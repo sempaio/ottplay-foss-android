@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="library_tab_live">Ao vivo</string>
-    <string name="library_heading_live">Canais de TV</string>
+    <string name="library_tab_live">Canais</string>
+    <string name="library_heading_live">Canais ao vivo</string>
     <string name="library_tab_movies">Filmes</string>
-    <string name="library_heading_movies">Filmes para a sua noite</string>
+    <string name="library_heading_movies">Filmes em destaque</string>
     <string name="library_tab_series">Séries</string>
-    <string name="library_heading_series">A sua próxima história</string>
+    <string name="library_heading_series">Encontre sua próxima série</string>
     <string name="library_tab_favorites">Favoritos</string>
-    <string name="library_heading_favorites">Sempre à mão</string>
+    <string name="library_heading_favorites">Seus favoritos</string>
     <string name="library_section_label">BIBLIOTECA</string>
     <string name="library_sources">Fontes</string>
     <string name="library_settings">Configurações</string>

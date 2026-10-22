@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir -p dist
           cp native/app/build/outputs/apk/debug/app-debug.apk dist/STARLINK-IPTV-debug.apk
-          test -s dist/STARLINK-IPTV-debug.apk
+          python3 starlink/validate_native_apk.py dist/STARLINK-IPTV-debug.apk
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging dist/STARLINK-IPTV-debug.apk | tee dist/apk-badging.txt
           grep -q "name='br.starlink.iptv'" dist/apk-badging.txt
           grep -q "application-label:'STARLINK IPTV'" dist/apk-badging.txt

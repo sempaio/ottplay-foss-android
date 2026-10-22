@@ -65,6 +65,7 @@ class HlsPlaybackInstrumentedTest {
                 val requests = server.requests.toList()
                 for ((route, token) in listOf("a" to TOKEN_A, "b" to TOKEN_B)) {
                     val itemRequests = requests.filter { it.path.startsWith("/$route/") }
+                    assertTrue("$route 307 route was not fetched", itemRequests.any { it.path.endsWith("/redirect.m3u8") })
                     assertTrue("$route master playlist was not fetched", itemRequests.any { it.path.endsWith("/master.m3u8") })
                     assertTrue("$route media playlist was not fetched", itemRequests.any { it.path.endsWith("/index.m3u8") })
                     assertTrue("$route TS segments were not fetched", itemRequests.any { it.path.endsWith(".ts") })
@@ -160,7 +161,7 @@ class HlsPlaybackInstrumentedTest {
             }
         }
 
-        fun url(route: String): String = "http://127.0.0.1:${server.localPort}/$route/master.m3u8"
+        fun url(route: String): String = "http://127.0.0.1:${server.localPort}/$route/redirect.m3u8"
 
         private fun serve(socket: Socket) {
             socket.soTimeout = 5000
@@ -184,6 +185,10 @@ class HlsPlaybackInstrumentedTest {
                 return
             }
             val file = path.substringAfterLast('/')
+            if (file == "redirect.m3u8") {
+                writeResponse(socket, "307 Temporary Redirect", ByteArray(0), "text/plain", "Location: /$route/master.m3u8\r\n")
+                return
+            }
             if (file !in FIXTURE_FILES) {
                 rejections.add(path)
                 writeResponse(socket, "404 Not Found", ByteArray(0), "text/plain")
