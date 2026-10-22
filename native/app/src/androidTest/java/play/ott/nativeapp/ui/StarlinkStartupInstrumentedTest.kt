@@ -15,7 +15,8 @@ class StarlinkStartupInstrumentedTest {
     @Test fun installedApplicationStartsAndOpensM81Login() {
         compose.waitUntil(20000) { compose.onAllNodesWithTag("welcome-add-source").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("welcome-add-source").performScrollTo().performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
-        compose.onAllNodes(hasSetTextAction()).assertCountEquals(2)
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(3)
+        compose.onNodeWithText("https://panel.taila5c5c2.ts.net").assertExists()
         compose.onNodeWithText("Entrar • STARLINK IPTV").assertIsDisplayed()
     }
 }
