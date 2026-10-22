@@ -53,6 +53,13 @@ internal fun SourceEditor(
     val name = if (!nameWasEdited && original?.nameMessage != null && !original.nameIsUserDefined) original.name else enteredName
     var kind by rememberSaveable(id) { mutableStateOf(original?.kind ?: SourceKind.XTREAM) }
     var url by rememberSaveable(id) { mutableStateOf(original?.url ?: StarlinkConfig.XTREAM_BASE_URL) }
+    // Keep each address while switching between Xtream (default) and M3U.
+    var xtreamUrlDraft by rememberSaveable(id) {
+        mutableStateOf(original?.takeIf { it.kind == SourceKind.XTREAM }?.url ?: StarlinkConfig.XTREAM_BASE_URL)
+    }
+    var m3uUrlDraft by rememberSaveable(id) {
+        mutableStateOf(original?.takeIf { it.kind == SourceKind.M3U }?.url.orEmpty())
+    }
     var username by rememberSaveable(id) { mutableStateOf(original?.username.orEmpty()) }
     var password by remember(id) { mutableStateOf(original?.password.orEmpty()) }
     var mac by rememberSaveable(id) { mutableStateOf(original?.mac.orEmpty()) }
@@ -63,6 +70,18 @@ internal fun SourceEditor(
     var headers by rememberSaveable(id) { mutableStateOf(original?.headers?.entries?.joinToString("\n") { "${it.key}: ${it.value}" }.orEmpty()) }
     var showPassword by rememberSaveable(id) { mutableStateOf(false) }
     var validation by rememberSaveable(id) { mutableStateOf<Int?>(null) }
+    fun chooseKind(option: SourceKind) {
+        if (kind == option) return
+        if (kind == SourceKind.XTREAM) xtreamUrlDraft = url
+        if (kind == SourceKind.M3U) m3uUrlDraft = url
+        kind = option
+        url = when (option) {
+            SourceKind.XTREAM -> xtreamUrlDraft
+            SourceKind.M3U -> m3uUrlDraft
+            SourceKind.STALKER -> original?.takeIf { it.kind == SourceKind.STALKER }?.url.orEmpty()
+        }
+        validation = null
+    }
     AlertDialog(
         modifier = Modifier.tvRemoteInput(),
         onDismissRequest = onDismiss,
@@ -72,24 +91,39 @@ internal fun SourceEditor(
                 modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TextButton(onClick = { advanced = !advanced; if (!advanced) { kind = SourceKind.XTREAM; url = StarlinkConfig.XTREAM_BASE_URL } }) { Text(if (advanced) "Login M81" else "Outras fontes / opções avançadas") }
-                if (simpleLogin) Text("Servidor M81 configurado. Informe seu usuário e senha. A lista STARLINK IPTV também será incluída.")
-                if (!simpleLogin) {
-                Text(stringResource(R.string.dialog_source_intro), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { advanced = !advanced }) {
+                    Text(if (advanced) "Voltar ao login STARLINK" else "Outras fontes / opções avançadas")
+                }
+                if (simpleLogin) {
+                    Text("Escolha Xtream (recomendado) ou M3U. Confirme o endereço abaixo; usuário e senha são necessários apenas para Xtream.")
+                } else {
+                    Text(stringResource(R.string.dialog_source_intro), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SourceKind.entries.forEach { option ->
-                        FilterChip(selected = kind == option, onClick = { kind = option }, enabled = !localSource, label = { Text(option.label()) })
+                    val options = if (simpleLogin) listOf(SourceKind.XTREAM, SourceKind.M3U) else SourceKind.entries.toList()
+                    options.forEach { option ->
+                        FilterChip(selected = kind == option, onClick = { chooseKind(option) },
+                            enabled = !localSource, label = { Text(option.label()) })
                     }
                 }
-                OutlinedTextField(value = name, onValueChange = { enteredName = it; nameWasEdited = true }, label = { Text(stringResource(R.string.dialog_source_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (!simpleLogin) {
+                    OutlinedTextField(value = name, onValueChange = { enteredName = it; nameWasEdited = true },
+                        label = { Text(stringResource(R.string.dialog_source_name)) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 OutlinedTextField(
                     value = if (localSource) (if (original.url.startsWith("content://")) stringResource(R.string.dialog_source_local_file) else stringResource(R.string.dialog_source_demo)) else url,
-                    onValueChange = { url = it }, readOnly = localSource,
+                    onValueChange = {
+                        url = it
+                        if (kind == SourceKind.XTREAM) xtreamUrlDraft = it
+                        if (kind == SourceKind.M3U) m3uUrlDraft = it
+                        validation = null
+                    }, readOnly = localSource,
                     label = { Text(if (kind == SourceKind.M3U) stringResource(R.string.dialog_source_playlist_url) else stringResource(R.string.dialog_source_server_url)) },
-                    placeholder = { Text(stringResource(R.string.dialog_source_url_example)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    placeholder = { Text(stringResource(R.string.dialog_source_url_example)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
-                }
                 if (kind == SourceKind.XTREAM) {
                     OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text(stringResource(R.string.dialog_source_username)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(
@@ -132,7 +166,7 @@ internal fun SourceEditor(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
         confirmButton = {
             ActionButton(text = if (simpleLogin) "Entrar" else if (original == null) stringResource(R.string.dialog_add) else stringResource(R.string.dialog_save), selected = true, onClick = {
-                val cleanUrl = if (simpleLogin) StarlinkConfig.XTREAM_BASE_URL else url.trim()
+                val cleanUrl = url.trim()
                 val parsedHeaders = parseHeaders(headers)
                 val hours = if (catchupHours.isBlank()) 0.0 else catchupHours.trim().replace(',', '.').toDoubleOrNull()
                 validation = when {
@@ -154,7 +188,10 @@ internal fun SourceEditor(
                     onSave(source.copy(id = id, name = name.trim(), kind = kind, url = cleanUrl,
                         nameMessage = if (nameWasEdited) null else source.nameMessage,
                         nameIsUserDefined = source.nameIsUserDefined || nameWasEdited,
-                        username = username.trim(), password = password, mac = mac.trim(), epgUrl = epgUrl.trim(),
+                        username = if (kind == SourceKind.XTREAM) username.trim() else "",
+                        password = if (kind == SourceKind.XTREAM) password else "",
+                        mac = if (kind == SourceKind.STALKER) mac.trim() else "",
+                        epgUrl = epgUrl.trim(),
                         headers = parsedHeaders.orEmpty(), catchupDaysFallback = if (kind == SourceKind.M3U) requireNotNull(hours) / 24.0 else source.catchupDaysFallback))
                 }
             })
