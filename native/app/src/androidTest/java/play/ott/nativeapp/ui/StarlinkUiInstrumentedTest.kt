@@ -16,15 +16,17 @@ import play.ott.nativeapp.StarlinkConfig
 class StarlinkUiInstrumentedTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun m81LoginNeedsOnlyUsernameAndPassword() {
+    @Test fun m81LoginAllowsEditingServerUrlAndCredentials() {
         var saved: SourceConfig? = null
         compose.setContent { OttTheme { SourceEditor(null, {}, { saved = it }) } }
-        compose.onAllNodes(hasSetTextAction()).assertCountEquals(2)
-        compose.onAllNodes(hasSetTextAction())[0].performTextInput("fixture-user")
-        compose.onAllNodes(hasSetTextAction())[1].performTextInput("fixture-password")
+        // URL, username and password must all be present and editable.
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(3)
+        compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("https://iptv.example.org:8443")
+        compose.onAllNodes(hasSetTextAction())[1].performTextInput("fixture-user")
+        compose.onAllNodes(hasSetTextAction())[2].performTextInput("fixture-password")
         compose.onNodeWithText("Entrar").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.runOnIdle {
-            assertEquals("https://panel.taila5c5c2.ts.net", saved?.url)
+            assertEquals("https://iptv.example.org:8443", saved?.url)
             assertEquals(SourceKind.XTREAM, saved?.kind)
             assertEquals("fixture-user", saved?.username)
             assertEquals("fixture-password", saved?.password)
