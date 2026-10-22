@@ -399,11 +399,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun showError(error: Exception) {
         // Network/library exception messages may contain provider URLs and credentials.
-        val resource = when (error) {
-            is java.net.UnknownHostException -> R.string.message_host_not_found
-            is java.net.SocketTimeoutException -> R.string.message_network_timeout
-            else -> R.string.message_operation_failed
-        }
+        val resource = providerErrorResource(error)
         updateState { it.copy(isBusy = false) }
         setErrorText { message(resource) }
     }

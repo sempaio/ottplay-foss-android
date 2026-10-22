@@ -1,0 +1,13 @@
+package play.ott.nativeapp
+
+import play.ott.nativeapp.core.ProviderException
+
+/** Show status-specific guidance without ever rendering provider URLs, bodies or credentials. */
+internal fun providerErrorResource(error: Exception): Int = when {
+    error is ProviderException && error.statusCode == 401 -> R.string.starlink_login_denied
+    error is ProviderException && error.statusCode == 403 -> R.string.starlink_access_denied
+    error is ProviderException && error.statusCode in 500..599 -> R.string.starlink_server_unavailable
+    error is java.net.UnknownHostException -> R.string.message_host_not_found
+    error is java.net.SocketTimeoutException -> R.string.message_network_timeout
+    else -> R.string.message_operation_failed
+}

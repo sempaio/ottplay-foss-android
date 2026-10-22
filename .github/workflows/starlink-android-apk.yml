@@ -24,7 +24,7 @@ jobs:
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
       - name: Test and build native STARLINK
         working-directory: native
-        run: ./gradlew --no-daemon --stacktrace :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Validate APK
         run: |
           mkdir -p dist
@@ -35,6 +35,16 @@ jobs:
           grep -q "application-label:'STARLINK IPTV'" dist/apk-badging.txt
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify dist/STARLINK-IPTV-debug.apk
           sha256sum dist/STARLINK-IPTV-debug.apk > dist/SHA256SUMS
+      - name: Prepare exact APKs for device validation
+        run: |
+          mkdir -p device-apks
+          cp dist/STARLINK-IPTV-debug.apk device-apks/
+          cp native/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk device-apks/STARLINK-IPTV-debug-androidTest.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: STARLINK-device-apks
+          path: device-apks/
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: STARLINK-IPTV-debug-APK
@@ -74,15 +84,15 @@ jobs:
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
-      - run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Build device tests
-        working-directory: native
-        run: ./gradlew --no-daemon --max-workers=2 :app:assembleDebug :app:assembleDebugAndroidTest
+      - uses: actions/download-artifact@v4
+        with:
+          name: STARLINK-device-apks
+          path: device-apks
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
@@ -90,14 +100,10 @@ jobs:
           arch: x86_64
           profile: ${{ matrix.profile }}
           disable-animations: true
-          working-directory: native
-          script: ./gradlew --no-daemon --max-workers=1 :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.StarlinkAcceptanceSuite
-      - name: Verify full device coverage
-        run: python3 starlink/verify_device_results.py native/app/build/outputs/androidTest-results/connected/debug
+          script: bash starlink/run_device_tests.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: STARLINK-device-${{ matrix.device }}
           path: |
-            native/app/build/reports/androidTests/
-            native/app/build/outputs/androidTest-results/
+            device-reports/
