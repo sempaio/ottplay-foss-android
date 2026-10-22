@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - ottplay-k3s-linux-x64
+    - ottplay-k3s-kvm-x64
+    - ottplay-k3s-release-x64

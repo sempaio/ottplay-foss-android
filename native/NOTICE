@@ -1,0 +1,14 @@
+OTTPlay Native Android
+Copyright (c) 2026 open-ott-play
+
+Native reimplementation of OTTPlay protocols and workflows.
+Original project: https://github.com/open-ott-play/ottplay-foss (MIT).
+
+Gradle wrapper scripts and wrapper JAR: Gradle, Inc. and contributors,
+Apache License 2.0. Script copyright/license headers are preserved.
+
+The bundled demo.mp4 and HLS instrumentation fixtures are generated
+synthetic test patterns with silent audio; no third-party programming is included.
+
+AndroidX, Kotlin, OkHttp and Coil dependencies retain their upstream licenses.
+See THIRD_PARTY_LICENSES for bundled license texts.

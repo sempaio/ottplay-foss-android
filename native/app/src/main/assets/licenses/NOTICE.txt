@@ -1,0 +1,5 @@
+OTTPlay Native Android uses AndroidX, Kotlin, kotlinx.coroutines, kotlinx.serialization, OkHttp, Okio, Coil, and Guava. These projects are distributed under the Apache License 2.0. Copyright and authorship remain with their respective projects.
+
+OTTPlay Native Android: Copyright (c) 2026 open-ott-play, MIT License.
+
+Synthetic test video generated locally with FFmpeg; no third-party programming is included.

@@ -1,0 +1,317 @@
+{
+  "provenance": {
+    "repository": "open-ott-play/ottplay-android",
+    "commit": "1ade13fb02fffe828c7a383e15bf0ff7ae5283f8",
+    "capture": "Unchanged shipping XmltvParser.kt compiled with the current vendored JAR; exact shipping model declarations and byte-limit constant extracted, no parser or domain algorithm replaced.",
+    "sources": {
+      "core/src/main/kotlin/play/ott/nativeapp/core/XmltvParser.kt": "9c0900706744a3223c6d09dbf6ceb09fdfb0f1884ab1a8a50b04a5b3775de077",
+      "core/src/main/kotlin/play/ott/nativeapp/core/Models.kt": "20fb69f6d72eb662457d7034082726f35b9855adef9cdd4d027586a432ee6efa",
+      "core/src/main/kotlin/play/ott/nativeapp/core/ProviderHttp.kt": "2e46ac4fc4d4e8f34e443d509781858ee207d03b3a91357acd5214c09dceb94a"
+    },
+    "coreJarSha256": "9f3e985e0c701857ed22aa590b79882332a6ccb48eef1ee1447cae92a8c68d3e",
+    "coreManifestSha256": "51ec8d35574ff97f658d91a2e61fff2ca126751cb4676d9df50794bea7894a93",
+    "casesSource": "reports/native-fallback/capture-native-records.py",
+    "casesSourceSha256": "3057906c063b7c41133ee80cbe3b5b32601903c05acfb89ddffaa8d79dc06997",
+    "verifyCommand": "python3 reports/native-fallback/capture-active-records.py --verify"
+  },
+  "cases": [
+    {
+      "name": "display name first nonempty and duplicate aliases",
+      "xml": "<tv><channel id=\"a\"><display-name> </display-name><display-name>First</display-name><display-name>Second</display-name><display-name>First</display-name></channel></tv>",
+      "expected": {
+        "result": {
+          "programmes": []
+        }
+      }
+    },
+    {
+      "name": "empty first channel fixes ID fallback",
+      "xml": "<tv><channel id=\"a\"/><channel id=\"a\"><display-name>Later</display-name></channel></tv>",
+      "expected": {
+        "result": {
+          "programmes": []
+        }
+      }
+    },
+    {
+      "name": "duplicate channel retains first name and accumulates aliases",
+      "xml": "<tv><channel id=\"a\"><display-name>First</display-name><icon src=\"one\"/></channel><channel id=\"a\"><display-name>Second</display-name><display-name>First</display-name><icon src=\"two\"/></channel></tv>",
+      "expected": {
+        "result": {
+          "programmes": []
+        }
+      }
+    },
+    {
+      "name": "last icon including absent src wins",
+      "xml": "<tv><channel id=\"a\"><icon src=\"first\"/><icon src=\"\"/></channel><channel id=\"b\"><icon src=\"first\"/><icon/></channel><channel id=\"c\"><icon src=\"first\"/><icon src=\"last\"/></channel></tv>",
+      "expected": {
+        "result": {
+          "programmes": []
+        }
+      }
+    },
+    {
+      "name": "display name Unicode whitespace",
+      "xml": "<tv><channel id=\"a\"><display-name>Name</display-name><display-name> Alias </display-name><display-name>﻿BOM﻿</display-name></channel></tv>",
+      "expected": {
+        "result": {
+          "programmes": []
+        }
+      }
+    },
+    {
+      "name": "canonical equivalent channel IDs",
+      "xml": "<tv><channel id=\"é\"><display-name>First</display-name><icon src=\"one\"/></channel><channel id=\"é\"><display-name>Second</display-name><icon src=\"two\"/></channel><programme channel=\"é\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>One</title></programme><programme channel=\"é\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Two</title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "é",
+              "title": "Two",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            },
+            {
+              "channelId": "é",
+              "title": "One",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "repeated titles and descriptions concatenate",
+      "xml": "<tv><channel id=\"a\"/><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title lang=\"en\">First</title><title/><title lang=\"ru\">Second</title><desc>One</desc><desc/><desc>Two</desc></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "First",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": "One"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "missing and empty title are omitted",
+      "xml": "<tv><channel id=\"a\"/><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><desc>No title</desc></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title/><desc>Empty title</desc></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title></title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "Untitled programme",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": "No title"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "whitespace-only title policy",
+      "xml": "<tv><channel id=\"a\"/><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title> &#x9;&#xA; </title><desc>Kept?</desc></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title></title></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title> </title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "Untitled programme",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": "Kept?"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "missing and empty IDs",
+      "xml": "<tv><channel><display-name>Missing</display-name><icon src=\"missing\"/></channel><channel id=\"\"><display-name>Empty</display-name><icon src=\"empty\"/></channel><programme start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Missing</title></programme><programme channel=\"\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Empty</title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": []
+        }
+      }
+    },
+    {
+      "name": "raw whitespace IDs preserved",
+      "xml": "<tv><channel id=\" a \"><display-name>Spaced</display-name></channel><channel id=\"a\"><display-name>Plain</display-name></channel><programme channel=\" a \" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Spaced</title></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Plain</title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "Spaced",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "programmes precede channel and orphan programme remains",
+      "xml": "<tv><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Before</title></programme><programme channel=\"orphan\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Orphan</title></programme><channel id=\"a\"><display-name>After</display-name></channel></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "Before",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            },
+            {
+              "channelId": "orphan",
+              "title": "Orphan",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duplicate intervals preserve rows and input order",
+      "xml": "<tv><channel id=\"a\"/><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>First</title></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Second</title></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>First</title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "First",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unsorted programmes retain parser order",
+      "xml": "<tv><channel id=\"a\"/><programme channel=\"a\" start=\"20260914120000 +0000\" stop=\"20260914130000 +0000\"><title>Later</title></programme><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Earlier</title></programme><programme channel=\"a\" start=\"20260914120000 +0000\" stop=\"20260914130000 +0000\"><title>Middle duplicate</title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "Earlier",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            },
+            {
+              "channelId": "a",
+              "title": "Later",
+              "startMillis": 1789387200000,
+              "endMillis": 1789390800000,
+              "description": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "invalid missing and reversed programme times",
+      "xml": "<tv><channel id=\"a\"/><programme channel=\"a\"><title>Missing</title></programme><programme channel=\"a\" start=\"bad\" stop=\"bad\"><title>Invalid</title></programme><programme channel=\"a\" start=\"20260914130000 +0000\" stop=\"20260914110000 +0000\"><title>Reversed</title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": []
+        }
+      }
+    },
+    {
+      "name": "entities CDATA and adjacent text",
+      "xml": "<tv><channel id=\"a\"><display-name>A &amp; B<![CDATA[ + C]]></display-name></channel><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>A &amp; B<![CDATA[ + C]]> tail</title><desc><![CDATA[<detail>]]>&amp; end</desc></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "A & B + C tail",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": "<detail>& end"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "multiple channel-less or external fields ignored",
+      "xml": "<tv><display-name>Outside</display-name><icon src=\"outside\"/><title>Outside</title><desc>Outside</desc><channel id=\"a\"><display-name>Inside</display-name></channel><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Inside</title></programme><icon src=\"after\"/></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "Inside",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unknown nested elements retain active text target",
+      "xml": "<tv><channel id=\"a\"><display-name>A<unknown>B</unknown>C</display-name></channel><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>A<unknown>B</unknown>C</title><desc>One<unknown>Two</unknown>Three</desc></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "ABC",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": "OneTwoThree"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "channel metadata interleaved with programmes",
+      "xml": "<tv><channel id=\"a\"><display-name>First</display-name></channel><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>One</title></programme><channel id=\"a\"><display-name>Second</display-name><icon src=\"later\"/></channel><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Two</title></programme></tv>",
+      "expected": {
+        "result": {
+          "programmes": [
+            {
+              "channelId": "a",
+              "title": "One",
+              "startMillis": 1789383600000,
+              "endMillis": 1789387200000,
+              "description": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "malformed tail after completed metadata and programme",
+      "xml": "<tv><channel id=\"a\"><display-name>Saved alias</display-name><icon src=\"saved-icon\"/></channel><programme channel=\"a\" start=\"20260914110000 +0000\" stop=\"20260914120000 +0000\"><title>Saved programme</title></programme><channel",
+      "expected": {
+        "error": {
+          "type": "play.ott.nativeapp.core.ProviderException",
+          "message": "EPG is malformed XML or uses unsupported document declarations"
+        }
+      }
+    }
+  ]
+}

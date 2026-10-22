@@ -1,0 +1,222 @@
+name: Android native
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      run_device_tests:
+        description: Run instrumented tests on phone and Android TV emulators
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    uses: victron-venus/venus-os-ci-toolkit/.github/workflows/change-scope.yml@6b2d99519d513d2b871d2a845ddd6134dea4af2c
+    with:
+      runner: ${{ vars.CI_RUNNER_MODE == 'k3s' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'ottplay-k3s-linux-x64' || 'ubuntu-latest' }}
+      force-full: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
+      documentation-paths: '["store/README.md"]'
+      required-paths: '["docs/privacy-policy.md"]'
+
+  build:
+    name: Unit tests, lint and APKs
+    needs: scope
+    if: ${{ needs.scope.outputs.run != 'false' || needs.scope.outputs.reason != 'documentation-only' }}
+    runs-on: ${{ vars.CI_RUNNER_MODE == 'k3s' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'ottplay-k3s-linux-x64' || 'ubuntu-24.04' }}
+    timeout-minutes: 35
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check self-hosted runner prerequisites
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py base
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Prepare an isolated writable Android SDK
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py prepare-sdk
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Test release tooling without signing credentials
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Validate Play listing assets
+        run: python3 scripts/validate-store-assets.py --require-screenshots
+      - name: Validate all app translations
+        run: python3 scripts/validate-localization.py
+      - name: Test, lint and assemble
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :app:bundleRelease :app:assembleFull :app:assembleDebugAndroidTest
+      - name: Upload debug APK and unsigned release APK/AAB
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ottplay-native-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/bundle/release/app-release.aab
+            app/build/outputs/apk/full/app-full-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: android-host-reports
+          path: |
+            core/build/reports/tests/
+            core/build/test-results/
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-debug.*
+            app/build/reports/lint-results-release.*
+          if-no-files-found: warn
+          retention-days: ${{ job.status == 'success' && 1 || 3 }}
+
+  emulator:
+    name: Instrumented tests · ${{ matrix.device }}
+    # Run the full device matrix on integration commits, not again on every PR update.
+    # release.py still requires both successful OS jobs for the exact release SHA.
+    if: >-
+      ${{ (github.event_name == 'push' ||
+      github.event_name == 'merge_group' || inputs.run_device_tests) &&
+      (needs.scope.outputs.run != 'false' || needs.scope.outputs.reason != 'documentation-only') }}
+    needs: [scope, build]
+    runs-on: ${{ vars.CI_RUNNER_MODE == 'k3s' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'ottplay-k3s-kvm-x64' || 'ubuntu-24.04' }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: phone-api35
+            api: 35
+            target: google_apis
+            arch: x86_64
+            profile: pixel_7
+            ram_mb: 3072
+            stabilize_guest: 'true'
+            # Preserve Pixel 7's dp viewport while reducing software rendering load.
+            display: 720x1600@280
+          # SDK stable catalogue: system-images;android-36;android-tv;x86_64, revision 4.
+          # This is an Android TV OS image, not a phone with overridden uiMode.
+          - device: androidtv-api36
+            api: 36
+            target: android-tv
+            arch: x86_64
+            profile: tv_1080p
+            ram_mb: 2048
+            stabilize_guest: 'false'
+            display: ''
+    env:
+      CI_AVD_NAME: ottplay-${{ matrix.device }}
+      CI_AVD_PROFILE: ${{ matrix.profile }}
+      CI_AVD_RAM_MB: ${{ matrix.ram_mb }}
+      CI_AVD_DISPLAY: ${{ matrix.display }}
+      CI_STABILIZE_GUEST: ${{ matrix.stabilize_guest }}
+      CI_SYSTEM_IMAGE: system-images;android-${{ matrix.api }};${{ matrix.target }};${{ matrix.arch }}
+      CI_EMULATOR_DIAGNOSTICS: app/build/reports/emulator
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check self-hosted runner prerequisites
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py emulator
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Reserve disk space for the ephemeral emulator
+        if: runner.environment == 'github-hosted'
+        run: |
+          # This Kotlin-only project does not use the runner's preinstalled NDK/CMake.
+          # Keep SDK platforms and build tools; TV images and userdata need the space.
+          sudo rm -rf -- "${ANDROID_HOME:?}/ndk" "${ANDROID_HOME:?}/cmake"
+          df -h "$ANDROID_HOME"
+      - name: Prepare an isolated writable Android SDK
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py prepare-sdk
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Install emulator and system image
+        run: sdkmanager "emulator" "$CI_SYSTEM_IMAGE"
+      - name: Verify emulator acceleration on the self-hosted image
+        if: runner.environment == 'self-hosted'
+        run: '"$ANDROID_HOME/emulator/emulator" -accel-check'
+      - name: Build test APKs before starting the emulator
+        # Release compiler memory before the guest boots on the shared runner.
+        run: ./gradlew --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Enable KVM for the ephemeral emulator runner
+        if: runner.environment == 'github-hosted'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Boot emulator and wait for Android services
+        env:
+          ANDROID_AVD_HOME: ${{ runner.temp }}/ottplay-avd
+        run: bash scripts/ci-start-emulator.sh
+      - name: Run instrumented tests
+        run: ./gradlew --no-daemon --stacktrace --max-workers=1 -Pkotlin.compiler.execution.strategy=in-process '-Dorg.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8' :app:connectedDebugAndroidTest
+      - name: Collect emulator diagnostics and stop emulator
+        if: always()
+        run: |
+          mkdir -p "$CI_EMULATOR_DIAGNOSTICS"
+          timeout 15s adb devices -l > "$CI_EMULATOR_DIAGNOSTICS/adb-devices.txt" 2>&1 || true
+          timeout 20s adb -s emulator-5554 logcat -d > "$CI_EMULATOR_DIAGNOSTICS/logcat.txt" 2>&1 || true
+          timeout 20s adb -s emulator-5554 shell dumpsys window > "$CI_EMULATOR_DIAGNOSTICS/windows.txt" 2>&1 || true
+          timeout 20s adb -s emulator-5554 shell dumpsys input > "$CI_EMULATOR_DIAGNOSTICS/input.txt" 2>&1 || true
+          timeout 20s adb -s emulator-5554 shell dumpsys dropbox --print system_server_anr > "$CI_EMULATOR_DIAGNOSTICS/system-server-anr.txt" 2>&1 || true
+          timeout 20s adb -s emulator-5554 shell dumpsys dropbox --print system_app_anr > "$CI_EMULATOR_DIAGNOSTICS/system-app-anr.txt" 2>&1 || true
+          free -m > "$CI_EMULATOR_DIAGNOSTICS/host-memory.txt"
+          timeout 10s adb -s emulator-5554 emu kill || true
+          if [[ -f "$CI_EMULATOR_DIAGNOSTICS/emulator.pid" ]]; then
+            emulator_pid=$(cat "$CI_EMULATOR_DIAGNOSTICS/emulator.pid")
+            if [[ "$emulator_pid" =~ ^[0-9]+$ ]]; then
+              kill "$emulator_pid" 2>/dev/null || true
+            fi
+          fi
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: android-${{ matrix.device }}-device-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            ${{ env.CI_EMULATOR_DIAGNOSTICS }}/
+          if-no-files-found: warn
+          retention-days: ${{ job.status == 'success' && 1 || 3 }}

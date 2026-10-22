@@ -1,8 +1,8 @@
 name: STARLINK IPTV Android APK
 on:
   push:
-    branches:
-      - starlink/consolidacao-android
+    branches: ['starlink/**']
+    paths: ['native/**', '.github/workflows/starlink-android-apk.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,35 +11,91 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - name: Checkout STARLINK customization
-        uses: actions/checkout@v4
-        with:
-          path: starlink
-      - name: Checkout native Android source
-        uses: actions/checkout@v4
-        with:
-          repository: sempaio/ottplay-android
-          ref: main
-          path: native
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android compile SDK
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
-      - name: Apply STARLINK branding
-        run: |
-          cp starlink/starlink/brand_native.py native/starlink_brand_native.py
-          python3 native/starlink_brand_native.py
-      - name: Build debug APK
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Test and build native STARLINK
         working-directory: native
-        run: ./gradlew --no-daemon :app:assembleDebug
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Validate APK
+        run: |
+          mkdir -p dist
+          cp native/app/build/outputs/apk/debug/app-debug.apk dist/STARLINK-IPTV-debug.apk
+          test -s dist/STARLINK-IPTV-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging dist/STARLINK-IPTV-debug.apk | tee dist/apk-badging.txt
+          grep -q "name='br.starlink.iptv'" dist/apk-badging.txt
+          grep -q "application-label:'STARLINK IPTV'" dist/apk-badging.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify dist/STARLINK-IPTV-debug.apk
+          sha256sum dist/STARLINK-IPTV-debug.apk > dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
         with:
           name: STARLINK-IPTV-debug-APK
-          path: native/app/build/outputs/apk/debug/app-debug.apk
+          path: dist/
           if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: STARLINK-test-reports
+          path: |
+            native/core/build/reports/tests/
+            native/app/build/reports/
+  device:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: phone
+            api: 35
+            target: google_apis
+            profile: pixel_7
+          - device: tv
+            api: 36
+            target: android-tv
+            profile: tv_1080p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Build device tests
+        working-directory: native
+        run: ./gradlew --no-daemon --max-workers=2 :app:assembleDebug :app:assembleDebugAndroidTest
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          disable-animations: true
+          working-directory: native
+          script: ./gradlew --no-daemon --max-workers=1 :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest,play.ott.nativeapp.ui.StarlinkStartupInstrumentedTest,play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest,play.ott.nativeapp.playback.NativePlaybackInstrumentedTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: STARLINK-device-${{ matrix.device }}
+          path: |
+            native/app/build/reports/androidTests/
+            native/app/build/outputs/androidTest-results/

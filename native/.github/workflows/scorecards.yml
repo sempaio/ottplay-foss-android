@@ -1,0 +1,90 @@
+# This workflow uses actions that are not certified by GitHub. They are provided
+# by a third-party and are governed by separate terms of service, privacy
+# policy, and support documentation.
+
+name: Scorecard supply-chain security
+on:
+  # For Branch-Protection check. Only the default branch is supported. See
+  # https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection
+  branch_protection_rule:
+  # To guarantee Maintained check is occasionally updated. See
+  # https://github.com/ossf/scorecard/blob/main/docs/checks.md#maintained
+  schedule:
+    - cron: '20 7 * * 2'
+  push:
+    branches: ["main"]
+
+# Declare default permissions as read only.
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ${{ fromJSON((vars.CI_RUNNER_MODE == 'self-hosted' || vars.CI_RUNNER_MODE == 'k3s') && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))) && (vars.CI_RUNNER_LABELS || '[]') || '["ubuntu-latest"]') }}
+    timeout-minutes: 30
+    permissions:
+      # Needed to upload the results to code-scanning dashboard.
+      security-events: write
+      contents: read
+      actions: read
+      # To allow GraphQL ListCommits to work
+      issues: read
+      pull-requests: read
+      # To detect SAST tools
+      checks: read
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: "Checkout code"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout the reviewed fail-closed scanner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: victron-venus/venus-os-ci-toolkit
+          ref: 6b6cc553a797a885f6942c2d04afc4ef8f8b110c
+          path: .scorecard-toolkit
+          persist-credentials: false
+
+      - name: Set up the scanner build toolchain
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.27.2'
+          cache-dependency-path: .scorecard-toolkit/tools/scorecard-scan/go.sum
+
+      - name: Build the scanner from checksum-pinned dependencies
+        working-directory: .scorecard-toolkit/tools/scorecard-scan
+        env:
+          GOTOOLCHAIN: local
+        run: go build -mod=readonly -trimpath -o "$RUNNER_TEMP/scorecard-scan" .
+
+      - name: Require a complete Scorecard analysis
+        env:
+          GITHUB_AUTH_TOKEN: ${{ github.token }}
+        run: >-
+          "$RUNNER_TEMP/scorecard-scan"
+          -repo "$GITHUB_REPOSITORY"
+          -commit "$GITHUB_SHA"
+          -output "$GITHUB_WORKSPACE/results.sarif"
+
+      # Upload the results as artifacts (optional). Commenting out will disable uploads of run results in SARIF
+      # format to the repository Actions tab.
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      # Upload the results to GitHub's code scanning dashboard.
+      - name: "Upload to code-scanning"
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: results.sarif

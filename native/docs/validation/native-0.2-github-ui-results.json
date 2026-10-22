@@ -1,0 +1,214 @@
+{
+  "verifiedAtUtc": "2026-09-13T15:10:56.095099+00:00",
+  "run": {
+    "conclusion": "failure",
+    "createdAt": "2026-09-13T14:53:45Z",
+    "databaseId": 34763982972,
+    "event": "workflow_dispatch",
+    "headSha": "55c13da2a8e0a6de76fe0dd0470a7d0d1f5715e8",
+    "jobs": [
+      {
+        "completedAt": "2026-09-13T15:01:29Z",
+        "conclusion": "success",
+        "databaseId": 103741575766,
+        "name": "Unit tests, lint and APKs",
+        "startedAt": "2026-09-13T14:53:49Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34763982972/job/103741575766"
+      },
+      {
+        "completedAt": "2026-09-13T15:09:34Z",
+        "conclusion": "success",
+        "databaseId": 103742553709,
+        "name": "Instrumented tests · androidtv-api36",
+        "startedAt": "2026-09-13T15:01:31Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34763982972/job/103742553709"
+      },
+      {
+        "completedAt": "2026-09-13T15:10:12Z",
+        "conclusion": "failure",
+        "databaseId": 103742553733,
+        "name": "Instrumented tests · phone-api35",
+        "startedAt": "2026-09-13T15:01:31Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34763982972/job/103742553733"
+      }
+    ],
+    "status": "completed",
+    "updatedAt": "2026-09-13T15:10:13Z",
+    "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34763982972"
+  },
+  "checks": {
+    "exactHead": true,
+    "allThreeJobsSuccessful": false,
+    "runSuccessful": false,
+    "phoneAndTvSameCases": true,
+    "junitNoFailuresErrorsSkipsOrDuplicates": false,
+    "testRunnerNoUnderlyingExceptions": false,
+    "phoneApi35": true,
+    "tvApi36": true,
+    "realTvOs": true
+  },
+  "allChecksPassed": false,
+  "junit": {
+    "host": {
+      "tests": 68,
+      "uniqueTests": 68,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 20.237,
+      "failedCases": [],
+      "duplicateCases": []
+    },
+    "phone": {
+      "tests": 16,
+      "uniqueTests": 16,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 99.131,
+      "failedCases": [
+        {
+          "class": "play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest",
+          "test": "coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback",
+          "seconds": 22.288,
+          "issues": [
+            {
+              "kind": "failure",
+              "message": "java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null",
+              "appFrames": [
+                "at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:31)",
+                "at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:11)",
+                "at play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest.openOptions(RealActivityPlaybackInstrumentedTest.kt:119)",
+                "at play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest.coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback(RealActivityPlaybackInstrumentedTest.kt:96)"
+              ]
+            }
+          ]
+        }
+      ],
+      "duplicateCases": [],
+      "properties": {
+        "ro.build.version.sdk": "35",
+        "ro.product.cpu.abi": "x86_64",
+        "ro.product.model": "sdk_gphone64_x86_64",
+        "ro.build.characteristics": "emulator",
+        "ro.build.fingerprint": "google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys"
+      },
+      "testRunner": {
+        "started": 16,
+        "finished": 16,
+        "unfinished": [],
+        "exceptionBlocks": [
+          {
+            "case": "coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback(play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest)",
+            "startLine": 90381,
+            "endLine": 90454,
+            "message": "java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null",
+            "appFrames": [
+              "at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:31)",
+              "at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:11)",
+              "at play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest.openOptions(RealActivityPlaybackInstrumentedTest.kt:119)",
+              "at play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest.coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback(RealActivityPlaybackInstrumentedTest.kt:96)"
+            ]
+          }
+        ]
+      },
+      "notificationIds": {
+        "uniqueIds": [
+          305387908,
+          305387909,
+          305387910,
+          305387911
+        ],
+        "firstObservations": [
+          {
+            "id": 305387908,
+            "firstLine": 80968,
+            "firstObservedDuringTest": "encryptedDashDecodesThroughNativeClearKeyWithIsolatedLicenseHeaders(play.ott.nativeapp.playback.ClearKeyPlaybackInstrumentedTest)"
+          },
+          {
+            "id": 305387909,
+            "firstLine": 82738,
+            "firstObservedDuringTest": "decoderContinuesAfterControllerReleaseAndReconnectsUntilExplicitStop(play.ott.nativeapp.playback.NativePlaybackInstrumentedTest)"
+          },
+          {
+            "id": 305387910,
+            "firstLine": 85003,
+            "firstObservedDuringTest": "onboardingDemoSelectionPlaybackBackAndSourceEditor(play.ott.nativeapp.ui.NativeUiInstrumentedTest)"
+          },
+          {
+            "id": 305387911,
+            "firstLine": 90251,
+            "firstObservedDuringTest": "coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback(play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest)"
+          }
+        ],
+        "default1001Observed": false,
+        "runtimeKeyEvidenceAvailable": true
+      }
+    },
+    "tv": {
+      "tests": 16,
+      "uniqueTests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 85.934,
+      "failedCases": [],
+      "duplicateCases": [],
+      "properties": {
+        "ro.build.version.sdk": "36",
+        "ro.product.cpu.abi": "x86_64",
+        "ro.product.model": "sdk_google_atv64_x86_64",
+        "ro.build.characteristics": "emulator",
+        "ro.build.fingerprint": "google/sdk_google_atv64_x86_64/emu64xa:16/BT2A.260319.001/15058170:user/dev-keys"
+      },
+      "testRunner": {
+        "started": 16,
+        "finished": 16,
+        "unfinished": [],
+        "exceptionBlocks": []
+      },
+      "notificationIds": {
+        "uniqueIds": [],
+        "firstObservations": [],
+        "default1001Observed": false,
+        "runtimeKeyEvidenceAvailable": false,
+        "note": "TV logcat did not print app notification keys; no ID application claim is made from this artifact."
+      }
+    }
+  },
+  "releaseToolingPython": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "evidence": "host.log:1437-1439; Ran 10 tests in 0.045s; OK"
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 28,
+    "hints": 1,
+    "evidence": "host/app/build/reports/lint-results-debug.xml"
+  },
+  "counts": {
+    "uniqueJvmAndInstrumentedTests": 84,
+    "junitExecutions": 100,
+    "uniqueIncludingPython": 94,
+    "executionsIncludingPython": 110
+  },
+  "supplementalLogcatFindings": [
+    {
+      "device": "phone",
+      "artifact": "android-phone-api35-device-reports",
+      "path": "reports/emulator/logcat.txt",
+      "lines": [
+        89153,
+        89460,
+        89974
+      ],
+      "finding": "System ImmersiveModeConfirmation overlay acquired window focus during RealActivity playback. The activity readiness assertion failed while this first-fullscreen onboarding window was still present; the overlay closed during teardown."
+    }
+  ]
+}

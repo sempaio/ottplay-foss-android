@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name" translatable="false">STARLINK IPTV</string>
+    <string name="local_playlist">Local playlist</string>
+</resources>

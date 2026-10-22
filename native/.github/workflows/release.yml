@@ -1,0 +1,165 @@
+name: Signed Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Build preview, promote its exact bytes to stable, or build separate production app
+        required: true
+        default: preview
+        type: choice
+        options: [preview, stable, production]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: signed-android-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Verify and sign ${{ inputs.channel }}
+    if: github.ref == 'refs/heads/main' && inputs.channel != 'stable'
+    runs-on: ${{ vars.CI_RUNNER_MODE == 'k3s' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'ottplay-k3s-release-x64' || 'ubuntu-24.04' }}
+    timeout-minutes: 35
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    env:
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check self-hosted runner prerequisites
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py release
+      - name: Validate version, immutable tag and exact-commit device matrix
+        run: python3 scripts/release.py check --channel "$RELEASE_CHANNEL"
+      - name: Read artifact version
+        id: version
+        run: python3 scripts/release.py metadata --channel "$RELEASE_CHANNEL"
+      - name: Test release safety boundaries
+        run: python3 -m unittest discover -s scripts/tests -v
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Prepare an isolated writable Android SDK
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py prepare-sdk
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+      - name: Install compile SDK and signature tools
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Load configured preview signing identity
+        if: inputs.channel == 'preview'
+        env:
+          PREVIEW_SIGNING_KEYSTORE_BASE64: ${{ secrets.PREVIEW_SIGNING_KEYSTORE_BASE64 }}
+          PREVIEW_SIGNING_STORE_PASSWORD: ${{ secrets.PREVIEW_SIGNING_STORE_PASSWORD }}
+          PREVIEW_SIGNING_KEY_ALIAS: ${{ secrets.PREVIEW_SIGNING_KEY_ALIAS }}
+          PREVIEW_SIGNING_KEY_PASSWORD: ${{ secrets.PREVIEW_SIGNING_KEY_PASSWORD }}
+          PREVIEW_SIGNING_CERT_SHA256: ${{ secrets.PREVIEW_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/ci-prepare-signing.py
+      - name: Load configured production signing identity
+        if: inputs.channel == 'production'
+        env:
+          PREVIEW_SIGNING_CERT_SHA256: ${{ secrets.PREVIEW_SIGNING_CERT_SHA256 }}
+          RELEASE_SIGNING_KEYSTORE_BASE64: ${{ secrets.RELEASE_SIGNING_KEYSTORE_BASE64 }}
+          RELEASE_SIGNING_STORE_PASSWORD: ${{ secrets.RELEASE_SIGNING_STORE_PASSWORD }}
+          RELEASE_SIGNING_KEY_ALIAS: ${{ secrets.RELEASE_SIGNING_KEY_ALIAS }}
+          RELEASE_SIGNING_KEY_PASSWORD: ${{ secrets.RELEASE_SIGNING_KEY_PASSWORD }}
+          RELEASE_SIGNING_CERT_SHA256: ${{ secrets.RELEASE_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/ci-prepare-signing.py
+      - name: Test, lint, build APK and AAB, verify signatures and versions
+        run: python3 scripts/release.py build --channel "$RELEASE_CHANNEL"
+      - name: Remove signing material from the runner
+        if: always()
+        run: rm -rf -- "${RUNNER_TEMP:?}/ottplay-release-signing"
+      - name: Upload signed artifacts and checksums
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ottplay-native-${{ steps.version.outputs.tag }}
+          path: build/distributions/${{ steps.version.outputs.tag }}/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: signed-release-validation
+          path: |
+            core/build/test-results/
+            app/build/test-results/
+            app/build/reports/lint-results-*.xml
+            app/build/outputs/mapping/
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    name: Publish new version
+    needs: build
+    runs-on: ${{ vars.CI_RUNNER_MODE == 'k3s' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'ottplay-k3s-release-x64' || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      RELEASE_CHANNEL: ${{ inputs.channel }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check self-hosted runner prerequisites
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py release
+      - name: Download only this run's verified signed artifacts
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "ottplay-native-$RELEASE_TAG" --dir "build/distributions/$RELEASE_TAG"
+      - name: Recheck source, version and checksums; publish without overwriting
+        run: python3 scripts/release.py publish --channel "$RELEASE_CHANNEL"
+
+  stable:
+    name: Promote verified preview to stable
+    if: github.ref == 'refs/heads/main' && inputs.channel == 'stable'
+    runs-on: ${{ vars.CI_RUNNER_MODE == 'k3s' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 'ottplay-k3s-release-x64' || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check self-hosted runner prerequisites
+        if: runner.environment == 'self-hosted'
+        run: python3 scripts/ci-runner-preflight.py release
+      - name: Test release safety boundaries
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Verify source, device matrix and original signed bytes; promote to stable
+        env:
+          OTTPLAY_EXPECTED_CERT_SHA256: ${{ secrets.PREVIEW_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/release.py promote --channel preview
