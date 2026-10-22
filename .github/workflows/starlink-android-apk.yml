@@ -27,9 +27,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | sdkmanager --licenses > /dev/null || true
       - name: Install Android compile SDK
-        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - name: Apply STARLINK branding
         run: |
           cp starlink/starlink/brand_native.py native/starlink_brand_native.py
