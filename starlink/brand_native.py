@@ -3,7 +3,7 @@
 from pathlib import Path
 import re
 
-root = Path(__file__).resolve().parents[1]
+root = Path(__file__).resolve().parent
 strings = root / "app/src/main/res/values/strings.xml"
 gradle = root / "app/build.gradle.kts"
 if not strings.exists() or not gradle.exists():
