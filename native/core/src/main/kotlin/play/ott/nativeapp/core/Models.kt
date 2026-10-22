@@ -92,4 +92,4 @@ data class Programme(
 )
 
 /** Messages deliberately exclude URLs, which commonly contain provider credentials. */
-class ProviderException(message: String, val statusCode: Int? = null) : Exception(message)
+class ProviderException(message: String, val statusCode: Int? = null, val reasonCode: String? = null) : Exception(message)

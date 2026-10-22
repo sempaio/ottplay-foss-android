@@ -15,6 +15,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 internal const val MAX_CATALOG_BYTES = 32 * 1024 * 1024
 internal const val MAX_EPG_BYTES = 64 * 1024 * 1024
@@ -70,7 +73,7 @@ internal class ProviderHttp(client: OkHttpClient, private val transportPolicy: R
             body?.let { builder.post(it.toRequestBody("application/json; charset=utf-8".toMediaType())) }
             val result = execute(builder.build(), limit)
             if (result.code !in setOf(301, 302, 303, 307, 308)) {
-                if (result.code !in 200..299) throw ProviderException("Provider returned HTTP ${result.code}", result.code)
+                if (result.code !in 200..299) throw ProviderException("Provider returned HTTP ${result.code}", result.code, result.reasonCode)
                 return HttpPayload(result.bytes, url.toString(), result.contentType)
             }
             if (attempt == 5) throw ProviderException("Too many source redirects")
@@ -87,7 +90,39 @@ internal class ProviderHttp(client: OkHttpClient, private val transportPolicy: R
         throw ProviderException("Too many source redirects")
     }
 
-    private data class Result(val code: Int, val location: String?, val bytes: ByteArray, val contentType: String?)
+    private data class Result(
+        val code: Int,
+        val location: String?,
+        val bytes: ByteArray,
+        val contentType: String?,
+        val reasonCode: String?,
+    )
+
+    /**
+     * M81 may explain an HTTP 403 with {"detail":{"code":"client_blocked"}}.
+     * Read at most 2049 bytes, recognize only exact known codes, then discard
+     * the body. Never expose provider-supplied messages, URLs or credentials.
+     */
+    private fun safeAccessReason(response: Response): String? = runCatching {
+        if (response.code != 403 || !response.header("Content-Type").orEmpty().contains("json", ignoreCase = true)) {
+            return@runCatching null
+        }
+        val stream = response.body?.byteStream() ?: return@runCatching null
+        val buffer = ByteArray(2049)
+        var used = 0
+        while (used < buffer.size) {
+            val count = stream.read(buffer, used, buffer.size - used)
+            if (count == -1) break
+            if (count == 0) break
+            used += count
+        }
+        if (used == 0 || used > 2048) return@runCatching null
+        val payload = Json.parseToJsonElement(String(buffer, 0, used, Charsets.UTF_8)) as? JsonObject
+            ?: return@runCatching null
+        val detail = payload["detail"] as? JsonObject ?: return@runCatching null
+        val code = (detail["code"] as? JsonPrimitive)?.content ?: return@runCatching null
+        code.takeIf { it in setOf("client_blocked", "subscription_expired", "client_inactive") }
+    }.getOrNull()
 
     private suspend fun execute(request: Request, limit: Int): Result = suspendCancellableCoroutine { continuation ->
         val call = http.newCall(request)
@@ -117,7 +152,10 @@ internal class ProviderHttp(client: OkHttpClient, private val transportPolicy: R
                                 output.toByteArray()
                             }
                         } else byteArrayOf()
-                        if (continuation.isActive) continuation.resume(Result(response.code, response.header("Location"), bytes, response.header("Content-Type")))
+                        val reasonCode = safeAccessReason(response)
+                        if (continuation.isActive) continuation.resume(
+                            Result(response.code, response.header("Location"), bytes, response.header("Content-Type"), reasonCode)
+                        )
                     }
                 } catch (error: Exception) {
                     if (continuation.isActive) continuation.resumeWithException(
