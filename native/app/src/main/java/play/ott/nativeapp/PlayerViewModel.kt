@@ -180,6 +180,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
                 repository.save(action.source)
+                if (StarlinkConfig.isStarlinkAccount(action.source) &&
+                    repository.sources().none { it.id == StarlinkConfig.PLAYLIST_SOURCE_ID }) {
+                    repository.save(StarlinkConfig.playlistSource())
+                }
                 val sources = repository.sources()
                 updateState { it.copy(sources = sources) }
                 load(action.source.id, true)

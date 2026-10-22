@@ -36,3 +36,6 @@ Base nativa já contém catálogos Xtream, episódios, filtros, favoritos, cofre
 - `ottplay-android`: workflow android.yml já usa SDK platforms;android-37.0 e JDK 17. GitHub não retornou execuções recentes no fork sempaio.
 - M81: sem workflows recentes; FastAPI 0.141.1, SQLAlchemy 2.0.52 e requisitos fixados. Código consultado exclusivamente como documentação, sem executar serviços, migrations ou deploy.
 - Conectividade inicial M81: GET /player_api.php sem credenciais retornou HTTP 422; autenticação real não realizada.
+
+## Esclarecimento de endereço durante a missão
+O usuário identificou a playlist com STARLINK IPTV no caminho e sufixo .m3u. Contrato localizado em `app/routers/app_auth.py`: `/app/starlink-iptv/playlist.m3u`; HEAD público retornou 200, application/x-mpegurl. O usuário confirmou manter login/catálogos Xtream e incluir essa playlist pré-configurada. Os dois endpoints são distintos e serão preservados. O painel não foi alterado.

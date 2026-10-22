@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.res.stringResource
 import play.ott.nativeapp.R
+import play.ott.nativeapp.StarlinkConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +44,7 @@ internal fun SourceEditor(
 ) {
     val id = rememberSaveable(original?.id) { original?.id ?: UUID.randomUUID().toString() }
     var advanced by rememberSaveable { mutableStateOf(false) }
-    val simpleLogin = (original == null || (original.kind == SourceKind.XTREAM && original.url == "https://panel.taila5c5c2.ts.net")) && !advanced
+    val simpleLogin = (original == null || (original.kind == SourceKind.XTREAM && original.url == StarlinkConfig.XTREAM_BASE_URL)) && !advanced
     val localSource = original != null && !isHttpUrl(original.url)
     var enteredName by rememberSaveable(id) { mutableStateOf(original?.name ?: "STARLINK IPTV") }
     var nameWasEdited by rememberSaveable(id) { mutableStateOf(false) }
@@ -51,7 +52,7 @@ internal fun SourceEditor(
     // Explicit input remains saveable even when it exactly matches an older translation.
     val name = if (!nameWasEdited && original?.nameMessage != null && !original.nameIsUserDefined) original.name else enteredName
     var kind by rememberSaveable(id) { mutableStateOf(original?.kind ?: SourceKind.XTREAM) }
-    var url by rememberSaveable(id) { mutableStateOf(original?.url ?: "https://panel.taila5c5c2.ts.net") }
+    var url by rememberSaveable(id) { mutableStateOf(original?.url ?: StarlinkConfig.XTREAM_BASE_URL) }
     var username by rememberSaveable(id) { mutableStateOf(original?.username.orEmpty()) }
     var password by remember(id) { mutableStateOf(original?.password.orEmpty()) }
     var mac by rememberSaveable(id) { mutableStateOf(original?.mac.orEmpty()) }
@@ -71,8 +72,8 @@ internal fun SourceEditor(
                 modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TextButton(onClick = { advanced = !advanced; if (!advanced) { kind = SourceKind.XTREAM; url = "https://panel.taila5c5c2.ts.net" } }) { Text(if (advanced) "Login M81" else "Outras fontes / opções avançadas") }
-                if (simpleLogin) Text("Servidor M81 configurado. Informe seu usuário e senha.")
+                TextButton(onClick = { advanced = !advanced; if (!advanced) { kind = SourceKind.XTREAM; url = StarlinkConfig.XTREAM_BASE_URL } }) { Text(if (advanced) "Login M81" else "Outras fontes / opções avançadas") }
+                if (simpleLogin) Text("Servidor M81 configurado. Informe seu usuário e senha. A lista STARLINK IPTV também será incluída.")
                 if (!simpleLogin) {
                 Text(stringResource(R.string.dialog_source_intro), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -131,7 +132,7 @@ internal fun SourceEditor(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
         confirmButton = {
             ActionButton(text = if (simpleLogin) "Entrar" else if (original == null) stringResource(R.string.dialog_add) else stringResource(R.string.dialog_save), selected = true, onClick = {
-                val cleanUrl = if (simpleLogin) "https://panel.taila5c5c2.ts.net" else url.trim()
+                val cleanUrl = if (simpleLogin) StarlinkConfig.XTREAM_BASE_URL else url.trim()
                 val parsedHeaders = parseHeaders(headers)
                 val hours = if (catchupHours.isBlank()) 0.0 else catchupHours.trim().replace(',', '.').toDoubleOrNull()
                 validation = when {

@@ -10,6 +10,7 @@ import org.junit.Test
 import org.junit.Assert.*
 import org.junit.runner.RunWith
 import play.ott.nativeapp.core.*
+import play.ott.nativeapp.StarlinkConfig
 
 @RunWith(AndroidJUnit4::class)
 class StarlinkUiInstrumentedTest {
@@ -36,4 +37,23 @@ class StarlinkUiInstrumentedTest {
         compose.onNodeWithText("Entrar").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.runOnIdle { assertEquals(0, saves) }
     }
+    @Test fun publishedPlaylistCanBeSelectedAlongsideXtreamWithoutTypingAUrl() {
+        val account = SourceConfig("account", "Conta Xtream simulada", SourceKind.XTREAM, StarlinkConfig.XTREAM_BASE_URL)
+        val playlist = StarlinkConfig.playlistSource()
+        var selected: String? = null
+        compose.setContent {
+            OttNativeApp(AppUiState(sources = listOf(account, playlist), selectedSourceId = account.id),
+                onAction = { if (it is AppAction.SelectSource) selected = it.sourceId },
+                controller = null, onPictureInPicture = {}, onFullscreenChanged = {})
+        }
+        compose.onNodeWithText(account.name).performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
+        compose.onNodeWithText(playlist.name).performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
+        compose.runOnIdle { assertEquals(StarlinkConfig.PLAYLIST_SOURCE_ID, selected) }
+    }
+
+    @Test fun publishedPlaylistPresetUsesTheCompleteM3uAddress() {
+        compose.setContent { OttTheme { SourceEditor(StarlinkConfig.playlistSource(), {}, {}) } }
+        compose.onNodeWithText("https://panel.taila5c5c2.ts.net/app/starlink-iptv/playlist.m3u").assertExists()
+    }
+
 }

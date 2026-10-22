@@ -22,6 +22,7 @@ with zipfile.ZipFile(apk) as archive:
     assert archive.testzip() is None
     dex = b''.join(archive.read(name) for name in archive.namelist() if name.endswith('.dex'))
     assert b'https://panel.taila5c5c2.ts.net' in dex, 'M81 server missing from executable'
+    assert b'/app/starlink-iptv/playlist.m3u' in dex, 'STARLINK playlist missing from executable'
     assert b'fixture-password' not in dex, 'Test fixture packaged into production executable'
 print(f'Validated: {apk.name}; bytes={apk.stat().st_size}; SHA256={hashlib.sha256(apk.read_bytes()).hexdigest()}')
 print(badging)
