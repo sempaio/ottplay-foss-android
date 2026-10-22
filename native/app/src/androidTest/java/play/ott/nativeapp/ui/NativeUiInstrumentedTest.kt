@@ -90,8 +90,10 @@ class NativeUiInstrumentedTest {
         compose.onNodeWithTag("now-playing-bar").assertIsDisplayed()
         compose.onNodeWithText(text(R.string.library_sources)).activateForDevice()
         compose.onNodeWithText(text(R.string.library_add_by_url)).performScrollTo().activateForDevice()
-        compose.onNodeWithText(text(R.string.dialog_source_name)).performTextInput("Новая библиотека")
-        compose.onNodeWithText(text(R.string.dialog_source_playlist_url)).performTextInput("https://example.com/new.m3u")
+        compose.onNodeWithText("Outras fontes / opções avançadas").performClick()
+        compose.onNodeWithText(text(R.string.dialog_source_kind_m3u)).performClick()
+        compose.onNodeWithText(text(R.string.dialog_source_name)).performTextReplacement("Новая библиотека")
+        compose.onNodeWithText(text(R.string.dialog_source_playlist_url)).performTextReplacement("https://example.com/new.m3u")
         compose.onNodeWithText(text(R.string.dialog_source_archive_hours)).performScrollTo().performTextInput("48")
         compose.onNodeWithText(text(R.string.dialog_add), substring = false).activateForDevice()
         compose.runOnIdle {
@@ -113,11 +115,11 @@ class NativeUiInstrumentedTest {
                 )
             }
         }
-        compose.onNodeWithText(text(R.string.message_section_movie)).assertIsFocused()
+        compose.onNodeWithText(text(R.string.library_tab_movies)).assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithText(text(R.string.library_tab_live)).assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
-        compose.onNodeWithText(text(R.string.message_section_movie)).assertIsFocused()
+        compose.onNodeWithText(text(R.string.library_tab_movies)).assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
         compose.onNodeWithTag("catalog-item-${entry.id}").assertIsDisplayed()
     }

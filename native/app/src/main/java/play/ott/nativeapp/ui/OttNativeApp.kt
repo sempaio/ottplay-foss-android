@@ -145,6 +145,7 @@ fun OttNativeApp(
     val visibleEntries = remember(tabEntries, search, group) {
         tabEntries.filter { (group.isBlank() || it.group == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || it.group.contains(search, ignoreCase = true)) }
     }
+    val catalogHeaderCount = if (tab == LibraryTab.MOVIES || tab == LibraryTab.SERIES) 1 else 0
     val railFocus = remember { FocusRequester() }
     val welcomeFocus = remember { FocusRequester() }
     val catalogFocus = remember { FocusRequester() }
@@ -160,7 +161,7 @@ fun OttNativeApp(
             withFrameNanos { }
             if (state.sources.isEmpty()) welcomeFocus.requestFocus()
             else if (lastFocusedEntryId != null && focusEntryId != null) {
-                gridState.scrollToItem(visibleEntries.indexOfFirst { it.id == focusEntryId })
+                gridState.scrollToItem(visibleEntries.indexOfFirst { it.id == focusEntryId } + catalogHeaderCount)
                 withFrameNanos { }
                 catalogFocus.requestFocus()
             } else railFocus.requestFocus()
@@ -217,7 +218,7 @@ fun OttNativeApp(
                                                         else focusScope.launch {
                                                             // A remembered grid position can put a new tab's target
                                                             // outside the lazy viewport. Compose it before focusing.
-                                                            gridState.scrollToItem(visibleEntries.indexOfFirst { it.id == focusEntryId })
+                                                            gridState.scrollToItem(visibleEntries.indexOfFirst { it.id == focusEntryId } + catalogHeaderCount)
                                                             withFrameNanos { }
                                                             catalogFocus.requestFocus()
                                                         }

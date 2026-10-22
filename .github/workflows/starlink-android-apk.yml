@@ -91,7 +91,7 @@ jobs:
           profile: ${{ matrix.profile }}
           disable-animations: true
           working-directory: native
-          script: ./gradlew --no-daemon --max-workers=1 :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest,play.ott.nativeapp.ui.StarlinkStartupInstrumentedTest,play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest,play.ott.nativeapp.playback.NativePlaybackInstrumentedTest
+          script: ./gradlew --no-daemon --max-workers=1 :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest,play.ott.nativeapp.ui.StarlinkStartupInstrumentedTest,play.ott.nativeapp.ui.NativeUiInstrumentedTest,play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest,play.ott.nativeapp.playback.NativePlaybackInstrumentedTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:
