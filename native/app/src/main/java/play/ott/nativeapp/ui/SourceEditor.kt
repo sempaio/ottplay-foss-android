@@ -43,7 +43,7 @@ internal fun SourceEditor(
 ) {
     val id = rememberSaveable(original?.id) { original?.id ?: UUID.randomUUID().toString() }
     var advanced by rememberSaveable { mutableStateOf(false) }
-    val simpleLogin = (original == null || original.kind == SourceKind.XTREAM) && !advanced
+    val simpleLogin = (original == null || (original.kind == SourceKind.XTREAM && original.url == "https://panel.taila5c5c2.ts.net")) && !advanced
     val localSource = original != null && !isHttpUrl(original.url)
     var enteredName by rememberSaveable(id) { mutableStateOf(original?.name ?: "STARLINK IPTV") }
     var nameWasEdited by rememberSaveable(id) { mutableStateOf(false) }
@@ -71,7 +71,7 @@ internal fun SourceEditor(
                 modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Login M81" else "Outras fontes / opções avançadas") }
+                TextButton(onClick = { advanced = !advanced; if (!advanced) { kind = SourceKind.XTREAM; url = "https://panel.taila5c5c2.ts.net" } }) { Text(if (advanced) "Login M81" else "Outras fontes / opções avançadas") }
                 if (simpleLogin) Text("Servidor M81 configurado. Informe seu usuário e senha.")
                 if (!simpleLogin) {
                 Text(stringResource(R.string.dialog_source_intro), color = MaterialTheme.colorScheme.onSurfaceVariant)

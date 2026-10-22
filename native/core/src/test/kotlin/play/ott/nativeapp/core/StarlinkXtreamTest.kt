@@ -23,7 +23,7 @@ class StarlinkXtreamTest {
                 val request = s.takeRequest()
                 assertEquals(config(s).username, request.requestUrl?.queryParameter("username"))
                 assertEquals(config(s).password, request.requestUrl?.queryParameter("password"))
-                assertEquals("get_account_info", request.requestUrl?.queryParameter("action"))
+                assertNull(request.requestUrl?.queryParameter("action"))
             }
         }
     }

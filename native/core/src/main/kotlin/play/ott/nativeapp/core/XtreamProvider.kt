@@ -44,7 +44,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
     }
 
     suspend fun authenticate(config: SourceConfig) {
-        val data = api(config, "get_account_info", "", "") as? JsonObject
+        val data = api(config, "", "", "") as? JsonObject
             ?: throw ProviderException("Invalid Xtream account response")
         val account = data["user_info"] as? JsonObject ?: throw ProviderException("Invalid Xtream account response")
         if (account.string("auth") != "1") throw ProviderException("Xtream rejected the username or password")
@@ -93,7 +93,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             .apply { XtreamAddresses.nativeBaseSegments(input.pathSegments).forEach { addPathSegment(it) } }
             .addPathSegment("player_api.php")
             .addQueryParameter("username", config.username).addQueryParameter("password", config.password)
-            .addQueryParameter("action", action).apply { if (key.isNotBlank()) addQueryParameter(key, id) }.build().toString()
+            .apply { if (action.isNotBlank()) addQueryParameter("action", action); if (key.isNotBlank()) addQueryParameter(key, id) }.build().toString()
         return parseProviderJson(http.get(url, config.headers).text())
     }
 

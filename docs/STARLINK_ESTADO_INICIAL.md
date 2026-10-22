@@ -29,3 +29,10 @@ Workflow 39736040191 em 66fb9d53 falhou: setup-android@v3 usa packages padrão t
 Tema Netflix: apenas CSS e README, sem licença explícita. Reutilizar somente conceitos de cores escuras, contraste e cartões; não copiar CSS nem marcas/imagens. Identidade existente em starlink/brand_native.py apenas muda nome/ID e grava URL sem integração UI.
 M81 somente leitura: app/routers/xtream_api.py documenta login, seis catálogos, get_vod_info, get_series_info, get_short_epg (lista vazia atualmente), XMLTV e redirecionamento HTTP 307. Não há transcodificação presumida.
 Base nativa já contém catálogos Xtream, episódios, filtros, favoritos, cofre AES-GCM AndroidKeyStore, retomada, PiP e controles TV. Verificar com testes antes de declarar funcional. Cast não encontrado. Sem dispositivo ou assinatura existente fornecidos; package br.starlink.iptv será debug e não garante atualização de instalação assinada por outra chave.
+
+## Complemento do reconhecimento
+- `ottplay-netflix`: workflow manual chama npm ci/android:full, mas o checkout contém apenas README/CSS e workflow, sem package.json; execuções 39737799943 e 39737792689 falharam.
+- `ottplay-foss`: versão 1.1.58, Vite/Capacitor com backends adicionais Rust/Tauri; workflows extensos de CI/paridade/release. Execução 39730766440 com sucesso e 39730753748 com falha. Não são prova da variante Android STARLINK.
+- `ottplay-android`: workflow android.yml já usa SDK platforms;android-37.0 e JDK 17. GitHub não retornou execuções recentes no fork sempaio.
+- M81: sem workflows recentes; FastAPI 0.141.1, SQLAlchemy 2.0.52 e requisitos fixados. Código consultado exclusivamente como documentação, sem executar serviços, migrations ou deploy.
+- Conectividade inicial M81: GET /player_api.php sem credenciais retornou HTTP 422; autenticação real não realizada.
