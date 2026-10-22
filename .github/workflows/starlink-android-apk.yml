@@ -92,6 +92,8 @@ jobs:
           disable-animations: true
           working-directory: native
           script: ./gradlew --no-daemon --max-workers=1 :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.StarlinkAcceptanceSuite
+      - name: Verify full device coverage
+        run: python3 starlink/verify_device_results.py native/app/build/outputs/androidTest-results/connected/debug
       - uses: actions/upload-artifact@v4
         if: always()
         with:
