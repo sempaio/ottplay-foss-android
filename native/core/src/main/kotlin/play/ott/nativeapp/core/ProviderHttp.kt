@@ -94,7 +94,7 @@ internal class ProviderHttp(client: OkHttpClient, private val transportPolicy: R
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                if (continuation.isActive) continuation.resumeWithException(ProviderException("Cannot connect to source; check address and network"))
+                if (continuation.isActive) continuation.resumeWithException(networkFailure(e))
             }
 
             override fun onResponse(call: Call, response: Response) {
@@ -121,7 +121,7 @@ internal class ProviderHttp(client: OkHttpClient, private val transportPolicy: R
                     }
                 } catch (error: Exception) {
                     if (continuation.isActive) continuation.resumeWithException(
-                        if (error is ProviderException) error else ProviderException("Unable to read source response")
+                        if (error is ProviderException) error else if (error is IOException) networkFailure(error) else ProviderException("Unable to read source response", failure = ProviderFailure.INVALID_RESPONSE)
                     )
                 }
             }
@@ -136,3 +136,13 @@ internal class ProviderHttp(client: OkHttpClient, private val transportPolicy: R
             .build()
     }
 }
+
+/** Keep the diagnostic category, never the IOException text/cause (which may contain credentials). */
+internal fun networkFailure(error: IOException): ProviderException = ProviderException(
+    "Unable to connect to provider", failure = when (error) {
+        is java.net.UnknownHostException -> ProviderFailure.DNS
+        is java.net.SocketTimeoutException, is java.io.InterruptedIOException -> ProviderFailure.TIMEOUT
+        is javax.net.ssl.SSLException -> ProviderFailure.TLS
+        else -> ProviderFailure.CONNECTION
+    }
+)

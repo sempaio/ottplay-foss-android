@@ -92,4 +92,6 @@ data class Programme(
 )
 
 /** Messages deliberately exclude URLs, which commonly contain provider credentials. */
-class ProviderException(message: String, val statusCode: Int? = null) : Exception(message)
+enum class ProviderFailure { UNKNOWN, DNS, TIMEOUT, TLS, CONNECTION, AUTHENTICATION, ACCOUNT_INACTIVE, INVALID_RESPONSE }
+
+class ProviderException(message: String, val statusCode: Int? = null, val failure: ProviderFailure = ProviderFailure.UNKNOWN) : Exception(message)

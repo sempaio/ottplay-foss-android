@@ -45,10 +45,10 @@ internal class XtreamProvider(private val http: ProviderHttp) {
 
     suspend fun authenticate(config: SourceConfig) {
         val data = api(config, "", "", "") as? JsonObject
-            ?: throw ProviderException("Invalid Xtream account response")
-        val account = data["user_info"] as? JsonObject ?: throw ProviderException("Invalid Xtream account response")
-        if (account.string("auth") != "1") throw ProviderException("Xtream rejected the username or password")
-        if (!account.string("status").equals("Active", ignoreCase = true)) throw ProviderException("Xtream account is not active")
+            ?: throw ProviderException("Invalid Xtream account response", failure = ProviderFailure.INVALID_RESPONSE)
+        val account = data["user_info"] as? JsonObject ?: throw ProviderException("Invalid Xtream account response", failure = ProviderFailure.INVALID_RESPONSE)
+        if (account.string("auth") != "1") throw ProviderException("Xtream rejected the username or password", failure = ProviderFailure.AUTHENTICATION)
+        if (!account.string("status").trim().equals("Active", ignoreCase = true)) throw ProviderException("Xtream account is not active", failure = ProviderFailure.ACCOUNT_INACTIVE)
     }
 
     /** VOD detail is lazy: one request only when the user starts a movie. */

@@ -1,0 +1,9 @@
+<resources>
+    <string name="starlink_authenticating">Verificando a conta…</string>
+    <string name="starlink_use_playlist">Usar lista STARLINK (M3U)</string>
+    <string name="starlink_tls_failed">Não foi possível estabelecer uma conexão HTTPS segura. Verifique a data, a hora e a rede do aparelho.</string>
+    <string name="starlink_connection_failed">Não foi possível conectar ao servidor. Verifique a internet e o acesso à rede M81.</string>
+    <string name="starlink_credentials_rejected">O servidor recusou este usuário ou senha. Nenhuma conta foi salva.</string>
+    <string name="starlink_account_inactive">O servidor informou que esta conta está inativa ou vencida. Entre em contato com o suporte.</string>
+    <string name="starlink_invalid_response">O servidor não retornou uma resposta de conta Xtream válida. O acesso pode estar indisponível ou o endereço não expor a API Xtream.</string>
+</resources>

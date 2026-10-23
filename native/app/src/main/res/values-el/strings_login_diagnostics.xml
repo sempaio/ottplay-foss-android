@@ -1,0 +1,9 @@
+<resources>
+    <string name="starlink_authenticating">Checking account…</string>
+    <string name="starlink_use_playlist">Use STARLINK playlist (M3U)</string>
+    <string name="starlink_tls_failed">A secure HTTPS connection could not be established. Check the device date, time and network.</string>
+    <string name="starlink_connection_failed">Could not connect to the server. Check your internet connection and access to the M81 network.</string>
+    <string name="starlink_credentials_rejected">The server rejected this username or password. No account was saved.</string>
+    <string name="starlink_account_inactive">The server reports this account is inactive or expired. Contact support.</string>
+    <string name="starlink_invalid_response">The server did not return a valid Xtream account response. Access may be unavailable or the address may not expose the Xtream API.</string>
+</resources>
