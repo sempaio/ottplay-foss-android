@@ -17,7 +17,14 @@ Pacote preservado: `br.starlink.iptv.layout`, nome STARLINK IPTV Prévia, códig
 
 Os testes usam contas fictícias e mídias sintéticas. Não houve autenticação com conta real; portanto esta alteração não comprova a disponibilidade do servidor nem resolve por si só eventual bloqueio de acesso no painel. O erro mostrado no celular ainda não permite distinguir credenciais recusadas de restrições da rede/serviço. Não foram alterados serviços, dados ou configurações de produção.
 
-Resultados, hash do APK e execução dos emuladores serão registrados após o término das verificações.
+Validação local concluída: 68 testes do núcleo e 118 do aplicativo, todos aprovados; lint sem erros e 21 avisos legados. Compilação do aplicativo e APK de instrumentação aprovadas. aapt/apksigner e inspeção dos DEX confirmaram pacote, nome, versão, Internet, assinatura íntegra, URLs previstas e ausência da senha sintética no APK cliente.
+
+APK: `dist/STARLINK-IPTV-layout.apk`, 23.860.026 bytes, versão `0.3.1-layout`.
+SHA256: `414abb9a8c5bf49ef3a0b4f1536cd5b58e3994fe057ce85df2d1477130c85e26`.
+Código e APK: commit `028cde75bbc45eb1ed41f0adc7d5485e953e36c3`.
+Execução celular: https://github.com/sempaio/ottplay-foss-android/actions/runs/40004079694 (resultado em acompanhamento).
+
+[Download desta versão](https://raw.githubusercontent.com/sempaio/ottplay-foss-android/028cde75bbc45eb1ed41f0adc7d5485e953e36c3/dist/STARLINK-IPTV-layout.apk).
 
 ## Instalação e rollback
 

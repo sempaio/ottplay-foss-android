@@ -1,3 +1,5 @@
+> Atualização 0.3.1 para celular: veja [STARLINK_CLIENTE_031.md](STARLINK_CLIENTE_031.md). O conteúdo abaixo registra a entrega anterior. TV, DLNA e espelhamento estão adiados nesta atualização.
+
 # STARLINK IPTV — prévia neon 0.3.0-layout
 
 Repositório: https://github.com/sempaio/ottplay-foss-android

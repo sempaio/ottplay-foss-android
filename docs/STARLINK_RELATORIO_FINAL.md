@@ -1,3 +1,5 @@
+> Atualização 0.3.1 para celular: veja [STARLINK_CLIENTE_031.md](STARLINK_CLIENTE_031.md). O conteúdo abaixo registra a entrega anterior. TV, DLNA e espelhamento estão adiados nesta atualização.
+
 > Nova prévia neon 0.3.0-layout: [STARLINK_LAYOUT_RELATORIO_FINAL.md](STARLINK_LAYOUT_RELATORIO_FINAL.md). Este documento preserva a entrega anterior.
 
 # Entrega STARLINK IPTV — 2026-10-22
