@@ -8,4 +8,6 @@ A migração SQLite1→2 apenas cria `recent`; não apaga catálogos, fontes ou 
 
 Chave estável local fora do Git: `/workspace/.starlink-signing/layout.jks`, configuração privada no mesmo diretório. Guardar backup seguro desse diretório antes de trocar o computador. Nunca publicar o keystore ou o JSON privado. O certificado público pode constar no relatório. CI usa quatro segredos dedicados quando disponíveis: STARLINK_LAYOUT_KEYSTORE_B64, STARLINK_LAYOUT_STORE_PASSWORD, STARLINK_LAYOUT_KEY_ALIAS, STARLINK_LAYOUT_KEY_PASSWORD. Não substituir segredos de outras variantes.
 
-A alternativa CI de APK fixado só aceita binários que correspondam ao recibo `starlink/layout-build.json` e ao fingerprint dos fontes nativos. Para novo build, usar a mesma chave, executar os testes, atualizar a pré-release e gerar novo recibo. Se não houver a chave, não assinar substituto como se fosse atualização; entregar outra variante ou recuperar o backup seguro.
+A alternativa CI de APK fixado só aceita binários que correspondam ao recibo `starlink/layout-build.json` e ao fingerprint dos fontes nativos. Para novo build, usar a mesma chave, executar os testes, atualizar os dois APKs versionados e gerar novo recibo. Se não houver a chave, não assinar substituto como se fosse atualização; entregar outra variante ou recuperar o backup seguro.
+
+O upload de assets em uploads.github.com retornou HTTP401 com a credencial desta integração. Alternativa: APK público versionado em dist e APK de instrumentação em starlink/validation, além do artefato do Actions. O keystore não é versionado.

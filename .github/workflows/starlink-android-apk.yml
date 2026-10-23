@@ -53,11 +53,10 @@ jobs:
           cp app/build/outputs/apk/androidTest/layout/app-layout-androidTest.apk ../device-apks/STARLINK-IPTV-layout-androidTest.apk
       - name: Validate pinned signed build when secrets cannot be provisioned
         if: steps.signing.outputs.configured != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download starlink-layout-0.3.0 --repo "$GITHUB_REPOSITORY" --pattern STARLINK-layout-device-apks.zip --dir "$RUNNER_TEMP"
-          unzip -q "$RUNNER_TEMP/STARLINK-layout-device-apks.zip" -d device-apks
+          mkdir -p device-apks
+          cp dist/STARLINK-IPTV-layout.apk device-apks/
+          cp starlink/validation/STARLINK-IPTV-layout-androidTest.apk device-apks/
           python3 starlink/layout_build_receipt.py verify
       - name: Validate APK
         run: |
@@ -73,7 +72,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: STARLINK-IPTV-layout-APK
-          path: dist/
+          path: |
+            dist/STARLINK-IPTV-layout.apk
+            dist/SHA256SUMS-layout
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
