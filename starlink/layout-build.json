@@ -1,7 +1,7 @@
 {
-  "native_sources_sha256": "30a197fff3ff147cd988d547f1b980bc72bd0cef811f9f03ec0fe56b8059682f",
+  "native_sources_sha256": "7becb1924f35f145fd7f7d5e07e0b43899b23b665b5425289368edfffcbcf39d",
   "apks": {
-    "STARLINK-IPTV-layout.apk": "414abb9a8c5bf49ef3a0b4f1536cd5b58e3994fe057ce85df2d1477130c85e26",
-    "STARLINK-IPTV-layout-androidTest.apk": "4f4aa9a9c3463ef3e122b1692d43e5c8bb85edc6e5ea60989ea2aea81625d37f"
+    "STARLINK-IPTV-layout.apk": "856c576fb36a002c69082907077355455017ab6ff541cce361a51afbfb147bd4",
+    "STARLINK-IPTV-layout-androidTest.apk": "4d5f2c50607f2fd21c237b4c582684aed130eea09c3eb0966305a4e4ac8bae4d"
   }
 }
