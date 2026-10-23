@@ -72,4 +72,18 @@ class StarlinkXtreamTest {
             assertEquals("/cdn/catalog", s.takeRequest().path)
         }
     }
+    @Test fun `M81 pending series never invent episodes or stream paths`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val source = config(server)
+            val entry = MediaEntry("pending", source.id, "[24H] Fixture [S07]", kind = MediaKind.SERIES, providerId = "42")
+            server.enqueue(MockResponse().setBody("""{"info":{"name":"Fixture"},"seasons":[],"episodes":{},"episode_metadata":"pending"}"""))
+            assertTrue(ProviderRepository().loadEpisodes(source, entry).isEmpty())
+            val request = server.takeRequest()
+            assertEquals("get_series_info", request.requestUrl?.queryParameter("action"))
+            assertEquals("42", request.requestUrl?.queryParameter("series_id"))
+            assertEquals(1, server.requestCount)
+        }
+    }
+
 }

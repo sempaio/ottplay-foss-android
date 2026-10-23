@@ -173,7 +173,7 @@ fun OttNativeApp(
         value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || it.group == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || it.group.contains(search, ignoreCase = true)) }
     }
     }
-    val catalogHeaderCount = 0
+    val catalogHeaderCount = 1
     val railFocus = remember { FocusRequester() }
     val welcomeFocus = remember { FocusRequester() }
     val catalogFocus = remember { FocusRequester() }
@@ -281,6 +281,16 @@ fun OttNativeApp(
                                             group = category; search = ""
                                         })
                                     } else {
+                                    LazyVerticalGrid(
+                                        state = gridState,
+                                        columns = GridCells.Adaptive(if (wide) 218.dp else 152.dp),
+                                        modifier = Modifier.weight(1f).testTag("library-grid"),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                                        contentPadding = PaddingValues(bottom = 24.dp),
+                                    ) {
+                                        item(key = "catalog-controls", span = { GridItemSpan(maxLineSpan) }) {
+                                            Column(Modifier.testTag("catalog-controls"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     LibraryHeader(stringResource(tab.heading), selectedSource, state.sources, onAction, state.isBusy, customerMode)
                                     state.playingEntry?.let { entry ->
                                         Card(onClick = { fullscreen = true }, modifier = Modifier.testTag("now-playing-bar"), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -314,18 +324,14 @@ fun OttNativeApp(
                                         Text(pluralStringResource(R.plurals.library_entry_count, visibleEntries.size, visibleEntries.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         if (isTv) Text(stringResource(R.string.library_remote_hint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    if (visibleEntries.isEmpty()) {
-                                        EmptyLibrary(tab, search.isNotEmpty() || group.isNotEmpty(), state.isBusy,
-                                            { search = ""; group = "" }, { onAction(AppAction.Refresh) }, Modifier.weight(1f))
-                                    } else {
-                                        LazyVerticalGrid(
-                                            state = gridState,
-                                            columns = GridCells.Adaptive(if (wide) 218.dp else 152.dp),
-                                            modifier = Modifier.weight(1f).testTag("library-grid"),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                                            contentPadding = PaddingValues(bottom = 24.dp),
-                                        ) {
+                                            }
+                                        }
+                                        if (visibleEntries.isEmpty()) {
+                                            item(key = "catalog-empty", span = { GridItemSpan(maxLineSpan) }) {
+                                                EmptyLibrary(tab, search.isNotEmpty() || group.isNotEmpty(), state.isBusy,
+                                                    { search = ""; group = "" }, { onAction(AppAction.Refresh) }, Modifier.fillMaxWidth().heightIn(min = 180.dp))
+                                            }
+                                        } else {
                                             items(visibleEntries, key = { it.id }) { entry ->
                                                 MediaCard(entry, entry.id in state.favoriteIds, state.playingEntry?.id == entry.id, onAction,
                                                     Modifier.then(if (entry.id == focusEntryId) Modifier.focusRequester(catalogFocus) else Modifier)
@@ -400,9 +406,16 @@ internal fun Brand() {
 @Composable
 internal fun LibraryHeader(title: String, source: SourceConfig?, sources: List<SourceConfig>, onAction: (AppAction) -> Unit, loading: Boolean, customerMode: Boolean = false) {
     var menuOpen by remember { mutableStateOf(false) }
+    val refreshDescription = stringResource(R.string.library_refresh)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (customerMode) androidx.compose.material3.IconButton(onClick = { onAction(AppAction.Refresh) }, enabled = !loading,
+                modifier = Modifier.testTag("catalog-refresh").semantics { contentDescription = refreshDescription }) {
+                Text("↻", style = MaterialTheme.typography.headlineMedium)
+            }
+        }
+        if (!customerMode) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!customerMode) Box(Modifier.weight(1f)) {
                 ActionButton(source?.name ?: stringResource(R.string.library_choose_source), { menuOpen = true }, Modifier.fillMaxWidth(), compact = true)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
