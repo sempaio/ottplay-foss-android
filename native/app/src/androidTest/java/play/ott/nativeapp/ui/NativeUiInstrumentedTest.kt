@@ -32,6 +32,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import play.ott.nativeapp.core.MediaEntry
@@ -46,6 +47,16 @@ import play.ott.nativeapp.core.SourceKind
 @RunWith(AndroidJUnit4::class)
 class NativeUiInstrumentedTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @Before fun bringFixtureActivityToForeground() {
+        // A real launcher Activity was exercised by the preceding class. Its asynchronous
+        // task/window teardown must not leave this fixture behind the launcher window.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val activity = compose.activity
+            activity.getSystemService(android.app.ActivityManager::class.java).appTasks
+                .firstOrNull { it.taskInfo?.taskId == activity.taskId }?.moveToFront()
+        }
+        awaitActivityWindowReady(compose.activity, hideIme = true)
+    }
     private fun text(id: Int) = compose.activity.getString(id)
     private val source = SourceConfig("ui-test", "Демоисточник", SourceKind.M3U, "https://example.com/list.m3u")
     private val entry = MediaEntry("ui-test:movie", source.id, "Тестовый ролик", "https://example.com/video.mp4", kind = MediaKind.MOVIE)

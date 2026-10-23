@@ -24,7 +24,9 @@ internal fun awaitActivityWindowReady(
             .hide(WindowInsetsCompat.Type.ime())
     }
     var diagnostics = ""
-    val automation = if (acknowledgeImmersiveTutorial) instrumentation.uiAutomation else null
+    // Always collect the owning system window on failure; do not dismiss it unless
+    // the caller explicitly requests the narrowly identified immersive tutorial.
+    val automation = instrumentation.uiAutomation
     val originalFlags = automation?.serviceInfo?.flags
     if (automation != null) automation.serviceInfo = automation.serviceInfo.apply {
         flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
@@ -42,7 +44,7 @@ internal fun awaitActivityWindowReady(
                     "ime=$imeVisible, focus=${activity.currentFocus?.javaClass?.simpleName}:${activity.currentFocus?.id}"
             }
             if (ready) return
-            if (automation != null && !tutorialAcknowledged) {
+            if (acknowledgeImmersiveTutorial && !tutorialAcknowledged) {
                 tutorialAcknowledged = acknowledgeKnownImmersiveTutorial(automation)
                 if (tutorialAcknowledged) {
                     // Accessibility may block until Android's first-fullscreen overlay

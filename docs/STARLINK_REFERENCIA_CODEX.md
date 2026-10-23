@@ -34,3 +34,5 @@ Resolução das séries transferida pelo usuário ao Codex do computador. Candid
 Servidor Xtream fixo: https://panel.taila5c5c2.ts.net . Playlist independente: https://panel.taila5c5c2.ts.net/app/starlink-iptv/playlist.m3u . O cliente informa somente usuário e senha; edição de servidor/fontes bloqueada na versão cliente. Não compartilhar credenciais nos relatos.
 
 TV, DLNA, espelhamento e comportamento em segundo plano seguem adiados. Botão Atualizar fixo no topo é preferência registrada para próxima melhoria; não integra a alteração atual. Preservar 0.3.1 como referência estável, sem aplicar downgrade destrutivo no dispositivo.
+
+Nova tentativa reproduziu 16/19, com as mesmas três falhas de foco. Preparação da janela dos testes corrigida para trazer a tarefa da Activity de fixture ao primeiro plano; diagnóstico de janela ampliado sem aceitar diálogos genéricos ou remover asserções. APK cliente reconstruído e SHA256 confirmado idêntico; somente a instrumentação foi alterada. Nova execução completa solicitada.
