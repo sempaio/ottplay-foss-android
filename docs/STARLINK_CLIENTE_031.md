@@ -11,6 +11,7 @@ Pacote preservado: `br.starlink.iptv.layout`, nome STARLINK IPTV Prévia, códig
 - Mensagens curtas para autenticação, internet, tempo de espera e indisponibilidade; sem URLs, protocolos ou detalhes internos. Classificação interna preserva a diferença entre DNS, TLS, timeout, resposta inválida e autenticação, sem registrar credenciais.
 - Logo derivada do arquivo de identidade existente `tv_apps/starlink_m3u/base/starlink/brand.png` no repositório do operador, com adaptação visual para IPTV. Créditos e licenças originais preservados.
 - DLNA e espelhamento excluídos desta entrega por solicitação do usuário. Google Cast continua pendente.
+- Entrega priorizada para celular. Adaptação e validação de Android TV adiadas por solicitação posterior; o workflow desta versão executa apenas o emulador de celular.
 
 ## Validação e limites
 
