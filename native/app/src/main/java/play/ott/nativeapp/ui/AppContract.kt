@@ -7,12 +7,17 @@ import play.ott.nativeapp.data.TrackPreference
 
 /** A presentation snapshot. Network, persistence and playback ownership stay outside Compose. */
 data class AppUiState(
+    val sourceSaveRevision: Int = 0,
     val sources: List<SourceConfig> = emptyList(),
     val selectedSourceId: String? = null,
     val entries: List<MediaEntry> = emptyList(),
+    val updateAvailable: Boolean = false,
+    val checkingUpdate: Boolean = false,
+    val recent: List<play.ott.nativeapp.data.RecentPlayback> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
     val epgEntry: MediaEntry? = null,
     val programmes: List<Programme> = emptyList(),
+    val movieEntry: MediaEntry? = null,
     val seriesEntry: MediaEntry? = null,
     val episodes: List<MediaEntry> = emptyList(),
     val playingEntry: MediaEntry? = null,
@@ -27,11 +32,15 @@ sealed interface AppAction {
     data class SelectSource(val sourceId: String) : AppAction
     data class SaveSource(val source: SourceConfig) : AppAction
     data class DeleteSource(val sourceId: String) : AppAction
+    data object CheckUpdate : AppAction
+    data object InstallUpdate : AppAction
     data object Refresh : AppAction
     data class ToggleFavorite(val entry: MediaEntry) : AppAction
     data class Play(val entry: MediaEntry) : AppAction
     data class OpenEpg(val entry: MediaEntry) : AppAction
     data class PlayProgramme(val entry: MediaEntry, val programme: Programme) : AppAction
+    data class OpenMovie(val entry: MediaEntry) : AppAction
+    data object CloseMovie : AppAction
     data class OpenSeries(val entry: MediaEntry) : AppAction
     data object CloseEpg : AppAction
     data object CloseSeries : AppAction

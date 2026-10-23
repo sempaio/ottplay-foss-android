@@ -29,8 +29,16 @@ android {
         buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
         manifestPlaceholders["allowCleartextTraffic"] = "false"
     }
+    testBuildType = "layout"
     buildFeatures { compose = true; buildConfig = true; resValues = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    signingConfigs.create("layoutStable") {
+        val path = providers.environmentVariable("STARLINK_LAYOUT_KEYSTORE").orNull
+        storeFile = path?.let { file(it) } ?: file(System.getProperty("user.home") + "/.starlink-signing/layout.jks")
+        storePassword = providers.environmentVariable("STARLINK_LAYOUT_STORE_PASSWORD").orNull
+        keyAlias = providers.environmentVariable("STARLINK_LAYOUT_KEY_ALIAS").orNull ?: "starlink-layout"
+        keyPassword = providers.environmentVariable("STARLINK_LAYOUT_KEY_PASSWORD").orNull
+    }
     if (signingVariant != null) {
         signingConfigs.create("configured") {
             storeFile = file(signingValues.getValue("OTTPLAY_KEYSTORE")!!)
@@ -47,6 +55,7 @@ android {
         }
         create("layout") {
             initWith(getByName("debug"))
+            signingConfig = signingConfigs.getByName("layoutStable")
             applicationIdSuffix = ".layout"
             versionNameSuffix = "-layout"
             matchingFallbacks += "debug"
@@ -124,3 +133,8 @@ dependencies {
 }
 
 configurations.named("layoutImplementation") { extendsFrom(configurations.getByName("debugImplementation")) }
+
+androidComponents.beforeVariants(androidComponents.selector().withBuildType("layout")) {
+    it.hostTests.values.filter { test -> test.type == "UnitTest" }.forEach { test -> test.enable = true }
+
+}

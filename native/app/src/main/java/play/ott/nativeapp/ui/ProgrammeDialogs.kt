@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -119,6 +120,7 @@ private fun ProgrammeCard(title: String, description: String, time: String, stat
 
 @Composable
 internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading: Boolean, onAction: (AppAction) -> Unit) {
+    var selectedSeason by remember(entry.id) { mutableStateOf<Int?>(null) }
     val ordered = remember(episodes) { episodes.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.name })) }
     Dialog(onDismissRequest = { onAction(AppAction.CloseSeries) }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.tvRemoteInput().fillMaxWidth(.94f).widthIn(max = 860.dp).fillMaxHeight(.91f), shape = RoundedCornerShape(24.dp)) {
@@ -133,8 +135,13 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
                 if (entry.description.isNotBlank()) Text(entry.description, style = MaterialTheme.typography.bodyMedium, maxLines = 4, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (ordered.isEmpty() && !loading) Text(stringResource(R.string.dialog_series_empty))
+                val seasons = remember(ordered) { ordered.map { it.season ?: 1 }.distinct() }
+                val activeSeason = selectedSeason?.takeIf { it in seasons } ?: seasons.firstOrNull()
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(seasons) { season -> ActionButton(stringResource(R.string.dialog_season, season), { selectedSeason = season }, selected = season == activeSeason, compact = true) }
+                }
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ordered.groupBy { it.season ?: 1 }.forEach { (season, entries) ->
+                    ordered.filter { (it.season ?: 1) == activeSeason }.groupBy { it.season ?: 1 }.forEach { (season, entries) ->
                         item { Text(stringResource(R.string.dialog_season, season), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp)) }
                         items(entries, key = { it.id }) { episode ->
                             var focused by remember { mutableStateOf(false) }
@@ -146,6 +153,7 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                             ) {
                                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (episode.logo.isNotBlank()) coil.compose.AsyncImage(episode.logo, null, Modifier.widthIn(max = 140.dp).weight(.4f))
                                     Column(Modifier.weight(1f)) {
                                         episode.episode?.let { Text(stringResource(R.string.dialog_episode, it), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary) }
                                         Text(episode.name, style = MaterialTheme.typography.titleMedium)

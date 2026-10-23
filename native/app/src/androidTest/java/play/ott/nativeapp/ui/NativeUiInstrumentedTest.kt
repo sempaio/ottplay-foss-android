@@ -60,8 +60,10 @@ class NativeUiInstrumentedTest {
                     actions += action
                     when (action) {
                         AppAction.AddDemo -> snapshot = snapshot.copy(sources = listOf(source), selectedSourceId = source.id, entries = listOf(entry))
+                        is AppAction.OpenMovie -> snapshot = snapshot.copy(movieEntry = action.entry)
+                        AppAction.CloseMovie -> snapshot = snapshot.copy(movieEntry = null)
                         is AppAction.Play -> snapshot = snapshot.copy(playingEntry = action.entry)
-                        is AppAction.SaveSource -> snapshot = snapshot.copy(sources = snapshot.sources + action.source)
+                        is AppAction.SaveSource -> snapshot = snapshot.copy(sources = snapshot.sources + action.source, sourceSaveRevision = snapshot.sourceSaveRevision + 1)
                         AppAction.StopPlayback -> snapshot = snapshot.copy(playingEntry = null)
                         else -> Unit
                     }
@@ -76,8 +78,10 @@ class NativeUiInstrumentedTest {
             assertEquals(source.id, snapshot.selectedSourceId)
             assertEquals(listOf(entry), snapshot.entries)
         }
+        compose.onNodeWithTag("library-tab-MOVIES").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         // A movie-only source must select the film tab; an empty live section must not hide it.
         compose.onNodeWithTag("catalog-item-${entry.id}").assertIsDisplayed().activateForDevice()
+        compose.onNodeWithText(text(R.string.dialog_watch)).activateForDevice()
         compose.onNodeWithTag("player-container").assertIsDisplayed()
         // A previous editor's IME can outlive Compose idleness and consume Back.
         // Deliver one hardware key only after the activity owns a keyboard-free window.
@@ -88,7 +92,7 @@ class NativeUiInstrumentedTest {
         }
         compose.onNodeWithTag("player-container").assertDoesNotExist()
         compose.onNodeWithTag("now-playing-bar").assertIsDisplayed()
-        compose.onNodeWithText(text(R.string.library_sources)).activateForDevice()
+        compose.onNodeWithText(text(R.string.library_sources)).performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.onNodeWithText(text(R.string.library_add_by_url)).performScrollTo().activateForDevice()
         compose.onNodeWithText("Outras fontes / opções avançadas").performClick()
         compose.onNodeWithText(text(R.string.dialog_source_kind_m3u)).performClick()
@@ -115,6 +119,7 @@ class NativeUiInstrumentedTest {
                 )
             }
         }
+        compose.onNodeWithTag("library-tab-MOVIES").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithText(text(R.string.library_tab_movies)).assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithText(text(R.string.library_tab_live)).assertIsFocused()
@@ -133,6 +138,7 @@ class NativeUiInstrumentedTest {
         compose.setContent {
             OttNativeApp(snapshot, {}, null, {}, {})
         }
+        compose.onNodeWithTag("library-tab-MOVIES").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.onNodeWithTag("library-group-Local test").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.onNodeWithTag("catalog-item-${generated.id}").assertIsDisplayed()
         compose.onNodeWithTag("catalog-item-${provider.id}").assertDoesNotExist()
@@ -208,6 +214,8 @@ class NativeUiInstrumentedTest {
                     {}, null, {}, {})
             }
         }
+        compose.onNodeWithTag("library-tab-LIVE").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
+        compose.onNodeWithTag("library-tab-LIVE").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithTag("library-grid").performScrollToIndex(60)
         compose.onNodeWithTag("library-tab-LIVE").assertIsFocused()
         // Deliver hardware events so a phone running the TV layout also leaves touch input mode.

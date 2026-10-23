@@ -35,11 +35,16 @@ import play.ott.nativeapp.AppTransportPolicy
 import java.net.URI
 import java.util.UUID
 
+@Composable
+internal fun SourceEditor(original: SourceConfig?, onDismiss: () -> Unit, onSave: (SourceConfig) -> Unit) =
+    SourceEditor(original, onDismiss, false, onSave)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SourceEditor(
     original: SourceConfig?,
     onDismiss: () -> Unit,
+    busy: Boolean,
     onSave: (SourceConfig) -> Unit,
 ) {
     val id = rememberSaveable(original?.id) { original?.id ?: UUID.randomUUID().toString() }
@@ -63,7 +68,7 @@ internal fun SourceEditor(
     var headers by rememberSaveable(id) { mutableStateOf(original?.headers?.entries?.joinToString("\n") { "${it.key}: ${it.value}" }.orEmpty()) }
     var showPassword by rememberSaveable(id) { mutableStateOf(false) }
     var validation by rememberSaveable(id) { mutableStateOf<Int?>(null) }
-    AlertDialog(
+    NeonSourceDialog(simpleLogin,
         modifier = Modifier.tvRemoteInput(),
         onDismissRequest = onDismiss,
         title = { Text(if (simpleLogin) "Entrar • STARLINK IPTV" else if (original == null) stringResource(R.string.dialog_source_add_title) else stringResource(R.string.dialog_source_edit_title)) },
@@ -131,7 +136,7 @@ internal fun SourceEditor(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
         confirmButton = {
-            ActionButton(text = if (simpleLogin) "Entrar" else if (original == null) stringResource(R.string.dialog_add) else stringResource(R.string.dialog_save), selected = true, onClick = {
+            ActionButton(enabled = !busy, text = if (busy) stringResource(R.string.library_loading) else if (simpleLogin) "Entrar" else if (original == null) stringResource(R.string.dialog_add) else stringResource(R.string.dialog_save), selected = true, onClick = {
                 val cleanUrl = if (simpleLogin) StarlinkConfig.XTREAM_BASE_URL else url.trim()
                 val parsedHeaders = parseHeaders(headers)
                 val hours = if (catchupHours.isBlank()) 0.0 else catchupHours.trim().replace(',', '.').toDoubleOrNull()

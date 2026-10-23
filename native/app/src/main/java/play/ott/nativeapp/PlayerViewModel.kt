@@ -22,6 +22,9 @@ import play.ott.nativeapp.ui.AppUiState
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+    private val updates = play.ott.nativeapp.data.UpdateClient(application)
+    private var latestUpdate: play.ott.nativeapp.data.AppUpdate? = null
+    private var updateJob: Job? = null
     private val repository = (application as OttplayApplication).repository
     private fun message(id: Int, vararg args: Any) = AppLanguages.localizedContext(getApplication()).getString(id, *args)
     private var loadingResource = R.string.message_loading_library
@@ -71,6 +74,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private var controller: MediaController? = null
+    private var saveInFlight = false
     private var loadJob: Job? = null
     private var detailJob: Job? = null
     private var playJob: Job? = null
@@ -89,6 +93,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
     init {
+        checkUpdate(false)
+        viewModelScope.launch { repository.recent.collect { recent -> updateState { it.copy(recent = recent) } } }
+        viewModelScope.launch { runCatching { repository.loadRecent() } }
         viewModelScope.launch {
             repository.preferences.data.collect { preferences ->
                 updateState { it.copy(favoriteIds = preferences.favorites, backgroundPlayback = preferences.backgroundPlayback) }
@@ -105,6 +112,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             catch (_: Exception) {
                 updateState { it.copy(isBusy = false) }; setErrorText { message(R.string.message_saved_sources_unreadable) }
             }
+        }
+    }
+
+    private fun checkUpdate(manual: Boolean) {
+        if (updateJob?.isActive == true) return
+        updateJob = viewModelScope.launch {
+            updateState { it.copy(checkingUpdate = true) }
+            try {
+                latestUpdate = updates.latest()
+                updateState { it.copy(updateAvailable = latestUpdate != null) }
+                if (manual && latestUpdate == null) setNoticeText { message(R.string.neon_no_update) }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { if (manual) setNoticeText { message(R.string.neon_update_failed) } }
+            finally { updateState { it.copy(checkingUpdate = false) } }
         }
     }
 
@@ -174,8 +195,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun dispatch(action: AppAction) {
         when (action) {
+            AppAction.CheckUpdate -> checkUpdate(true)
+            AppAction.InstallUpdate -> {
+                if (updateJob?.isActive != true) latestUpdate?.let { update ->
+                    updateJob = viewModelScope.launch {
+                        updateState { it.copy(checkingUpdate = true) }
+                        try { updates.requestInstall(updates.downloadAndVerify(update)) }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { setNoticeText { message(R.string.neon_update_failed) } }
+                        finally { updateState { it.copy(checkingUpdate = false) } }
+                    }
+                }
+            }
             is AppAction.SelectSource -> load(action.sourceId, false)
-            is AppAction.SaveSource -> operation {
+            is AppAction.SaveSource -> {
+                if (saveInFlight) return
+                saveInFlight = true
+                updateState { it.copy(isBusy = true, error = null) }
+                operation { try {
                 retirePendingSource(action.source.id)
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
@@ -185,8 +222,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     repository.save(StarlinkConfig.playlistSource())
                 }
                 val sources = repository.sources()
-                updateState { it.copy(sources = sources) }
+                updateState { it.copy(sources = sources, sourceSaveRevision = it.sourceSaveRevision + 1) }
                 load(action.source.id, true)
+                } finally { saveInFlight = false } }
             }
             is AppAction.DeleteSource -> operation {
                 retirePendingSource(action.sourceId)
@@ -219,17 +257,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 else play(action.entry.copy(id = action.entry.id + ":archive:" + action.programme.startMillis,
                     name = action.programme.title, nameMessage = null, kind = MediaKind.MOVIE), stream)
             }
+            is AppAction.OpenMovie -> {
+                detailJob?.cancel()
+                updateState { it.copy(movieEntry = action.entry, isBusy = true) }
+                detailJob = operation {
+                    val source = repository.sources().first { it.id == action.entry.sourceId }
+                    val movie = repository.providers.loadMovieInfo(source, action.entry)
+                    updateState { if (it.movieEntry?.id == action.entry.id) it.copy(movieEntry = movie, isBusy = false) else it }
+                }
+            }
+            AppAction.CloseMovie -> { detailJob?.cancel(); updateState { it.copy(movieEntry = null, isBusy = false) } }
             is AppAction.OpenSeries -> {
                 detailJob?.cancel()
-                updateState { it.copy(seriesEntry = action.entry, episodes = emptyList()) }
+                updateState { it.copy(seriesEntry = action.entry, episodes = emptyList(), isBusy = true) }
                 detailJob = operation {
                     val source = repository.sources().first { it.id == action.entry.sourceId }
                     val episodes = repository.providers.loadEpisodes(source, action.entry)
-                    updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes) else it }
+                    updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
                 }
             }
             AppAction.CloseEpg -> { detailJob?.cancel(); updateState { it.copy(epgEntry = null, programmes = emptyList()) } }
-            AppAction.CloseSeries -> { detailJob?.cancel(); updateState { it.copy(seriesEntry = null, episodes = emptyList()) } }
+            AppAction.CloseSeries -> { detailJob?.cancel(); updateState { it.copy(seriesEntry = null, episodes = emptyList(), isBusy = false) } }
             AppAction.DismissError -> { errorText = null; updateState { it.copy(error = null) } }
             AppAction.DismissNotice -> { noticeText = null; updateState { it.copy(notice = null) } }
             AppAction.StopPlayback -> stop()
@@ -259,7 +307,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val generation = ++loadGeneration
         detailJob?.cancel()
         updateState { it.copy(selectedSourceId = id, entries = emptyList(), epgEntry = null,
-            seriesEntry = null, isBusy = true, loadingMessage = message(loadingResource), error = null) }
+            movieEntry = null, seriesEntry = null, isBusy = true, loadingMessage = message(loadingResource), error = null) }
         loadJob = viewModelScope.launch {
             try {
                 repository.preferences.update { it.copy(selectedSourceId = id) }

@@ -93,8 +93,15 @@ import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.SourceConfig
 import play.ott.nativeapp.i18n.AppLanguages
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.produceState
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 
 private enum class LibraryTab(@param:StringRes val title: Int, @param:StringRes val heading: Int) {
+    HOME(R.string.neon_home, R.string.neon_welcome),
     LIVE(R.string.library_tab_live, R.string.library_heading_live),
     MOVIES(R.string.library_tab_movies, R.string.library_heading_movies),
     SERIES(R.string.library_tab_series, R.string.library_heading_series),
@@ -113,22 +120,28 @@ fun OttNativeApp(
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val keyToCatalog = if (LocalLayoutDirection.current == LayoutDirection.Rtl) Key.DirectionLeft else Key.DirectionRight
-    var tab by rememberSaveable { mutableStateOf(LibraryTab.LIVE) }
+    var tab by rememberSaveable { mutableStateOf(LibraryTab.HOME) }
     var search by rememberSaveable { mutableStateOf("") }
     var group by rememberSaveable(state.selectedSourceId, tab) { mutableStateOf("") }
     var showSources by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showGuidePicker by rememberSaveable { mutableStateOf(false) }
     var showPrivacy by rememberSaveable { mutableStateOf(false) }
     var sourceEditorOpen by rememberSaveable { mutableStateOf(false) }
     var sourceEditorId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.sourceSaveRevision) {
+        if (state.sourceSaveRevision > 0) { sourceEditorOpen = false; showSources = false }
+    }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var autoOpenedEntry by rememberSaveable { mutableStateOf<String?>(null) }
     var initializedSource by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val selectedSource = state.sources.firstOrNull { it.id == state.selectedSourceId }
-    val tabEntries = remember(state.entries, state.favoriteIds, tab) {
+    val tabEntries by produceState<List<MediaEntry>>(emptyList(), state.entries, state.favoriteIds, tab) {
+        value = withContext(Dispatchers.Default) {
         state.entries.filter { entry ->
             when (tab) {
+                LibraryTab.HOME -> true
                 LibraryTab.LIVE -> entry.kind == MediaKind.LIVE
                 LibraryTab.MOVIES -> entry.kind == MediaKind.MOVIE
                 LibraryTab.SERIES -> entry.kind == MediaKind.SERIES
@@ -136,14 +149,20 @@ fun OttNativeApp(
             }
         }
     }
-    val groups = remember(tabEntries) { tabEntries.map { it.group }.filter { it.isNotBlank() }.distinct().sorted() }
-    LaunchedEffect(groups, state.isBusy) {
-        // Generated group labels change with the app language. Keep existing provider filters,
-        // but do not let a saved, obsolete label hide the newly localized catalog.
-        if (!state.isBusy && tabEntries.isNotEmpty() && group.isNotBlank() && group !in groups) group = ""
     }
-    val visibleEntries = remember(tabEntries, search, group) {
-        tabEntries.filter { (group.isBlank() || it.group == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || it.group.contains(search, ignoreCase = true)) }
+    val groups by produceState<List<String>>(emptyList(), tabEntries) {
+        value = withContext(Dispatchers.Default) { tabEntries.map { it.group }.filter { it.isNotBlank() }.distinct().sorted() }
+    }
+    LaunchedEffect(state.entries, group, state.isBusy) {
+        if (!state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
+            val exists = withContext(Dispatchers.Default) { state.entries.any { it.group == group } }
+            if (!exists) group = ""
+        }
+    }
+    val visibleEntries by produceState<List<MediaEntry>>(emptyList(), tabEntries, search, group) {
+        if (search.isNotBlank()) delay(250)
+        value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || it.group == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || it.group.contains(search, ignoreCase = true)) }
+    }
     }
     val catalogHeaderCount = if (tab == LibraryTab.MOVIES || tab == LibraryTab.SERIES) 1 else 0
     val railFocus = remember { FocusRequester() }
@@ -159,8 +178,8 @@ fun OttNativeApp(
             // Request only on entering the library, after layout and automatic tab selection.
             // Later state updates must not pull focus out of search or a dialog.
             withFrameNanos { }
-            if (state.sources.isEmpty()) welcomeFocus.requestFocus()
-            else if (lastFocusedEntryId != null && focusEntryId != null) {
+            if (state.sources.isEmpty() || tab == LibraryTab.HOME) welcomeFocus.requestFocus()
+            else if (tab != LibraryTab.HOME && lastFocusedEntryId != null && focusEntryId != null) {
                 gridState.scrollToItem(visibleEntries.indexOfFirst { it.id == focusEntryId } + catalogHeaderCount)
                 withFrameNanos { }
                 catalogFocus.requestFocus()
@@ -171,12 +190,7 @@ fun OttNativeApp(
     LaunchedEffect(state.selectedSourceId, state.entries) {
         if (initializedSource != state.selectedSourceId && state.entries.isNotEmpty()) {
             initializedSource = state.selectedSourceId
-            tab = when {
-                state.entries.any { it.kind == MediaKind.LIVE } -> LibraryTab.LIVE
-                state.entries.any { it.kind == MediaKind.MOVIE } -> LibraryTab.MOVIES
-                state.entries.any { it.kind == MediaKind.SERIES } -> LibraryTab.SERIES
-                else -> LibraryTab.FAVORITES
-            }
+            tab = LibraryTab.HOME
         }
     }
     LaunchedEffect(state.playingEntry?.id) {
@@ -188,7 +202,7 @@ fun OttNativeApp(
     LaunchedEffect(state.notice) {
         state.notice?.let { snackbar.showSnackbar(it); onAction(AppAction.DismissNotice) }
     }
-    BackHandler(enabled = state.playingEntry != null && state.epgEntry == null && state.seriesEntry == null && !showSources && !showSettings && !showPrivacy && !sourceEditorOpen) {
+    BackHandler(enabled = state.playingEntry != null && state.epgEntry == null && state.seriesEntry == null && state.movieEntry == null && !showSources && !showSettings && !showPrivacy && !sourceEditorOpen && !showGuidePicker) {
         if (fullscreen) fullscreen = false else onAction(AppAction.StopPlayback)
     }
     OttTheme {
@@ -203,7 +217,7 @@ fun OttNativeApp(
                         val wide = isTv || maxWidth >= 840.dp
                         Row(Modifier.fillMaxSize().padding(if (isTv) 28.dp else 16.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             if (wide) {
-                                Column(Modifier.width(188.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(Modifier.width(188.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Brand()
                                     Spacer(Modifier.height(18.dp))
                                     LibraryTab.entries.forEach { option ->
@@ -214,7 +228,7 @@ fun OttNativeApp(
                                                 if (isTv && event.type == KeyEventType.KeyDown && event.key == keyToCatalog &&
                                                     (state.sources.isEmpty() || focusEntryId != null)) {
                                                     if (event.nativeKeyEvent.repeatCount == 0) {
-                                                        if (state.sources.isEmpty()) welcomeFocus.requestFocus()
+                                                        if (state.sources.isEmpty() || tab == LibraryTab.HOME) welcomeFocus.requestFocus()
                                                         else focusScope.launch {
                                                             // A remembered grid position can put a new tab's target
                                                             // outside the lazy viewport. Compose it before focusing.
@@ -227,7 +241,8 @@ fun OttNativeApp(
                                                 } else false
                                             }, selected = tab == option)
                                     }
-                                    Spacer(Modifier.weight(1f))
+                                    ActionButton(stringResource(R.string.library_tv_guide), { showGuidePicker = true }, Modifier.fillMaxWidth(), compact = true)
+                                    Spacer(Modifier.height(8.dp))
                                     Text(stringResource(R.string.library_section_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     ActionButton(stringResource(R.string.library_sources), { showSources = true }, Modifier.fillMaxWidth())
                                     ActionButton(stringResource(R.string.library_settings), { showSettings = true }, Modifier.fillMaxWidth().testTag("open-settings"))
@@ -251,6 +266,12 @@ fun OttNativeApp(
                                         initialFocus = welcomeFocus,
                                     )
                                 } else {
+                                    if (tab == LibraryTab.HOME) {
+                                        NeonHome(state, onAction, welcomeFocus, Modifier.weight(1f), onBrowse = { kind, category ->
+                                            tab = when (kind) { MediaKind.LIVE -> LibraryTab.LIVE; MediaKind.SERIES -> LibraryTab.SERIES; else -> LibraryTab.MOVIES }
+                                            group = category; search = ""
+                                        })
+                                    } else {
                                     LibraryHeader(stringResource(tab.heading), selectedSource, state.sources, onAction, state.isBusy)
                                     state.playingEntry?.let { entry ->
                                         Card(onClick = { fullscreen = true }, modifier = Modifier.testTag("now-playing-bar"), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -260,13 +281,6 @@ fun OttNativeApp(
                                                     Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
                                                 }
                                                 ActionButton(stringResource(R.string.library_open), { fullscreen = true }, compact = true)
-                                            }
-                                        }
-                                    }
-                                    if (!wide) {
-                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            items(LibraryTab.entries) { option ->
-                                                ActionButton(stringResource(option.title), { tab = option }, selected = tab == option, compact = true)
                                             }
                                         }
                                     }
@@ -313,6 +327,17 @@ fun OttNativeApp(
                                             }
                                         }
                                     }
+                                    }
+                                }
+                                if (!wide && state.sources.isNotEmpty()) {
+                                    NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+                                        LibraryTab.entries.filter { it != LibraryTab.FAVORITES }.forEach { option ->
+                                            NavigationBarItem(selected = tab == option, onClick = { tab = option; search = "" },
+                                                icon = { Text(when(option) { LibraryTab.HOME -> "⌂"; LibraryTab.LIVE -> "▣"; LibraryTab.MOVIES -> "▶"; else -> "▤" }) },
+                                                label = { Text(stringResource(option.title)) }, modifier = Modifier.testTag("library-tab-${option.name}"))
+                                        }
+                                        NavigationBarItem(selected = showSettings, onClick = { showSettings = true }, icon = { Text("☰") }, label = { Text(stringResource(R.string.library_more)) })
+                                    }
                                 }
                             }
                         }
@@ -326,14 +351,16 @@ fun OttNativeApp(
                 sourceEditorId = source?.id; sourceEditorOpen = true
             })
         }
-        if (showSettings && !showPrivacy) SettingsDialog(state, onAction, onPrivacy = { showPrivacy = true }) { showSettings = false }
+        if (showSettings && !showPrivacy) SettingsDialog(state, onAction, onGuide = { showGuidePicker = true; showSettings = false }, onFavorites = { tab = LibraryTab.FAVORITES; showSettings = false }, onSources = { showSources = true; showSettings = false }, onPrivacy = { showPrivacy = true }) { showSettings = false }
         if (showPrivacy) PrivacyPolicyDialog { showPrivacy = false }
         if (sourceEditorOpen) {
-            SourceEditor(state.sources.firstOrNull { it.id == sourceEditorId }, { sourceEditorOpen = false }) {
-                onAction(AppAction.SaveSource(it)); sourceEditorOpen = false; showSources = false
+            SourceEditor(state.sources.firstOrNull { it.id == sourceEditorId }, { sourceEditorOpen = false }, state.isBusy) {
+                onAction(AppAction.SaveSource(it))
             }
         }
+        if (showGuidePicker) NeonGuidePicker(state.entries, { showGuidePicker = false; onAction(AppAction.OpenEpg(it)) }, { showGuidePicker = false })
         state.epgEntry?.let { GuideDialog(it, state.programmes, state.isBusy, onAction) }
+        state.movieEntry?.let { MovieDialog(it, state.isBusy, it.id in state.favoriteIds, onAction) }
         state.seriesEntry?.let { SeriesDialog(it, state.episodes, state.isBusy, onAction) }
         state.error?.let { message ->
             AlertDialog(
@@ -348,20 +375,18 @@ fun OttNativeApp(
 }
 
 @Composable
-private fun Brand() {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.size(32.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-            Text(stringResource(R.string.library_brand_icon), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
-        }
+internal fun Brand() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        NeonEmblem(Modifier.size(46.dp))
         Column {
-            Text(stringResource(R.string.library_brand_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-            Text(stringResource(R.string.library_brand_tagline), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("STARLINK", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+            Text("I P T V", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
         }
     }
 }
 
 @Composable
-private fun LibraryHeader(title: String, source: SourceConfig?, sources: List<SourceConfig>, onAction: (AppAction) -> Unit, loading: Boolean) {
+internal fun LibraryHeader(title: String, source: SourceConfig?, sources: List<SourceConfig>, onAction: (AppAction) -> Unit, loading: Boolean) {
     var menuOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -420,7 +445,7 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
         entry.name,
     )
     Card(
-        onClick = { onAction(if (entry.kind == MediaKind.SERIES) AppAction.OpenSeries(entry) else AppAction.Play(entry)) },
+        onClick = { onAction(when (entry.kind) { MediaKind.SERIES -> AppAction.OpenSeries(entry); MediaKind.MOVIE -> AppAction.OpenMovie(entry); else -> AppAction.Play(entry) }) },
         modifier = modifier.fillMaxWidth().testTag("catalog-item-${entry.id}").onFocusChanged { focused = it.isFocused }
             .border(BorderStroke(if (focused || playing) 2.dp else 0.dp, if (focused || playing) MaterialTheme.colorScheme.primary else Color.Transparent), shape),
         colors = CardDefaults.cardColors(containerColor = if (focused) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface),
@@ -428,7 +453,7 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
     ) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(if (entry.kind == MediaKind.LIVE) 2.15f else .72f)
-                .background(Brush.linearGradient(listOf(Color(0xFF381217), Color(0xFF141418)))),
+                .background(Brush.linearGradient(listOf(Color(0xFF122B42), Color(0xFF24132E)))),
             contentAlignment = Alignment.Center,
         ) {
             Text(entry.name.take(2).uppercase(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
@@ -484,7 +509,7 @@ private fun SourcesDialog(state: AppUiState, onAction: (AppAction) -> Unit, onDi
 }
 
 @Composable
-private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, onPrivacy: () -> Unit, onDismiss: () -> Unit) {
+private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onDismiss: () -> Unit) {
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     var languageTag by remember(configuration) { mutableStateOf(AppLanguages.currentTag()) }
@@ -520,6 +545,13 @@ private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, onP
         title = { Text(stringResource(R.string.library_settings)) },
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                ActionButton(stringResource(R.string.library_tab_favorites), onFavorites, Modifier.fillMaxWidth())
+                ActionButton(stringResource(R.string.library_sources), onSources, Modifier.fillMaxWidth())
+                ActionButton(stringResource(R.string.library_tv_guide), onGuide, Modifier.fillMaxWidth())
+                SupportButton()
+                ActionButton(stringResource(R.string.neon_updates), { onAction(AppAction.CheckUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
+                if (state.updateAvailable) ActionButton(stringResource(R.string.neon_update_install), { onAction(AppAction.InstallUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
+                Text("STARLINK IPTV Prévia · " + play.ott.nativeapp.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
                 Text(stringResource(R.string.library_language), style = MaterialTheme.typography.titleSmall)
                 ActionButton(languageName, { showLanguages = true },
                     Modifier.fillMaxWidth().focusRequester(languageFocus).testTag("settings-language"))
@@ -583,12 +615,12 @@ private fun LanguageDialog(languageTag: String, onSelect: (String) -> Unit, onDi
 }
 
 @Composable
-private fun FeaturedContent(entry: MediaEntry, onAction: (AppAction) -> Unit) {
-    Card(onClick = { onAction(if (entry.kind == MediaKind.SERIES) AppAction.OpenSeries(entry) else AppAction.Play(entry)) },
+internal fun FeaturedContent(entry: MediaEntry, onAction: (AppAction) -> Unit) {
+    Card(onClick = { onAction(when (entry.kind) { MediaKind.SERIES -> AppAction.OpenSeries(entry); MediaKind.MOVIE -> AppAction.OpenMovie(entry); else -> AppAction.Play(entry) }) },
         modifier = Modifier.fillMaxWidth().testTag("featured-content")) {
-        Box(Modifier.fillMaxWidth().height(160.dp).background(Brush.horizontalGradient(listOf(Color(0xFF461017), Color(0xFF141418))))) {
-            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(180.dp), contentScale = ContentScale.Crop)
-            Column(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE141418), Color.Transparent))).padding(20.dp), verticalArrangement = Arrangement.Center) {
+        Box(Modifier.fillMaxWidth().height(240.dp).background(Brush.horizontalGradient(listOf(Color(0xFF112E46), Color(0xFF211130))))) {
+            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(320.dp), contentScale = ContentScale.Crop)
+            Column(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE080B16), Color.Transparent))).padding(20.dp), verticalArrangement = Arrangement.Center) {
                 Text("DESTAQUE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(entry.group, style = MaterialTheme.typography.bodyMedium)

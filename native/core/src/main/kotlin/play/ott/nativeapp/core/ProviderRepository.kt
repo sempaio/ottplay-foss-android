@@ -55,6 +55,11 @@ class ProviderRepository(
         stream.copy(headers = playbackHeaders(config, entry, stream.url))
     }
 
+    suspend fun loadMovieInfo(config: SourceConfig, entry: MediaEntry): MediaEntry = withContext(Dispatchers.IO) {
+        require(config.id == entry.sourceId && entry.kind == MediaKind.MOVIE)
+        if (config.kind == SourceKind.XTREAM && entry.providerId.isNotBlank()) xtream.vod(config, entry) else entry
+    }
+
     suspend fun loadEpisodes(config: SourceConfig, series: MediaEntry): List<MediaEntry> = withContext(Dispatchers.IO) {
         validate(config)
         if (OperatorSources.relationship("android-episodes", config.kind.name.lowercase(), config.id, series.kind.name.lowercase(), series.sourceId).isNotEmpty())
