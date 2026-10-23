@@ -9,13 +9,15 @@ import zipfile
 
 parser = argparse.ArgumentParser()
 parser.add_argument('apk', type=Path)
+parser.add_argument('--package', default='br.starlink.iptv')
+parser.add_argument('--label', default='STARLINK IPTV')
 args = parser.parse_args()
 apk = args.apk.resolve()
 assert apk.is_file() and apk.stat().st_size > 0, 'APK missing or empty'
 sdk = Path(os.environ['ANDROID_HOME'])
 tools = sdk / 'build-tools/36.0.0'
 badging = subprocess.check_output([str(tools / 'aapt'), 'dump', 'badging', str(apk)], text=True)
-for marker in ["name='br.starlink.iptv'", "application-label:'STARLINK IPTV'", "name='android.permission.INTERNET'", "launchable-activity:", "leanback-launchable-activity:"]:
+for marker in [f"name='{args.package}'", f"application-label:'{args.label}'", "name='android.permission.INTERNET'", "launchable-activity:", "leanback-launchable-activity:"]:
     assert marker in badging, f'Missing APK marker: {marker}'
 subprocess.run([str(tools / 'apksigner'), 'verify', str(apk)], check=True)
 with zipfile.ZipFile(apk) as archive:

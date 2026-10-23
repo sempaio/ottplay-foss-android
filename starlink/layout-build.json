@@ -1,0 +1,7 @@
+{
+  "native_sources_sha256": "71e58d9f36709899bc350c128932ba6b4d595f47b02c89ea41bcec4e4183333b",
+  "apks": {
+    "STARLINK-IPTV-layout.apk": "7310f1b3b16b72d95a2e5558ac91f4f5e4f6b5e5e672f88498a21524250f93f9",
+    "STARLINK-IPTV-layout-androidTest.apk": "e87f5e5ac853aef1cf630b2b6b4d24a55c479a7d882e03e48c0f3d6bc0d00356"
+  }
+}

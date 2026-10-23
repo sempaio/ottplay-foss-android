@@ -2,12 +2,13 @@ name: STARLINK IPTV Android APK
 on:
   push:
     branches: ['starlink/**']
-    paths: ['native/**', '.github/workflows/starlink-android-apk.yml']
+    paths: ['native/**', 'starlink/**', '.github/workflows/starlink-android-apk.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   build:
+    if: github.ref_name == 'starlink/layout-neon'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -22,24 +23,48 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Install compile SDK
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
-      - name: Test and build native STARLINK
+      - name: Test and compile layout
         working-directory: native
-        run: ./gradlew --no-daemon --stacktrace :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout :app:compileLayoutAndroidTestKotlin
+      - name: Load stable signing key when configured
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.STARLINK_LAYOUT_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/layout.jks"
+            chmod 600 "$RUNNER_TEMP/layout.jks"
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build signed layout
+        if: steps.signing.outputs.configured == 'true'
+        working-directory: native
+        env:
+          STARLINK_LAYOUT_KEYSTORE: ${{ runner.temp }}/layout.jks
+          STARLINK_LAYOUT_STORE_PASSWORD: ${{ secrets.STARLINK_LAYOUT_STORE_PASSWORD }}
+          STARLINK_LAYOUT_KEY_ALIAS: ${{ secrets.STARLINK_LAYOUT_KEY_ALIAS }}
+          STARLINK_LAYOUT_KEY_PASSWORD: ${{ secrets.STARLINK_LAYOUT_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon :app:assembleLayout :app:assembleLayoutAndroidTest
+          mkdir -p ../device-apks
+          cp app/build/outputs/apk/layout/app-layout.apk ../device-apks/STARLINK-IPTV-layout.apk
+          cp app/build/outputs/apk/androidTest/layout/app-layout-androidTest.apk ../device-apks/STARLINK-IPTV-layout-androidTest.apk
+      - name: Validate pinned signed build when secrets cannot be provisioned
+        if: steps.signing.outputs.configured != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download starlink-layout-0.3.0 --repo "$GITHUB_REPOSITORY" --pattern STARLINK-layout-device-apks.zip --dir "$RUNNER_TEMP"
+          unzip -q "$RUNNER_TEMP/STARLINK-layout-device-apks.zip" -d device-apks
+          python3 starlink/layout_build_receipt.py verify
       - name: Validate APK
         run: |
           mkdir -p dist
-          cp native/app/build/outputs/apk/debug/app-debug.apk dist/STARLINK-IPTV-debug.apk
-          python3 starlink/validate_native_apk.py dist/STARLINK-IPTV-debug.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging dist/STARLINK-IPTV-debug.apk | tee dist/apk-badging.txt
-          grep -q "name='br.starlink.iptv'" dist/apk-badging.txt
-          grep -q "application-label:'STARLINK IPTV'" dist/apk-badging.txt
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify dist/STARLINK-IPTV-debug.apk
-          sha256sum dist/STARLINK-IPTV-debug.apk > dist/SHA256SUMS
-      - name: Prepare exact APKs for device validation
-        run: |
-          mkdir -p device-apks
-          cp dist/STARLINK-IPTV-debug.apk device-apks/
-          cp native/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk device-apks/STARLINK-IPTV-debug-androidTest.apk
+          cp device-apks/STARLINK-IPTV-layout.apk dist/STARLINK-IPTV-layout.apk
+          python3 starlink/validate_native_apk.py dist/STARLINK-IPTV-layout.apk --package br.starlink.iptv.layout --label 'STARLINK IPTV Prévia'
+          sha256sum dist/STARLINK-IPTV-layout.apk > dist/SHA256SUMS-layout
       - uses: actions/upload-artifact@v4
         with:
           name: STARLINK-device-apks
@@ -47,7 +72,7 @@ jobs:
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: STARLINK-IPTV-debug-APK
+          name: STARLINK-IPTV-layout-APK
           path: dist/
           if-no-files-found: error
           retention-days: 30

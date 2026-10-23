@@ -1,0 +1,4 @@
+Signer #1 certificate DN: CN=STARLINK IPTV Layout Development
+Signer #1 certificate SHA-256 digest: 41fc681aa4361d41118304c0fea7e0cc0097b8600857ffd049dea97b5a097e93
+Signer #1 certificate SHA-1 digest: 1ba27bfc52cc337f8b9518bca1ab2e24cc29b827
+Signer #1 certificate MD5 digest: 5e4b1d60edeb562670ff280fb5adf7ce

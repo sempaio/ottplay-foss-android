@@ -8,11 +8,11 @@ import sys
 path = Path(sys.argv[1])
 output = path.read_text()
 expected = {'StarlinkUiInstrumentedTest', 'StarlinkStartupInstrumentedTest', 'NativeUiInstrumentedTest',
-            'HlsPlaybackInstrumentedTest', 'NativePlaybackInstrumentedTest'}
+            'HlsPlaybackInstrumentedTest', 'NativePlaybackInstrumentedTest', 'NeonLayoutInstrumentedTest'}
 actual = {name.split('.')[-1] for name in re.findall(r'INSTRUMENTATION_STATUS: class=([^\s]+)', output)}
 assert expected <= actual, f'Missing test classes: {sorted(expected - actual)}'
 match = re.search(r'\bOK \((\d+) tests?\)', output)
-assert match and int(match[1]) >= 12, 'Instrumentation did not report all 12 tests passing'
+assert match and int(match[1]) >= 15, 'Instrumentation did not report all 15 tests passing'
 assert 'FAILURES!!!' not in output and 'INSTRUMENTATION_FAILED' not in output, 'Instrumentation failed'
 result = {'tests': int(match[1]), 'failures': 0, 'classes': sorted(actual)}
 path.with_suffix('.json').write_text(json.dumps(result, indent=2) + '\n')

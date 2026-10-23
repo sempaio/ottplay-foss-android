@@ -85,3 +85,6 @@ release-assets/
 .compatibility/
 browser-candidate/
 browser-candidate-web/
+
+# Exact signed APK staging for layout device validation
+/device-apks/
