@@ -39,3 +39,5 @@ Preferência posterior do usuário: o botão de atualizar deve futuramente perma
 Entrega por solicitação do usuário, sem aguardar testes adicionais do emulador. Build CI aprovado; 187 testes unitários locais aprovados; arquivo público baixado e SHA256 idêntico ao APK validado. Resultado de interface/gesto desta versão permanece pendente no momento da entrega.
 
 Download: https://raw.githubusercontent.com/sempaio/ottplay-foss-android/f25fafdcc39ab91390c428dd21dbdb5dda8d90f5/dist/STARLINK-IPTV-layout.apk . Instalar sobre STARLINK IPTV Prévia, pacote e assinatura preservados. Esta atualização ajusta a interface; não implanta a correção de séries do painel.
+
+Retomada das verificações: primeira execução de celular terminou com 16/19 testes aprovados; três falharam por ausência de foco da janela durante simulação de teclas. Login, rolagem, temporadas e reprodução passaram. Reexecução dos jobs falhos solicitada sem mudar o APK; resultado em acompanhamento. Referências exatas em STARLINK_REFERENCIA_CODEX.md.
