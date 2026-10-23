@@ -164,7 +164,7 @@ fun OttNativeApp(
         value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || it.group == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || it.group.contains(search, ignoreCase = true)) }
     }
     }
-    val catalogHeaderCount = if (tab == LibraryTab.MOVIES || tab == LibraryTab.SERIES) 1 else 0
+    val catalogHeaderCount = 0
     val railFocus = remember { FocusRequester() }
     val welcomeFocus = remember { FocusRequester() }
     val catalogFocus = remember { FocusRequester() }
@@ -317,9 +317,6 @@ fun OttNativeApp(
                                             verticalArrangement = Arrangement.spacedBy(12.dp),
                                             contentPadding = PaddingValues(bottom = 24.dp),
                                         ) {
-                                            if (tab == LibraryTab.MOVIES || tab == LibraryTab.SERIES) item(span = { GridItemSpan(maxLineSpan) }) {
-                                                FeaturedContent(visibleEntries.first(), onAction)
-                                            }
                                             items(visibleEntries, key = { it.id }) { entry ->
                                                 MediaCard(entry, entry.id in state.favoriteIds, state.playingEntry?.id == entry.id, onAction,
                                                     Modifier.then(if (entry.id == focusEntryId) Modifier.focusRequester(catalogFocus) else Modifier)

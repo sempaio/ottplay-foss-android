@@ -1,4 +1,4 @@
-Validated: STARLINK-IPTV-layout.apk; bytes=21319559; SHA256=7310f1b3b16b72d95a2e5558ac91f4f5e4f6b5e5e672f88498a21524250f93f9
+Validated: STARLINK-IPTV-layout.apk; bytes=21318837; SHA256=98e19552f9eab0a2d027da49424a93d372e5a5e5b07f4b7e125561f4b5bddf0d
 package: name='br.starlink.iptv.layout' versionCode='8' versionName='0.3.0-layout' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'
 sdkVersion:'26'
 targetSdkVersion:'36'

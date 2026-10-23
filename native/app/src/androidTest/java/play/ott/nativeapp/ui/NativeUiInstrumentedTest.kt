@@ -120,11 +120,11 @@ class NativeUiInstrumentedTest {
             }
         }
         compose.onNodeWithTag("library-tab-MOVIES").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        compose.onNodeWithText(text(R.string.library_tab_movies)).assertIsFocused()
+        compose.onNodeWithTag("library-tab-MOVIES").assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
-        compose.onNodeWithText(text(R.string.library_tab_live)).assertIsFocused()
+        compose.onNodeWithTag("library-tab-LIVE").assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
-        compose.onNodeWithText(text(R.string.library_tab_movies)).assertIsFocused()
+        compose.onNodeWithTag("library-tab-MOVIES").assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
         compose.onNodeWithTag("catalog-item-${entry.id}").assertIsDisplayed()
     }
