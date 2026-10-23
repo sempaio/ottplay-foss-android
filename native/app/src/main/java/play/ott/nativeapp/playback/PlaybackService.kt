@@ -82,7 +82,7 @@ class PlaybackService : MediaSessionService() {
         val isTelevision = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
         val preferencePlayer = TrackPreferencePlayer(exoPlayer, repository.preferences.data, serviceScope)
         val foregroundPlayer = if (isTelevision) ForegroundVideoPlayer(preferencePlayer) { app.playbackActivityVisible.value } else preferencePlayer
-        progress = PlaybackProgressRecorder(exoPlayer, serviceScope, repository.preferences.resumeWriter)
+        progress = PlaybackProgressRecorder(exoPlayer, serviceScope, repository.progressWriter)
         var queueSource: SourceConfig? = null
         val navigationPlayer = ChannelNavigationPlayer(
             delegate = StopClearsPlaylistPlayer(foregroundPlayer),

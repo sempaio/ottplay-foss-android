@@ -12,9 +12,10 @@ import kotlinx.coroutines.launch
 internal class ResumePositionWriter(
     private val persist: suspend (String, Long) -> Unit,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val persistRecent: suspend (RecentPlayback) -> Unit = {},
 ) {
     private sealed interface Write {
-        data class Position(val id: String, val value: Long) : Write
+        data class Position(val id: String, val value: Long, val recent: RecentPlayback? = null) : Write
         data class Barrier(val completed: CompletableDeferred<Unit>) : Write
     }
     private val queue = Channel<Write>(Channel.UNLIMITED)
@@ -24,6 +25,7 @@ internal class ResumePositionWriter(
             is Write.Position -> {
                 try {
                     persist(write.id, write.value)
+                    write.recent?.let { persistRecent(it) }
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { /* The next tick retries; no stale cache hides imported positions. */ }
             }
@@ -32,6 +34,10 @@ internal class ResumePositionWriter(
 
     fun enqueue(id: String, positionMs: Long) {
         if (id.isNotBlank()) check(queue.trySend(Write.Position(id, positionMs)).isSuccess) { "Resume writer closed" }
+    }
+
+    fun enqueueRecent(value: RecentPlayback) {
+        check(queue.trySend(Write.Position(value.entry.id, value.positionMs, value)).isSuccess) { "Resume writer closed" }
     }
 
     suspend fun awaitIdle() {

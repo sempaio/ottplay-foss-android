@@ -63,6 +63,19 @@ class NativeRepository(
     private val sourceMutex = Mutex()
     private val refreshMutex = Mutex()
     val preferences = PreferencesStore(context)
+    private val recentState = kotlinx.coroutines.flow.MutableStateFlow<List<RecentPlayback>>(emptyList())
+    val recent: kotlinx.coroutines.flow.StateFlow<List<RecentPlayback>> = recentState
+    internal val progressWriter by lazy { ResumePositionWriter(preferences::saveResumePosition, persistRecent = { value ->
+        // Source removal and late player callbacks must not resurrect deleted credentials.
+        sourceMutex.withLock {
+            if (vault.read().any { it.id == value.entry.sourceId }) db.saveRecent(value)
+            recentState.value = db.recent()
+        }
+    }) }
+    suspend fun loadRecent() = withContext(Dispatchers.IO) { sourceMutex.withLock {
+        val ids = vault.read().map { it.id }.toSet()
+        recentState.value = db.recent().filter { it.entry.sourceId in ids }
+    } }
     val providers = ProviderRepository(transportPolicy = transportPolicy)
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
@@ -82,6 +95,7 @@ class NativeRepository(
             val previous = sources.firstOrNull { it.id == source.id }
             if (previous != null && previous != saved) db.delete(source.id)
             vault.write(sources.filterNot { it.id == source.id } + saved)
+            recentState.value = db.recent()
         }}
     }
 
@@ -108,6 +122,7 @@ class NativeRepository(
         refreshMutex.withLock {
             sourceMutex.withLock { vault.write(vault.read().filterNot { it.id == id }) }
             db.delete(id)
+            recentState.value = db.recent()
         }
     }
 

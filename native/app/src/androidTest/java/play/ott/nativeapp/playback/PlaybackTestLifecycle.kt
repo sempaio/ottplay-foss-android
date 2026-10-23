@@ -77,7 +77,7 @@ internal object PlaybackTestLifecycle {
         }
         runBlocking {
             withTimeout(10_000) {
-                (context.applicationContext as OttplayApplication).repository.preferences.resumeWriter.awaitIdle()
+                (context.applicationContext as OttplayApplication).repository.progressWriter.awaitIdle()
             }
         }
     }

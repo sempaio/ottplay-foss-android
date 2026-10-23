@@ -20,16 +20,40 @@ private data class CatalogMetadata(val format: Int = 2, val epgUrls: List<String
 
 /** Transactional EPG index and encrypted catalog blocks. All calls run on Dispatchers.IO. */
 class CatalogDatabase(context: Context, private val vault: SourceVault) :
-    SQLiteOpenHelper(context, "catalog.db", null, 1) {
+    SQLiteOpenHelper(context, "catalog.db", null, 2) {
     private val json = Json { ignoreUnknownKeys = true }
     init { setWriteAheadLoggingEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE entries(source_id TEXT NOT NULL,id TEXT NOT NULL,payload BLOB NOT NULL,ordinal INTEGER NOT NULL,PRIMARY KEY(source_id,id))")
         db.execSQL("CREATE TABLE epg(source_id TEXT NOT NULL,channel_id TEXT NOT NULL,title TEXT NOT NULL,start_ms INTEGER NOT NULL,end_ms INTEGER NOT NULL,description TEXT NOT NULL,PRIMARY KEY(source_id,channel_id,start_ms,end_ms))")
         db.execSQL("CREATE INDEX epg_channel_time ON epg(source_id,channel_id COLLATE NOCASE,start_ms,end_ms)")
+        createRecent(db)
         db.execSQL("CREATE TABLE catalogs(source_id TEXT PRIMARY KEY,payload BLOB NOT NULL,updated_ms INTEGER NOT NULL)")
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) createRecent(db)
+    }
+
+    private fun createRecent(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS recent(source_id TEXT NOT NULL,id TEXT NOT NULL,payload BLOB NOT NULL,updated_ms INTEGER NOT NULL,PRIMARY KEY(source_id,id))")
+    }
+
+    fun saveRecent(value: RecentPlayback) {
+        writableDatabase.transaction {
+            if (value.positionMs <= 0) delete("recent", "source_id=? AND id=?", arrayOf(value.entry.sourceId, value.entry.id))
+            else insertWithOnConflict("recent", null, ContentValues().apply {
+                put("source_id", value.entry.sourceId); put("id", value.entry.id)
+                put("payload", vault.encrypt(json.encodeToString(value).encodeToByteArray()))
+                put("updated_ms", value.updatedMs)
+            }, SQLiteDatabase.CONFLICT_REPLACE)
+            execSQL("DELETE FROM recent WHERE rowid NOT IN (SELECT rowid FROM recent ORDER BY updated_ms DESC LIMIT 100)")
+        }
+    }
+
+    fun recent(): List<RecentPlayback> = readableDatabase.rawQuery("SELECT payload FROM recent ORDER BY updated_ms DESC LIMIT 100", null).use { cursor ->
+        buildList { while (cursor.moveToNext()) add(json.decodeFromString<RecentPlayback>(vault.decrypt(cursor.getBlob(0)).decodeToString())) }
+    }
+
 
     fun replace(sourceId: String, catalog: Catalog) {
         val db = writableDatabase
@@ -127,7 +151,7 @@ class CatalogDatabase(context: Context, private val vault: SourceVault) :
     fun delete(sourceId: String) {
         val db = writableDatabase
         db.transaction {
-            listOf("entries", "epg", "catalogs").forEach { db.delete(it, "source_id=?", arrayOf(sourceId)) }
+            listOf("entries", "epg", "catalogs", "recent").forEach { db.delete(it, "source_id=?", arrayOf(sourceId)) }
         }
     }
 }

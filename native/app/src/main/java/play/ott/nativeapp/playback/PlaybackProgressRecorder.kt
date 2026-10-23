@@ -16,7 +16,7 @@ internal class PlaybackProgressRecorder(
     serviceScope: CoroutineScope,
     private val writer: ResumePositionWriter,
 ) : Player.Listener {
-    private data class Sample(val id: String, val positionMs: Long, val durationMs: Long)
+    private data class Sample(val id: String, val positionMs: Long, val durationMs: Long, val entry: play.ott.nativeapp.core.MediaEntry?)
     private var last: Sample? = null
     private val ticker = serviceScope.launch {
         while (isActive) { delay(5_000); capture()?.let(::submit) }
@@ -45,11 +45,14 @@ internal class PlaybackProgressRecorder(
         if (isLive(item) || player.isCurrentMediaItemLive || player.duration <= 0 ||
             player.playbackState !in setOf(Player.STATE_READY, Player.STATE_ENDED)) return null
         return Sample(item.mediaId, if (player.playbackState == Player.STATE_ENDED) 0 else
-            resumePosition(player.currentPosition, player.duration), player.duration).also { last = it }
+            resumePosition(player.currentPosition, player.duration), player.duration, item.requestMetadata.extras?.getString("play.ott.nativeapp.entry")?.let {
+                runCatching { kotlinx.serialization.json.Json.decodeFromString<play.ott.nativeapp.core.MediaEntry>(it) }.getOrNull()
+            }).also { last = it }
     }
 
     private fun submit(sample: Sample) {
-        writer.enqueue(sample.id, sample.positionMs)
+        if (sample.entry != null) writer.enqueueRecent(play.ott.nativeapp.data.RecentPlayback(sample.entry, sample.positionMs, sample.durationMs))
+        else writer.enqueue(sample.id, sample.positionMs)
     }
 
     /** Capture before release; the shared writer keeps ordering across service restarts. */
