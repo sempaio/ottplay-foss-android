@@ -29,7 +29,7 @@ android {
         buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
         manifestPlaceholders["allowCleartextTraffic"] = "false"
     }
-    buildFeatures { compose = true; buildConfig = true }
+    buildFeatures { compose = true; buildConfig = true; resValues = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     if (signingVariant != null) {
         signingConfigs.create("configured") {
@@ -44,6 +44,13 @@ android {
             // Local HTTP fixtures are confined to a debuggable, non-publishable test variant.
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
             manifestPlaceholders["allowCleartextTraffic"] = "true"
+        }
+        create("layout") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".layout"
+            versionNameSuffix = "-layout"
+            matchingFallbacks += "debug"
+            resValue("string", "app_name", "STARLINK IPTV Prévia")
         }
         release {
             isMinifyEnabled = true
@@ -115,3 +122,5 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+configurations.named("layoutImplementation") { extendsFrom(configurations.getByName("debugImplementation")) }
