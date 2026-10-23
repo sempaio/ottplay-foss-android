@@ -27,6 +27,7 @@ android {
         versionName = appVersion.getProperty("versionName").also { require(it.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
+        buildConfigField("boolean", "CUSTOMER_MODE", "false")
         manifestPlaceholders["allowCleartextTraffic"] = "false"
     }
     testBuildType = "layout"
@@ -56,6 +57,7 @@ android {
         create("layout") {
             initWith(getByName("debug"))
             signingConfig = signingConfigs.getByName("layoutStable")
+            buildConfigField("boolean", "CUSTOMER_MODE", "true")
             applicationIdSuffix = ".layout"
             versionNameSuffix = "-layout"
             matchingFallbacks += "debug"

@@ -38,19 +38,13 @@ import play.ott.nativeapp.core.MediaKind
 /** Original geometric mark, used until the supplied brand master is available as a file. */
 @Composable
 internal fun NeonEmblem(modifier: Modifier = Modifier) {
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(brush = Brush.sweepGradient(listOf(Color(0xFF17DDF5), Color(0xFFF139CF), Color(0xFF17DDF5))), style = Stroke(3.dp.toPx()))
-            drawArc(Color(0xFF17DDF5), 190f, 150f, false, style = Stroke(1.dp.toPx()))
-        }
-        Text("S", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineMedium)
-    }
+    coil.compose.AsyncImage(R.drawable.starlink_logo, contentDescription = "STARLINK IPTV", modifier = modifier, contentScale = ContentScale.Fit)
 }
 
 private data class HomeRail(val title: String, val kind: MediaKind, val category: String, val entries: List<MediaEntry>)
 
 @Composable
-internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialFocus: FocusRequester, modifier: Modifier = Modifier, onBrowse: (MediaKind, String) -> Unit) {
+internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialFocus: FocusRequester, modifier: Modifier = Modifier, customerMode: Boolean = false, onBrowse: (MediaKind, String) -> Unit) {
     val live = stringResource(R.string.library_heading_live)
     val movies = stringResource(R.string.neon_featured_movies)
     val series = stringResource(R.string.neon_featured_series)
@@ -75,7 +69,7 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
     LazyColumn(modifier.fillMaxWidth().testTag("neon-home"), verticalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item(key = "welcome") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                LibraryHeader(stringResource(R.string.neon_welcome), state.sources.firstOrNull { it.id == state.selectedSourceId }, state.sources, onAction, state.isBusy)
+                LibraryHeader(stringResource(R.string.neon_welcome), state.sources.firstOrNull { it.id == state.selectedSourceId }, state.sources, onAction, state.isBusy, customerMode)
                 Text(stringResource(R.string.library_brand_tagline), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActionButton(live, { onBrowse(MediaKind.LIVE, "") }, Modifier.weight(1f).focusRequester(initialFocus), selected = true, compact = true)

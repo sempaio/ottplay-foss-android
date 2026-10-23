@@ -9,6 +9,7 @@ import play.ott.nativeapp.playback.NativePlaybackInstrumentedTest
 @RunWith(Suite::class)
 @Suite.SuiteClasses(
     StarlinkUiInstrumentedTest::class,
+    CustomerUiInstrumentedTest::class,
     NeonLayoutInstrumentedTest::class,
     StarlinkStartupInstrumentedTest::class,
     NativeUiInstrumentedTest::class,

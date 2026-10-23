@@ -26,6 +26,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var latestUpdate: play.ott.nativeapp.data.AppUpdate? = null
     private var updateJob: Job? = null
     private val repository = (application as OttplayApplication).repository
+    private suspend fun availableSources() = StarlinkConfig.visibleSources(repository.sources())
     private fun message(id: Int, vararg args: Any) = AppLanguages.localizedContext(getApplication()).getString(id, *args)
     private var loadingResource = R.string.message_loading_library
     private var errorText: (() -> String)? = null
@@ -50,7 +51,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             error = errorText?.invoke(), notice = noticeText?.invoke()) }
         viewModelScope.launch {
             try {
-                val sources = repository.sources()
+                val sources = availableSources()
                 updateState { it.copy(sources = sources) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { /* Keep the already displayed catalogue if storage is temporarily unavailable. */ }
@@ -68,6 +69,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun rememberCatalogNotes(catalog: Catalog) {
+        if (BuildConfig.CUSTOMER_MODE) {
+            if (catalog.notes.isNotEmpty() || catalog.messages.isNotEmpty()) noticeText = { message(R.string.customer_service_error) }
+            return
+        }
         if (catalog.notes.isNotEmpty() || catalog.messages.isNotEmpty()) noticeText = {
             repository.catalogNotes(catalog).joinToString("\n")
         }
@@ -103,7 +108,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         viewModelScope.launch {
             try {
-                val sources = repository.sources()
+                val sources = availableSources()
                 val selected = repository.preferences.data.first().selectedSourceId
                     ?.takeIf { id -> sources.any { it.id == id } } ?: sources.firstOrNull()?.id
                 updateState { it.copy(sources = sources, selectedSourceId = selected, isBusy = false) }
@@ -155,7 +160,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val generation = playGeneration
         recoveryJob = viewModelScope.launch {
             try {
-                val sources = repository.sources()
+                val sources = availableSources()
                 val sourceIds = sources.mapTo(hashSetOf()) { it.id }
                 var entry = state.value.entries.firstOrNull { it.id == item.mediaId && it.sourceId in sourceIds }
                 if (entry == null) {
@@ -176,7 +181,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
                 val recoveredSourceId = entry?.sourceId
-                if (recoveredSourceId != null && repository.sources().none { it.id == recoveredSourceId }) entry = null
+                if (recoveredSourceId != null && availableSources().none { it.id == recoveredSourceId }) entry = null
                 ensureActive()
                 if (controller !== value || value.currentMediaItem?.mediaId != item.mediaId || generation != playGeneration) return@launch
                 updateState { it.copy(playingEntry = entry) }
@@ -194,7 +199,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun onControllerFailure() { updateState { it.copy(isBusy = false) }; setErrorText { message(R.string.message_controller_unavailable) } }
 
     fun dispatch(action: AppAction) {
+        if (BuildConfig.CUSTOMER_MODE && (action is AppAction.DeleteSource || action == AppAction.AddDemo ||
+            action == AppAction.ImportPlaylist || action == AppAction.ImportSettings || action == AppAction.ExportSettings ||
+            (action is AppAction.SaveSource && !StarlinkConfig.isManagedSource(action.source)))) {
+            setErrorText { message(R.string.customer_generic_error) }; return
+        }
         when (action) {
+            AppAction.Logout -> operation {
+                if (saveInFlight) return@operation
+                loadJob?.cancelAndJoin(); detailJob?.cancel(); stop()
+                availableSources().forEach { repository.remove(it.id) }
+                repository.preferences.update { it.copy(selectedSourceId = null) }
+                updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
+            }
             AppAction.CheckUpdate -> checkUpdate(true)
             AppAction.InstallUpdate -> {
                 if (updateJob?.isActive != true) latestUpdate?.let { update ->
@@ -207,21 +224,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             }
-            is AppAction.SelectSource -> load(action.sourceId, false)
+            is AppAction.SelectSource -> if (!BuildConfig.CUSTOMER_MODE || state.value.sources.any { it.id == action.sourceId }) load(action.sourceId, false)
             is AppAction.SaveSource -> {
                 if (saveInFlight) return
                 saveInFlight = true
-                updateState { it.copy(isBusy = true, error = null) }
+                loadingResource = if (action.source.kind == SourceKind.XTREAM) R.string.starlink_authenticating else R.string.message_loading_catalog
+                updateState { it.copy(isBusy = true, error = null, loadingMessage = message(loadingResource)) }
                 operation { try {
                 retirePendingSource(action.source.id)
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
                 repository.save(action.source)
                 if (StarlinkConfig.isStarlinkAccount(action.source) &&
-                    repository.sources().none { it.id == StarlinkConfig.PLAYLIST_SOURCE_ID }) {
+                    availableSources().none { it.id == StarlinkConfig.PLAYLIST_SOURCE_ID }) {
                     repository.save(StarlinkConfig.playlistSource())
                 }
-                val sources = repository.sources()
+                val sources = availableSources()
                 updateState { it.copy(sources = sources, sourceSaveRevision = it.sourceSaveRevision + 1) }
                 load(action.source.id, true)
                 } finally { saveInFlight = false } }
@@ -231,7 +249,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (state.value.playingEntry?.sourceId == action.sourceId) stop()
                 loadJob?.cancel()
                 repository.remove(action.sourceId)
-                val sources = repository.sources()
+                val sources = availableSources()
                 val id = state.value.selectedSourceId?.takeUnless { it == action.sourceId } ?: sources.firstOrNull()?.id
                 updateState { it.copy(sources = sources, selectedSourceId = id, entries = emptyList(), isBusy = false) }
                 if (id != null) load(id, false)
@@ -261,7 +279,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 detailJob?.cancel()
                 updateState { it.copy(movieEntry = action.entry, isBusy = true) }
                 detailJob = operation {
-                    val source = repository.sources().first { it.id == action.entry.sourceId }
+                    val source = availableSources().first { it.id == action.entry.sourceId }
                     val movie = repository.providers.loadMovieInfo(source, action.entry)
                     updateState { if (it.movieEntry?.id == action.entry.id) it.copy(movieEntry = movie, isBusy = false) else it }
                 }
@@ -271,7 +289,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 detailJob?.cancel()
                 updateState { it.copy(seriesEntry = action.entry, episodes = emptyList(), isBusy = true) }
                 detailJob = operation {
-                    val source = repository.sources().first { it.id == action.entry.sourceId }
+                    val source = availableSources().first { it.id == action.entry.sourceId }
                     val episodes = repository.providers.loadEpisodes(source, action.entry)
                     updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
                 }
@@ -292,7 +310,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.AddDemo -> operation {
                 val source = NativeRepository.demoSource()
                 repository.save(source)
-                val sources = repository.sources()
+                val sources = availableSources()
                 updateState { it.copy(sources = sources) }
                 load(source.id, true)
             }
@@ -311,7 +329,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         loadJob = viewModelScope.launch {
             try {
                 repository.preferences.update { it.copy(selectedSourceId = id) }
-                val source = repository.sources().first { it.id == id }
+                val source = availableSources().first { it.id == id }
                 val cached = try { repository.cached(id) } catch (e: Exception) {
                     if (e is CancellationException || !refresh) throw e
                     Catalog(emptyList())
@@ -350,12 +368,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         resolvingSourceId = entry.sourceId
         val generation = ++playGeneration
         playJob = operation {
-            val source = repository.sources().first { it.id == entry.sourceId }
+            val source = availableSources().first { it.id == entry.sourceId }
             val stream = resolved ?: repository.stream(source, entry)
             val position = if (entry.kind == MediaKind.LIVE) 0L else repository.preferences.data.first().resumePositions[entry.id] ?: 0L
             ensureActive()
             if (generation != playGeneration) return@operation
-            if (repository.sources().firstOrNull { it.id == source.id } != source) error("Source changed during playback request")
+            if (availableSources().firstOrNull { it.id == source.id } != source) error("Source changed during playback request")
             val request = PendingPlay(entry, stream, position)
             if (controller == null) {
                 pending = request
@@ -402,14 +420,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun importPlaylist(uri: Uri, name: String) = operation {
+        check(!BuildConfig.CUSTOMER_MODE)
         val source = NativeRepository.fileSource(uri.toString(), name)
         repository.save(source)
-        val sources = repository.sources()
+        val sources = availableSources()
         updateState { it.copy(sources = sources) }
         load(source.id, true)
     }
 
     fun importSettings(uri: Uri) = operation {
+        check(!BuildConfig.CUSTOMER_MODE)
         val text = withContext(Dispatchers.IO) {
             getApplication<Application>().contentResolver.openInputStream(uri)?.use { play.ott.nativeapp.data.readBounded(it, 4 * 1024 * 1024).decodeToString() }
                 ?: error(message(R.string.message_file_unavailable))
@@ -422,7 +442,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         resolvingSourceId = null
         loadJob?.cancelAndJoin()
         val result = repository.importSettings(text)
-        val sources = repository.sources()
+        val sources = availableSources()
         updateState { it.copy(sources = sources) }
         setNoticeText { listOf(message(R.string.message_imported_sources, result.count))
             .plus(repository.importNotes(result)).joinToString(". ") }
@@ -431,6 +451,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun exportSettings(uri: Uri) = operation {
+        check(!BuildConfig.CUSTOMER_MODE)
         val text = repository.exportSettings()
         withContext(Dispatchers.IO) {
             getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(text) }

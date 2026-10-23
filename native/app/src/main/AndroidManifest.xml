@@ -9,7 +9,7 @@
     <uses-feature android:name="android.software.leanback" android:required="false"/>
     <uses-feature android:name="android.hardware.wifi" android:required="false"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
-    <application android:name=".OttplayApplication" android:label="@string/app_name" android:icon="@drawable/ic_launcher" android:banner="@drawable/starlink_tv_banner" android:theme="@style/Theme.Ottplay" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:localeConfig="@xml/locales_config" android:usesCleartextTraffic="${allowCleartextTraffic}">
+    <application android:name=".OttplayApplication" android:label="@string/app_name" android:icon="@drawable/starlink_logo" android:banner="@drawable/starlink_tv_banner" android:theme="@style/Theme.Ottplay" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:localeConfig="@xml/locales_config" android:usesCleartextTraffic="${allowCleartextTraffic}">
         <service android:name="androidx.appcompat.app.AppLocalesMetadataHolderService" android:enabled="false" android:exported="false">
             <meta-data android:name="autoStoreLocales" android:value="true" />
         </service>

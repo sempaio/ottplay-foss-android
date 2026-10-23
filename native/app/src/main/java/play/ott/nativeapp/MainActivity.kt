@@ -70,7 +70,9 @@ open class MainActivity : AppCompatActivity() {
             OttNativeApp(
                 state = state,
                 onAction = { action ->
-                    when (action) {
+                    if (BuildConfig.CUSTOMER_MODE && action in setOf(AppAction.ImportPlaylist, AppAction.ImportSettings, AppAction.ExportSettings)) {
+                        model.dispatch(action)
+                    } else when (action) {
                         AppAction.ImportPlaylist -> importPlaylist.launch(arrayOf("*/*"))
                         AppAction.ImportSettings -> importSettings.launch(arrayOf("application/json", "text/plain"))
                         AppAction.ExportSettings -> exportSettings.launch("ottplay-native-settings.json")

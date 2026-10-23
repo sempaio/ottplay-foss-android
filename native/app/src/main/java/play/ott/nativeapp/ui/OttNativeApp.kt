@@ -116,9 +116,18 @@ fun OttNativeApp(
     onPictureInPicture: () -> Unit,
     onFullscreenChanged: (Boolean) -> Unit,
     inPictureInPicture: Boolean = false,
+    customerMode: Boolean = play.ott.nativeapp.BuildConfig.CUSTOMER_MODE,
 ) {
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+    if (customerMode && state.sources.isEmpty()) {
+        LaunchedEffect(Unit) { onFullscreenChanged(false) }
+        OttTheme {
+            CustomerLoginScreen(busy = state.isBusy, onSubmit = { onAction(AppAction.SaveSource(it)) })
+            state.error?.let { CustomerErrorDialog(it) { onAction(AppAction.DismissError) } }
+        }
+        return
+    }
     val keyToCatalog = if (LocalLayoutDirection.current == LayoutDirection.Rtl) Key.DirectionLeft else Key.DirectionRight
     var tab by rememberSaveable { mutableStateOf(LibraryTab.HOME) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -244,7 +253,7 @@ fun OttNativeApp(
                                     ActionButton(stringResource(R.string.library_tv_guide), { showGuidePicker = true }, Modifier.fillMaxWidth(), compact = true)
                                     Spacer(Modifier.height(8.dp))
                                     Text(stringResource(R.string.library_section_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    ActionButton(stringResource(R.string.library_sources), { showSources = true }, Modifier.fillMaxWidth())
+                                    if (!customerMode) ActionButton(stringResource(R.string.library_sources), { showSources = true }, Modifier.fillMaxWidth())
                                     ActionButton(stringResource(R.string.library_settings), { showSettings = true }, Modifier.fillMaxWidth().testTag("open-settings"))
                                 }
                             }
@@ -252,7 +261,7 @@ fun OttNativeApp(
                                 if (!wide) {
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Box(Modifier.weight(1f)) { Brand() }
-                                        ActionButton(stringResource(R.string.library_sources), { showSources = true }, compact = true)
+                                        if (!customerMode) ActionButton(stringResource(R.string.library_sources), { showSources = true }, compact = true)
                                         ActionButton(stringResource(R.string.library_more), { showSettings = true }, Modifier.testTag("open-settings"), compact = true)
                                     }
                                 }
@@ -267,12 +276,12 @@ fun OttNativeApp(
                                     )
                                 } else {
                                     if (tab == LibraryTab.HOME) {
-                                        NeonHome(state, onAction, welcomeFocus, Modifier.weight(1f), onBrowse = { kind, category ->
+                                        NeonHome(state, onAction, welcomeFocus, Modifier.weight(1f), customerMode = customerMode, onBrowse = { kind, category ->
                                             tab = when (kind) { MediaKind.LIVE -> LibraryTab.LIVE; MediaKind.SERIES -> LibraryTab.SERIES; else -> LibraryTab.MOVIES }
                                             group = category; search = ""
                                         })
                                     } else {
-                                    LibraryHeader(stringResource(tab.heading), selectedSource, state.sources, onAction, state.isBusy)
+                                    LibraryHeader(stringResource(tab.heading), selectedSource, state.sources, onAction, state.isBusy, customerMode)
                                     state.playingEntry?.let { entry ->
                                         Card(onClick = { fullscreen = true }, modifier = Modifier.testTag("now-playing-bar"), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -343,15 +352,21 @@ fun OttNativeApp(
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
             }
         }
-        if (showSources) {
+        if (showSources && !customerMode) {
             SourcesDialog(state, onAction, onDismiss = { showSources = false }, onEdit = { source ->
                 sourceEditorId = source?.id; sourceEditorOpen = true
             })
         }
-        if (showSettings && !showPrivacy) SettingsDialog(state, onAction, onGuide = { showGuidePicker = true; showSettings = false }, onFavorites = { tab = LibraryTab.FAVORITES; showSettings = false }, onSources = { showSources = true; showSettings = false }, onPrivacy = { showPrivacy = true }) { showSettings = false }
+        if (showSettings && !showPrivacy) SettingsDialog(state, onAction, customerMode = customerMode, onGuide = { showGuidePicker = true; showSettings = false }, onFavorites = { tab = LibraryTab.FAVORITES; showSettings = false }, onSources = { showSettings = false; if (customerMode) sourceEditorOpen = true else showSources = true }, onPrivacy = { showPrivacy = true }) { showSettings = false }
         if (showPrivacy) PrivacyPolicyDialog { showPrivacy = false }
-        if (sourceEditorOpen) {
-            SourceEditor(state.sources.firstOrNull { it.id == sourceEditorId }, { sourceEditorOpen = false }, state.isBusy) {
+        if (sourceEditorOpen && customerMode) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { sourceEditorOpen = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+                CustomerLoginScreen(state.sources.firstOrNull { it.kind == play.ott.nativeapp.core.SourceKind.XTREAM }, state.isBusy,
+                    { onAction(AppAction.SaveSource(it)) }, { sourceEditorOpen = false })
+            }
+        }
+        if (sourceEditorOpen && !customerMode) {
+            SourceEditor(state.sources.firstOrNull { it.id == sourceEditorId }, { sourceEditorOpen = false }, state.isBusy, state.loadingMessage) {
                 onAction(AppAction.SaveSource(it))
             }
         }
@@ -360,7 +375,7 @@ fun OttNativeApp(
         state.movieEntry?.let { MovieDialog(it, state.isBusy, it.id in state.favoriteIds, onAction) }
         state.seriesEntry?.let { SeriesDialog(it, state.episodes, state.isBusy, onAction) }
         state.error?.let { message ->
-            AlertDialog(
+            if (customerMode) CustomerErrorDialog(message) { onAction(AppAction.DismissError) } else AlertDialog(
                 modifier = Modifier.tvRemoteInput(),
                 onDismissRequest = { onAction(AppAction.DismissError) },
                 title = { Text(stringResource(R.string.library_action_failed)) },
@@ -383,12 +398,12 @@ internal fun Brand() {
 }
 
 @Composable
-internal fun LibraryHeader(title: String, source: SourceConfig?, sources: List<SourceConfig>, onAction: (AppAction) -> Unit, loading: Boolean) {
+internal fun LibraryHeader(title: String, source: SourceConfig?, sources: List<SourceConfig>, onAction: (AppAction) -> Unit, loading: Boolean, customerMode: Boolean = false) {
     var menuOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) {
+            if (!customerMode) Box(Modifier.weight(1f)) {
                 ActionButton(source?.name ?: stringResource(R.string.library_choose_source), { menuOpen = true }, Modifier.fillMaxWidth(), compact = true)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     sources.forEach { candidate ->
@@ -506,7 +521,7 @@ private fun SourcesDialog(state: AppUiState, onAction: (AppAction) -> Unit, onDi
 }
 
 @Composable
-private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onDismiss: () -> Unit) {
+private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onDismiss: () -> Unit) {
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     var languageTag by remember(configuration) { mutableStateOf(AppLanguages.currentTag()) }
@@ -543,7 +558,7 @@ private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, onG
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 ActionButton(stringResource(R.string.library_tab_favorites), onFavorites, Modifier.fillMaxWidth())
-                ActionButton(stringResource(R.string.library_sources), onSources, Modifier.fillMaxWidth())
+                ActionButton(stringResource(if (customerMode) R.string.customer_account else R.string.library_sources), onSources, Modifier.fillMaxWidth())
                 ActionButton(stringResource(R.string.library_tv_guide), onGuide, Modifier.fillMaxWidth())
                 SupportButton()
                 ActionButton(stringResource(R.string.neon_updates), { onAction(AppAction.CheckUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
@@ -563,12 +578,15 @@ private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, onG
                     }
                     HorizontalDivider()
                 }
+                if (!customerMode) {
                 Text(stringResource(R.string.library_backup), style = MaterialTheme.typography.titleSmall)
                 Text(stringResource(R.string.library_backup_description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ActionButton(stringResource(R.string.library_export_settings), { onAction(AppAction.ExportSettings); onDismiss() }, Modifier.fillMaxWidth())
                 ActionButton(stringResource(R.string.library_import_settings), { onAction(AppAction.ImportSettings); onDismiss() }, Modifier.fillMaxWidth())
                 ActionButton(stringResource(R.string.library_add_demo), { onAction(AppAction.AddDemo); onDismiss() }, Modifier.fillMaxWidth())
                 HorizontalDivider()
+                }
+                if (customerMode) ActionButton(stringResource(R.string.customer_logout), { onAction(AppAction.Logout); onDismiss() }, Modifier.fillMaxWidth())
                 ActionButton(stringResource(R.string.library_privacy_policy), onPrivacy, Modifier.fillMaxWidth().testTag("settings-privacy"))
             }
         },

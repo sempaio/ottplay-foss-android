@@ -13,9 +13,9 @@ import play.ott.nativeapp.MainActivity
 class StarlinkStartupInstrumentedTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     @Test fun installedApplicationStartsAndOpensM81Login() {
-        compose.waitUntil(20000) { compose.onAllNodesWithTag("welcome-add-source").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("welcome-add-source").performScrollTo().performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
+        compose.waitUntil(20000) { compose.onAllNodesWithTag("customer-login").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(2)
-        compose.onNodeWithText("Entrar • STARLINK IPTV").assertIsDisplayed()
+        compose.onNodeWithTag("customer-brand").assertIsDisplayed()
+        compose.onNodeWithText("https://panel.taila5c5c2.ts.net").assertDoesNotExist()
     }
 }

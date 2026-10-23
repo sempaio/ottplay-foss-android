@@ -1,5 +1,4 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="320dp" android:height="180dp" android:viewportWidth="320" android:viewportHeight="180">
-<path android:fillColor="#080B16" android:pathData="M0,0h320v180H0z"/>
-<path android:fillColor="#17DDF5" android:pathData="M122,42h76v20h-53v12h46v47h-69v-20h46V90h-46z"/>
-<path android:fillColor="#FFFFFF" android:pathData="M205,75l25,15 -25,15z"/>
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape><size android:width="320dp" android:height="180dp"/><solid android:color="#080B16"/></shape></item>
+    <item android:width="160dp" android:height="160dp" android:gravity="center" android:drawable="@drawable/starlink_logo"/>
+</layer-list>

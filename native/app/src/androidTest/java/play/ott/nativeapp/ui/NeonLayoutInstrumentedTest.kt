@@ -24,6 +24,8 @@ class NeonLayoutInstrumentedTest {
     private fun capture(name: String) {
         compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.waitForIdleSync()
+        android.os.SystemClock.sleep(600)
         val bitmap = instrumentation.uiAutomation.takeScreenshot() ?: error("Screenshot unavailable")
         val folder = File(instrumentation.targetContext.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
         File(folder, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -55,9 +57,9 @@ class NeonLayoutInstrumentedTest {
         capture("series-season-2")
     }
     @Test fun loginKeepsTwoFieldsAndNeonIdentity() {
-        compose.setContent { OttTheme { SourceEditor(null, {}, {}) } }
+        compose.setContent { OttTheme { CustomerLoginScreen(busy = false, onSubmit = {}) } }
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(2)
-        compose.onNodeWithText("Entrar • STARLINK IPTV").assertIsDisplayed()
+        compose.onNodeWithTag("customer-brand").assertIsDisplayed()
         capture("login")
     }
 }

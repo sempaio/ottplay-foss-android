@@ -32,6 +32,7 @@ sealed interface AppAction {
     data class SelectSource(val sourceId: String) : AppAction
     data class SaveSource(val source: SourceConfig) : AppAction
     data class DeleteSource(val sourceId: String) : AppAction
+    data object Logout : AppAction
     data object CheckUpdate : AppAction
     data object InstallUpdate : AppAction
     data object Refresh : AppAction

@@ -44,7 +44,7 @@ class StarlinkUiInstrumentedTest {
         compose.setContent {
             OttNativeApp(AppUiState(sources = listOf(account, playlist), selectedSourceId = account.id),
                 onAction = { if (it is AppAction.SelectSource) selected = it.sourceId },
-                controller = null, onPictureInPicture = {}, onFullscreenChanged = {})
+                controller = null, onPictureInPicture = {}, onFullscreenChanged = {}, customerMode = false)
         }
         compose.onNodeWithText(account.name).performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.onNodeWithText(playlist.name).performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
@@ -54,6 +54,18 @@ class StarlinkUiInstrumentedTest {
     @Test fun publishedPlaylistPresetUsesTheCompleteM3uAddress() {
         compose.setContent { OttTheme { SourceEditor(StarlinkConfig.playlistSource(), {}, {}) } }
         compose.onNodeWithText("https://panel.taila5c5c2.ts.net/app/starlink-iptv/playlist.m3u").assertExists()
+    }
+
+    @Test fun publishedPlaylistIsAnExplicitAlternativeWithoutSendingCredentials() {
+        var saved: SourceConfig? = null
+        compose.setContent { OttTheme { SourceEditor(null, {}, { saved = it }) } }
+        compose.onNodeWithText(compose.activity.getString(play.ott.nativeapp.R.string.starlink_use_playlist))
+            .performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
+        compose.runOnIdle {
+            assertEquals(StarlinkConfig.playlistSource(), saved)
+            assertEquals("", saved?.username)
+            assertEquals("", saved?.password)
+        }
     }
 
 }

@@ -55,7 +55,7 @@ class NativeUiInstrumentedTest {
         val actions = mutableListOf<AppAction>()
         compose.setContent {
             OttNativeApp(
-                state = snapshot,
+                state = snapshot, customerMode = false,
                 onAction = { action ->
                     actions += action
                     when (action) {
@@ -114,7 +114,7 @@ class NativeUiInstrumentedTest {
         compose.setContent {
             CompositionLocalProvider(LocalConfiguration provides television) {
                 OttNativeApp(
-                    state = AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = listOf(entry)),
+                    state = AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = listOf(entry)), customerMode = false,
                     onAction = {}, controller = null, onPictureInPicture = {}, onFullscreenChanged = {},
                 )
             }
@@ -136,7 +136,7 @@ class NativeUiInstrumentedTest {
             sources = listOf(source), selectedSourceId = source.id, entries = listOf(generated, provider),
         ))
         compose.setContent {
-            OttNativeApp(snapshot, {}, null, {}, {})
+            OttNativeApp(snapshot, {}, null, {}, {}, customerMode = false)
         }
         compose.onNodeWithTag("library-tab-MOVIES").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.onNodeWithTag("library-group-Local test").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
@@ -211,7 +211,7 @@ class NativeUiInstrumentedTest {
         compose.setContent {
             CompositionLocalProvider(LocalConfiguration provides television) {
                 OttNativeApp(AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = entries),
-                    {}, null, {}, {})
+                    {}, null, {}, {}, customerMode = false)
             }
         }
         compose.onNodeWithTag("library-tab-LIVE").performSemanticsAction(SemanticsActions.OnClick) { check(it()) }

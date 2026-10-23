@@ -37,7 +37,7 @@ import java.util.UUID
 
 @Composable
 internal fun SourceEditor(original: SourceConfig?, onDismiss: () -> Unit, onSave: (SourceConfig) -> Unit) =
-    SourceEditor(original, onDismiss, false, onSave)
+    SourceEditor(original, onDismiss, false, onSave = onSave)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -45,6 +45,7 @@ internal fun SourceEditor(
     original: SourceConfig?,
     onDismiss: () -> Unit,
     busy: Boolean,
+    busyLabel: String? = null,
     onSave: (SourceConfig) -> Unit,
 ) {
     val id = rememberSaveable(original?.id) { original?.id ?: UUID.randomUUID().toString() }
@@ -78,7 +79,10 @@ internal fun SourceEditor(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 TextButton(onClick = { advanced = !advanced; if (!advanced) { kind = SourceKind.XTREAM; url = StarlinkConfig.XTREAM_BASE_URL } }) { Text(if (advanced) "Login M81" else "Outras fontes / opções avançadas") }
-                if (simpleLogin) Text("Servidor M81 configurado. Informe seu usuário e senha. A lista STARLINK IPTV também será incluída.")
+                if (simpleLogin) {
+                    Text("Servidor M81 configurado. Informe seu usuário e senha. A lista STARLINK IPTV também será incluída.")
+                    ActionButton(stringResource(R.string.starlink_use_playlist), { showPassword = false; onSave(StarlinkConfig.playlistSource()) }, Modifier.fillMaxWidth(), enabled = !busy, compact = true)
+                }
                 if (!simpleLogin) {
                 Text(stringResource(R.string.dialog_source_intro), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -96,9 +100,9 @@ internal fun SourceEditor(
                 )
                 }
                 if (kind == SourceKind.XTREAM) {
-                    OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text(stringResource(R.string.dialog_source_username)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(enabled = !busy, value = username, onValueChange = { username = it }, label = { Text(stringResource(R.string.dialog_source_username)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(
-                        value = password, onValueChange = { password = it }, label = { Text(stringResource(R.string.dialog_source_password)) }, singleLine = true,
+                        enabled = !busy, value = password, onValueChange = { password = it }, label = { Text(stringResource(R.string.dialog_source_password)) }, singleLine = true,
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) stringResource(R.string.dialog_hide) else stringResource(R.string.dialog_show)) } },
@@ -136,7 +140,8 @@ internal fun SourceEditor(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
         confirmButton = {
-            ActionButton(enabled = !busy, text = if (busy) stringResource(R.string.library_loading) else if (simpleLogin) "Entrar" else if (original == null) stringResource(R.string.dialog_add) else stringResource(R.string.dialog_save), selected = true, onClick = {
+            ActionButton(enabled = !busy, text = if (busy) busyLabel ?: stringResource(R.string.starlink_authenticating) else if (simpleLogin) "Entrar" else if (original == null) stringResource(R.string.dialog_add) else stringResource(R.string.dialog_save), selected = true, onClick = {
+                showPassword = false
                 val cleanUrl = if (simpleLogin) StarlinkConfig.XTREAM_BASE_URL else url.trim()
                 val parsedHeaders = parseHeaders(headers)
                 val hours = if (catchupHours.isBlank()) 0.0 else catchupHours.trim().replace(',', '.').toDoubleOrNull()

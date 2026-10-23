@@ -13,4 +13,13 @@ object StarlinkConfig {
 
     fun isStarlinkAccount(source: SourceConfig) = source.kind == SourceKind.XTREAM &&
         source.url.trimEnd('/') == XTREAM_BASE_URL
+    /** Client builds accept only operator-owned endpoints, never editable provider settings. */
+    fun isManagedSource(source: SourceConfig): Boolean =
+        (isStarlinkAccount(source) && source.headers.isEmpty() && source.epgUrl.isBlank() && source.mac.isBlank()) ||
+        (source.id == PLAYLIST_SOURCE_ID && source.kind == SourceKind.M3U && source.url == PLAYLIST_URL &&
+            source.username.isBlank() && source.password.isBlank() && source.headers.isEmpty() && source.epgUrl.isBlank())
+
+    fun visibleSources(sources: List<SourceConfig>, customerMode: Boolean = BuildConfig.CUSTOMER_MODE): List<SourceConfig> =
+        if (customerMode) sources.filter(::isManagedSource) else sources
+
 }
