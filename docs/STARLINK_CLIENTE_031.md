@@ -22,7 +22,7 @@ Validação local concluída: 68 testes do núcleo e 118 do aplicativo, todos ap
 APK: `dist/STARLINK-IPTV-layout.apk`, 23.860.026 bytes, versão `0.3.1-layout`.
 SHA256: `414abb9a8c5bf49ef3a0b4f1536cd5b58e3994fe057ce85df2d1477130c85e26`.
 Código e APK: commit `028cde75bbc45eb1ed41f0adc7d5485e953e36c3`.
-Execução celular: https://github.com/sempaio/ottplay-foss-android/actions/runs/40004079694 (resultado em acompanhamento).
+Execução celular: https://github.com/sempaio/ottplay-foss-android/actions/runs/40004079694 — **concluída com sucesso**, build e 18/18 testes no celular Android 35, incluindo login com servidor fixo, ausência de gestão de fontes, inicialização, catálogo, temporadas e reprodução MP4/HLS sintética. Evidências em `evidencias-starlink-cliente-031/`. O download público foi baixado e seu SHA256 coincide com o APK local validado. Artefato baixável: `STARLINK-IPTV-layout-APK` (ID 12522894044).
 
 [Download desta versão](https://raw.githubusercontent.com/sempaio/ottplay-foss-android/028cde75bbc45eb1ed41f0adc7d5485e953e36c3/dist/STARLINK-IPTV-layout.apk).
 
