@@ -41,3 +41,9 @@ Entrega por solicitação do usuário, sem aguardar testes adicionais do emulado
 Download: https://raw.githubusercontent.com/sempaio/ottplay-foss-android/f25fafdcc39ab91390c428dd21dbdb5dda8d90f5/dist/STARLINK-IPTV-layout.apk . Instalar sobre STARLINK IPTV Prévia, pacote e assinatura preservados. Esta atualização ajusta a interface; não implanta a correção de séries do painel.
 
 Retomada das verificações: primeira execução de celular terminou com 16/19 testes aprovados; três falharam por ausência de foco da janela durante simulação de teclas. Login, rolagem, temporadas e reprodução passaram. Reexecução dos jobs falhos solicitada sem mudar o APK; resultado em acompanhamento. Referências exatas em STARLINK_REFERENCIA_CODEX.md.
+
+## Verificação final da versão 0.3.2
+
+Execução https://github.com/sempaio/ottplay-foss-android/actions/runs/40011895751 concluída com sucesso: build e **19/19 testes no celular Android 35**, sem falhas. Tarefa da Activity de fixture trazida ao primeiro plano antes dos testes de teclas; nenhum teste removido ou asserção relaxada. Evidências em `evidencias-starlink-catalogo-032/aprovado/`. Código dos testes: `dd3012b9e337cf729eced9dad43c4c55c66fa9fd`. APK cliente idêntico ao do commit f25fafdcc39ab91390c428dd21dbdb5dda8d90f5, SHA256 856c576fb36a002c69082907077355455017ab6ff541cce361a51afbfb147bd4. Os resultados pendentes/falhos acima são histórico e estão superados por esta execução.
+
+0.3.1 permanece como base confirmada pelo operador; 0.3.2 agora tem validação automatizada completa da suíte celular. Séries do painel continuam sob responsabilidade do Codex do computador, sem implantação nesta entrega.

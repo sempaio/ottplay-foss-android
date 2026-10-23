@@ -36,3 +36,9 @@ Servidor Xtream fixo: https://panel.taila5c5c2.ts.net . Playlist independente: h
 TV, DLNA, espelhamento e comportamento em segundo plano seguem adiados. Botão Atualizar fixo no topo é preferência registrada para próxima melhoria; não integra a alteração atual. Preservar 0.3.1 como referência estável, sem aplicar downgrade destrutivo no dispositivo.
 
 Nova tentativa reproduziu 16/19, com as mesmas três falhas de foco. Preparação da janela dos testes corrigida para trazer a tarefa da Activity de fixture ao primeiro plano; diagnóstico de janela ampliado sem aceitar diálogos genéricos ou remover asserções. APK cliente reconstruído e SHA256 confirmado idêntico; somente a instrumentação foi alterada. Nova execução completa solicitada.
+
+## Verificação final da versão 0.3.2
+
+Execução https://github.com/sempaio/ottplay-foss-android/actions/runs/40011895751 concluída com sucesso: build e **19/19 testes no celular Android 35**, sem falhas. Tarefa da Activity de fixture trazida ao primeiro plano antes dos testes de teclas; nenhum teste removido ou asserção relaxada. Evidências em `evidencias-starlink-catalogo-032/aprovado/`. Código dos testes: `dd3012b9e337cf729eced9dad43c4c55c66fa9fd`. APK cliente idêntico ao do commit f25fafdcc39ab91390c428dd21dbdb5dda8d90f5, SHA256 856c576fb36a002c69082907077355455017ab6ff541cce361a51afbfb147bd4. Os resultados pendentes/falhos acima são histórico e estão superados por esta execução.
+
+0.3.1 permanece como base confirmada pelo operador; 0.3.2 agora tem validação automatizada completa da suíte celular. Séries do painel continuam sob responsabilidade do Codex do computador, sem implantação nesta entrega.
