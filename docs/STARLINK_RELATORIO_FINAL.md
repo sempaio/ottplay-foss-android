@@ -1,3 +1,5 @@
+> Nova prévia neon 0.3.0-layout: [STARLINK_LAYOUT_RELATORIO_FINAL.md](STARLINK_LAYOUT_RELATORIO_FINAL.md). Este documento preserva a entrega anterior.
+
 # Entrega STARLINK IPTV — 2026-10-22
 
 ## Aplicativo e código

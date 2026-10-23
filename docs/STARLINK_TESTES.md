@@ -1,3 +1,5 @@
+> Nova prévia neon 0.3.0-layout: [STARLINK_LAYOUT_TESTES.md](STARLINK_LAYOUT_TESTES.md). Este documento preserva a entrega anterior.
+
 # Testes STARLINK IPTV — 2026-10-22
 
 ## Ambiente e comandos

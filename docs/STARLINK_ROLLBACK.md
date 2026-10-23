@@ -1,3 +1,5 @@
+> Nova prévia neon 0.3.0-layout: [STARLINK_LAYOUT_ROLLBACK.md](STARLINK_LAYOUT_ROLLBACK.md). Este documento preserva a entrega anterior.
+
 # Rollback STARLINK
 
 Nenhuma main ou configuração do M81 foi alterada. Todo o trabalho está em `starlink/entrega-android-20261022`.
