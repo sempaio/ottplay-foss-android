@@ -82,6 +82,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var saveInFlight = false
     private var loadJob: Job? = null
     private var detailJob: Job? = null
+    private val episodeCache = SeriesEpisodeCache()
     private var playJob: Job? = null
     private var recoveryJob: Job? = null
     private var playGeneration = 0L
@@ -209,6 +210,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (saveInFlight) return@operation
                 loadJob?.cancelAndJoin(); detailJob?.cancel(); stop()
                 availableSources().forEach { repository.remove(it.id) }
+                episodeCache.clear()
                 repository.preferences.update { it.copy(selectedSourceId = null) }
                 updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
             }
@@ -235,6 +237,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
                 repository.save(action.source)
+                episodeCache.discardSource(action.source.id)
                 if (StarlinkConfig.isStarlinkAccount(action.source) &&
                     availableSources().none { it.id == StarlinkConfig.PLAYLIST_SOURCE_ID }) {
                     repository.save(StarlinkConfig.playlistSource())
@@ -249,6 +252,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (state.value.playingEntry?.sourceId == action.sourceId) stop()
                 loadJob?.cancel()
                 repository.remove(action.sourceId)
+                episodeCache.discardSource(action.sourceId)
                 val sources = availableSources()
                 val id = state.value.selectedSourceId?.takeUnless { it == action.sourceId } ?: sources.firstOrNull()?.id
                 updateState { it.copy(sources = sources, selectedSourceId = id, entries = emptyList(), isBusy = false) }
@@ -287,11 +291,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.CloseMovie -> { detailJob?.cancel(); updateState { it.copy(movieEntry = null, isBusy = false) } }
             is AppAction.OpenSeries -> {
                 detailJob?.cancel()
-                updateState { it.copy(seriesEntry = action.entry, episodes = emptyList(), isBusy = true) }
+                // Show only this series' last successful result while its new request is pending.
+                updateState { it.copy(seriesEntry = action.entry, episodes = episodeCache.previous(action.entry), isBusy = true) }
                 detailJob = operation {
                     val source = availableSources().first { it.id == action.entry.sourceId }
                     val episodes = repository.providers.loadEpisodes(source, action.entry)
-                    updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
+                    episodeCache.accept(action.entry, episodes)
+                    updateState {
+                        if (it.seriesEntry?.id == action.entry.id && it.seriesEntry?.sourceId == action.entry.sourceId)
+                            it.copy(episodes = episodes, isBusy = false) else it
+                    }
                 }
             }
             AppAction.CloseEpg -> { detailJob?.cancel(); updateState { it.copy(epgEntry = null, programmes = emptyList()) } }
