@@ -1,0 +1,36 @@
+name: STARLINK - publish verified series test APK
+on:
+  push:
+    branches: [starlink/fix-series-formats-20261024]
+    paths: [.github/workflows/starlink-publish-signed-test.yml]
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/starlink/fix-series-formats-20261024'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          run-id: 40076392304
+          github-token: ${{ github.token }}
+          name: STARLINK-IPTV-SERIES-TESTE
+          path: release-candidate
+      - name: Publish only the exact APK already built and verified
+        run: |
+          set -euo pipefail
+          echo "9439283324ff750220c77370def11e5ce64c1bbffaefbdee7ecef6a15f236fbe  release-candidate/STARLINK-IPTV-SERIES-TESTE.apk" | sha256sum -c -
+          git fetch origin refs/heads/starlink/fix-series-formats-20261024
+          git checkout -B starlink/fix-series-formats-20261024 FETCH_HEAD
+          mkdir -p dist
+          cp release-candidate/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.apk
+          printf '%s\n' "9439283324ff750220c77370def11e5ce64c1bbffaefbdee7ecef6a15f236fbe  STARLINK-IPTV-SERIES-TESTE.apk" > dist/STARLINK-IPTV-SERIES-TESTE.sha256
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f dist/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.sha256
+          git commit -m 'build: deliver signed series test APK [skip ci]'
+          git push origin HEAD:refs/heads/starlink/fix-series-formats-20261024

@@ -86,4 +86,42 @@ class StarlinkXtreamTest {
         }
     }
 
+
+    @Test fun xtreamSeasonArraysProduceSameEpisodesAsGroupedObjects() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val source = config(server)
+            val entry = MediaEntry("series", source.id, "Fixture", kind = MediaKind.SERIES, providerId = "6017")
+            val grouped = """{"episodes":{"1":[{"id":"801","episode_num":1,"title":"Pilot","container_extension":"mp4"}]}}"""
+            val listOfSeasons = """{"episodes":[{"season_number":1,"episodes":[{"id":"801","episode_num":1,"title":"Pilot","container_extension":"mp4"}]}]}"""
+            val flat = """{"episodes":[{"season":1,"id":"801","episode_num":1,"title":"Pilot","container_extension":"mp4"}]}"""
+            val fromSeasons = """{"episodes":{},"seasons":[{"season_number":1,"episodes":[{"id":"801","episode_num":1,"title":"Pilot","container_extension":"mp4"}]}]}"""
+            val repo = ProviderRepository()
+            val signatures = listOf(grouped, listOfSeasons, flat, fromSeasons).map { response ->
+                server.enqueue(MockResponse().setBody(response))
+                repo.loadEpisodes(source, entry).map { Triple(it.providerId, it.season, it.episode) }
+            }
+            assertEquals(listOf(Triple("801", 1, 1)), signatures.first())
+            signatures.forEach { assertEquals(signatures.first(), it) }
+            repeat(4) {
+                val request = server.takeRequest()
+                assertEquals("get_series_info", request.requestUrl?.queryParameter("action"))
+                assertEquals("6017", request.requestUrl?.queryParameter("series_id"))
+            }
+        }
+    }
+
+    @Test fun pendingSeriesDoNotInventEpisodesAndMalformedArraysFailVisibly() {
+        val pending = """{"info":{"name":"Pending"},"episodes":{},"seasons":[{"season_number":1}]}"""
+        assertEquals(pending, normalizeXtreamEpisodeRows(parseProviderJson(pending)).toString())
+        assertFailsWith<ProviderException> {
+            normalizeXtreamEpisodeRows(parseProviderJson(
+                """{"episodes":[{"season_number":1,"episodes":[{"title":"Missing identifier","episode_num":1}]}]}"""
+            ))
+        }
+        // A legacy flat list with no season still belongs to the shared core.
+        val legacy = """{"episodes":[{"id":"801","episode_num":1,"title":"Season unspecified"}]}"""
+        assertEquals(legacy, normalizeXtreamEpisodeRows(parseProviderJson(legacy)).toString())
+    }
+
 }

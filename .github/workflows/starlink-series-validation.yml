@@ -1,0 +1,85 @@
+name: STARLINK - validate series fixes
+on:
+  push:
+    branches:
+      - starlink/fix-series-formats-20261024
+    paths:
+      - 'native/**'
+      - '.github/workflows/starlink-series-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Run parser, UI unit tests and lint (no APK publishing)
+        working-directory: native
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout :app:assembleSeriesTest
+      - name: Validate and stage installable signed test APK
+        run: |
+          set -euo pipefail
+          mkdir -p release-candidate
+          cp native/app/build/outputs/apk/seriesTest/app-seriesTest.apk release-candidate/STARLINK-IPTV-SERIES-TESTE.apk
+          apk="release-candidate/STARLINK-IPTV-SERIES-TESTE.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='br.starlink.iptv.series'"
+          sha256sum "$apk" | tee release-candidate/SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: STARLINK-IPTV-SERIES-TESTE
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: starlink-series-test-reports
+          path: |
+            native/core/build/reports/tests/
+            native/app/build/reports/tests/
+            native/app/build/reports/lint-results-*
+          retention-days: 7
+
+  publish_test_apk:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/starlink/fix-series-formats-20261024'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: STARLINK-IPTV-SERIES-TESTE
+          path: release-candidate
+      - name: Verify and publish APK only to the isolated feature branch
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'starlink/fix-series-formats-20261024'
+          test -s release-candidate/STARLINK-IPTV-SERIES-TESTE.apk
+          sha256sum -c release-candidate/SHA256SUMS
+          mkdir -p dist
+          cp release-candidate/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.apk
+          cp release-candidate/SHA256SUMS dist/STARLINK-IPTV-SERIES-TESTE.sha256
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git add -f dist/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.sha256
+          git commit -m 'build: publish isolated series test APK [skip ci]'
+          git push origin HEAD:refs/heads/starlink/fix-series-formats-20261024
