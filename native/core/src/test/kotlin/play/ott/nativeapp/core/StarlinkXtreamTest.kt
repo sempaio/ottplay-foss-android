@@ -119,11 +119,9 @@ class StarlinkXtreamTest {
                 """{"episodes":[{"season_number":1,"episodes":[{"title":"Missing identifier","episode_num":1}]}]}"""
             ))
         }
-        assertFailsWith<ProviderException> {
-            normalizeXtreamEpisodeRows(parseProviderJson(
-                """{"episodes":[{"id":"801","episode_num":1,"title":"Season unspecified"}]}"""
-            ))
-        }
+        // A legacy flat list with no season still belongs to the shared core.
+        val legacy = """{"episodes":[{"id":"801","episode_num":1,"title":"Season unspecified"}]}"""
+        assertEquals(legacy, normalizeXtreamEpisodeRows(parseProviderJson(legacy)).toString())
     }
 
 }
