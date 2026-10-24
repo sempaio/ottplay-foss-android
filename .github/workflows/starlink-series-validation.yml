@@ -1,0 +1,41 @@
+name: STARLINK - validate series fixes
+on:
+  push:
+    branches:
+      - starlink/fix-series-formats-20261024
+    paths:
+      - 'native/**'
+      - '.github/workflows/starlink-series-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Run parser, UI unit tests and lint (no APK publishing)
+        working-directory: native
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: starlink-series-test-reports
+          path: |
+            native/core/build/reports/tests/
+            native/app/build/reports/tests/
+            native/app/build/reports/lint-results-*
+          retention-days: 7
