@@ -37,7 +37,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         val id = series.providerId
         val addresses = addresses(config)
         val request = XtreamCatalogs.seriesRequest(ProviderValue.text(id), "", XtreamFormat.ANDROID)
-        val data = parseProviderJson(http.get(addresses.api(request), config.headers).text()).toProviderValue()
+        val data = normalizeXtreamEpisodeRows(parseProviderJson(http.get(addresses.api(request), config.headers).text())).toProviderValue()
         XtreamCatalogs.episodes(data, XtreamFormat.ANDROID, source(config), addresses,
             XtreamSeriesParent(id, series.name, series.logo), { resolveHttp(config.url, it) }, { it },
             { stableId(*it.toTypedArray()) }).entries.map { item(it, config, "UTC") }
@@ -135,4 +135,55 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             else -> "Provider returned an unsupported response"
         })
     }
+}
+
+
+/**
+ * Some Xtream-compatible servers return episodes as season objects or as a flat
+ * array rather than the canonical map keyed by season number. Adapt only
+ * explicitly identified episodes; never infer numbers, URLs or series matches.
+ */
+internal fun normalizeXtreamEpisodeRows(payload: JsonElement): JsonElement {
+    val root = payload as? JsonObject ?: return payload
+    val raw = root["episodes"]
+    if (raw is JsonObject && raw.isNotEmpty()) return payload
+
+    val rows = when {
+        raw is JsonArray && raw.isNotEmpty() -> raw
+        raw == null || raw is JsonArray || (raw is JsonObject && raw.isEmpty()) -> {
+            val seasons = root["seasons"] as? JsonArray ?: return payload
+            if (seasons.none { (it as? JsonObject)?.get("episodes") is JsonArray }) return payload
+            seasons
+        }
+        else -> return payload
+    }
+    val grouped = linkedMapOf<String, MutableList<JsonElement>>()
+    fun invalid(): Nothing = throw ProviderException(
+        "Invalid Xtream series response", failure = ProviderFailure.INVALID_RESPONSE)
+    fun season(row: JsonObject): String =
+        listOf("season_number", "season").firstNotNullOfOrNull { key ->
+            (row[key] as? JsonPrimitive)?.content?.toIntOrNull()
+                ?.takeIf { it in 0..999 }?.toString()
+        } ?: invalid()
+    fun append(season: String, episode: JsonElement) {
+        val item = episode as? JsonObject ?: invalid()
+        val id = (item["id"] as? JsonPrimitive)?.content.orEmpty()
+        val number = listOf("episode_num", "episode").firstNotNullOfOrNull { key ->
+            (item[key] as? JsonPrimitive)?.content?.toIntOrNull()?.takeIf { it > 0 }
+        }
+        if (id.isBlank() || number == null) invalid()
+        grouped.getOrPut(season) { mutableListOf() }.add(item)
+    }
+    for (row in rows) {
+        val record = row as? JsonObject ?: invalid()
+        val key = season(record)
+        when (val nested = record["episodes"]) {
+            is JsonArray -> nested.forEach { append(key, it) }
+            null -> append(key, record)
+            else -> invalid()
+        }
+    }
+    return JsonObject(root.toMutableMap().apply {
+        this["episodes"] = JsonObject(grouped.mapValues { JsonArray(it.value) })
+    })
 }
