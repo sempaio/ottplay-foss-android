@@ -63,6 +63,16 @@ android {
             matchingFallbacks += "debug"
             resValue("string", "app_name", "STARLINK IPTV Prévia")
         }
+        // Installable alongside the signed 0.3.2-layout app. Do not use the
+        // stable package ID with the CI-generated debug signing certificate.
+        create("seriesTest") {
+            initWith(getByName("layout"))
+            applicationIdSuffix = ".series"
+            versionNameSuffix = "-series-test"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "layout"
+            resValue("string", "app_name", "STARLINK IPTV Series Teste")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
