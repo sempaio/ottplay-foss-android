@@ -149,7 +149,12 @@ internal fun normalizeXtreamEpisodeRows(payload: JsonElement): JsonElement {
     if (raw is JsonObject && raw.isNotEmpty()) return payload
 
     val rows = when {
-        raw is JsonArray && raw.isNotEmpty() -> raw
+        raw is JsonArray && raw.isNotEmpty() -> {
+            // The shared core already supports flat episode arrays, including entries
+            // without a season. Adapt only arrays of season containers here.
+            if (raw.none { (it as? JsonObject)?.get("episodes") is JsonArray }) return payload
+            raw
+        }
         raw == null || raw is JsonArray || (raw is JsonObject && raw.isEmpty()) -> {
             val seasons = root["seasons"] as? JsonArray ?: return payload
             if (seasons.none { (it as? JsonObject)?.get("episodes") is JsonArray }) return payload
