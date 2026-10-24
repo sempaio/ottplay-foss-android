@@ -16,12 +16,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
@@ -30,7 +30,7 @@ jobs:
       - name: Run parser, UI unit tests and lint (no APK publishing)
         working-directory: native
         run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: starlink-series-test-reports
