@@ -29,6 +29,6 @@ jobs:
           printf '%s\n' "9439283324ff750220c77370def11e5ce64c1bbffaefbdee7ecef6a15f236fbe  STARLINK-IPTV-SERIES-TESTE.apk" > dist/STARLINK-IPTV-SERIES-TESTE.sha256
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dist/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.sha256
+          git add -f dist/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.sha256
           git commit -m 'build: deliver signed series test APK [skip ci]'
           git push origin HEAD:refs/heads/starlink/fix-series-formats-20261024
