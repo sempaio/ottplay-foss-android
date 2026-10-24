@@ -80,6 +80,6 @@ jobs:
           cp release-candidate/SHA256SUMS dist/STARLINK-IPTV-SERIES-TESTE.sha256
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git config user.name 'github-actions[bot]'
-          git add dist/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.sha256
+          git add -f dist/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.sha256
           git commit -m 'build: publish isolated series test APK [skip ci]'
           git push origin HEAD:refs/heads/starlink/fix-series-formats-20261024
