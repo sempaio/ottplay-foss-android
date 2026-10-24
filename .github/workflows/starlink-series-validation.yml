@@ -74,7 +74,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = 'starlink/fix-series-formats-20261024'
           test -s release-candidate/STARLINK-IPTV-SERIES-TESTE.apk
-          (cd release-candidate && sha256sum -c SHA256SUMS)
+          sha256sum -c release-candidate/SHA256SUMS
           mkdir -p dist
           cp release-candidate/STARLINK-IPTV-SERIES-TESTE.apk dist/STARLINK-IPTV-SERIES-TESTE.apk
           cp release-candidate/SHA256SUMS dist/STARLINK-IPTV-SERIES-TESTE.sha256
