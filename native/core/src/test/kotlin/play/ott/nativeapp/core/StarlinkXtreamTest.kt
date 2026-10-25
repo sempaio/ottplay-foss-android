@@ -91,10 +91,8 @@ class StarlinkXtreamTest {
             assertEquals(listOf("movie", otherAccount.username, otherAccount.password, "42.avi"),
                 other.url.toHttpUrl().pathSegments)
             assertEquals(2, server.requestCount)
-            assertEquals(otherAccount.password, server.takeRequest().requestUrl?.queryParameter("password").let {
-                // First request belongs to the original account; verify both in request order below.
-                server.takeRequest().requestUrl?.queryParameter("password")
-            })
+            assertEquals(source.password, server.takeRequest().requestUrl?.queryParameter("password"))
+            assertEquals(otherAccount.password, server.takeRequest().requestUrl?.queryParameter("password"))
 
             // Source refresh/edit/removal invalidates the short-lived detail.
             server.enqueue(MockResponse().setBody("""{"movie_data":{"container_extension":"mkv"}}"""))
