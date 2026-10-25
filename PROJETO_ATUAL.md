@@ -62,8 +62,9 @@ significa que as duas sejam mescladas ou que saibamos qual está selecionada:
 
 ## Inventário informado pelo proprietário em 25/10
 
-A captura de “Repositórios Principais” identifica o conjunto abaixo. O proprietário
-informa que ele é a base usada no projeto. Registrar essa informação junto das
+A captura de “Repositórios Principais” contém repositórios de diferentes usos.
+O proprietário confirmou os sete abaixo como base do projeto e excluiu
+explicitamente airgeddon e Evil-Twin; não os tratar como integrações IPTV. Registrar essa informação junto das
 ligações verificadas no código; não reduzir o projeto ao APK do telefone.
 
 | Repositório do proprietário | Papel identificado na documentação/código | Referência para integração |
@@ -75,8 +76,6 @@ ligações verificadas no código; não reduzir o projeto ao APK do telefone.
 | [sempaio/app-m3u-generator](https://github.com/sempaio/app-m3u-generator) | Geração de listas FAST e referências EPG para Pluto, Plex TV, Samsung TV Plus, Roku e Tubi. | generate_playlists.py, playlists/ e workflows. O código M81 inspecionado referencia o upstream BuddyChewChew; ver seção seguinte. |
 | [sempaio/ottplay-foss-server-epg](https://github.com/sempaio/ottplay-foss-server-epg) | Serviço de associação/entrega de EPG para canais; README referencia ott-play-epg-converter. | README e samples/. Identificar a URL EPG configurada em cada cliente/serviço para confirmar a ligação operacional específica. |
 | [sempaio/Iptv-Brasil-2025](https://github.com/sempaio/Iptv-Brasil-2025) | Repositório de listas/referências IPTV do proprietário. | Não confundir com Ramys/Iptv-Brasil-2026, que aparece literalmente nos presets BR04/BR05 do M81. Não copiar credenciais contidas em documentação de terceiros para este mapa. |
-| [sempaio/airgeddon](https://github.com/sempaio/airgeddon) | Ferramenta de auditoria de redes sem fio. | README. Faz parte do inventário informado; não foi demonstrada dependência desse software no caminho catálogo → capa → reprodução. |
-| [sempaio/Evil-Twin](https://github.com/sempaio/Evil-Twin) | Ferramentas/estudo de auditoria e defesa de redes Wi-Fi. | README. Mesmo limite de confirmação de vínculo técnico com o fluxo IPTV. |
 
 **Regra para avaliar PRs:** identificar componente afetado, consumidor no projeto,
 versão/commit usado e pré-requisitos entre player/controlador/CLI. Um PR que ajuda
