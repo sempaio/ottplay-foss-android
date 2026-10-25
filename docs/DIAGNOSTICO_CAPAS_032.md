@@ -137,3 +137,13 @@ O ZIP de Actions foi baixado e o checksum interno conferido antes da inclusão
 na branch isolada. Receipt em `dist/STARLINK-IPTV-CAPAS-TESTE.json`.
 O APK conserva o protocolo/loader/cache do cliente base e coleta os resultados
 Coil; sua primeira abertura tem catálogo/cache próprios, não os do APK original.
+
+## Interpretação refinada após pesquisa do Coil 2.7.0
+
+NETWORK no relatório significa que o fetcher passou pelo caminho de rede; pode
+incluir revalidação HTTP 304 dos bytes já guardados. Não significa sempre um
+download completo novo. Para separar esses casos, seriam necessários status e
+bytes de rede; o APK entregue não fornece esse detalhamento. DISK e MEMORY_CACHE
+identificam os caminhos locais reportados pelo Coil. A candidata tem cache
+privado próprio e não lê o cache do Séries Teste original. Ver revisão das quatro
+recomendações em ARQUITETURA_E_MELHORIAS_20261025.md.
