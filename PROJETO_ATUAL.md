@@ -28,7 +28,7 @@ nome do repositório ou assumir que main contém o aplicativo em uso.
 | Núcleo compartilhado | `native/core/vendor/ottplay-core.jar` e `.manifest.json`; fonte canônica [open-ott-play/ottplay-core/shared-core](https://github.com/open-ott-play/ottplay-core/tree/main/shared-core) | O README nativo identifica o compartilhamento com FOSS2. Binário fixado por receipt; `verifySharedCore` valida integridade. Não substituir pelo projeto web/Rust. |
 | Painel M81 / CoreAPI | `sempaio/painel-m81-iptv-cloud` | Backend/painel, publicação, fontes e compatibilidade Xtream. A main contém também o pipeline Android LEGADO 100.0.x. Esse pipeline não gera o app da captura. |
 | Referência de investigação M81 | Branch `codex/rootcause-runtime-20261024` | Handoff registra base de código `9ef159835012973fe9a8a9c0bc2810ab8d77fe11`; a própria documentação registra diferenças na imagem. É evidência datada, não inspeção do runtime de hoje. |
-| Outras linhas de código | Repositórios `ottplay-android`, `ottplay-netflix`, `ottplay-foss` e variantes TV | Não tomar automaticamente como fonte do Android da captura. Só seguir dependência demonstrada por manifest/receipt/importação. |
+| Procedência Android e TV | ottplay-android e ottplay-foss | Importação Android e build TV foram confirmados na auditoria abaixo. Cada componente tem papel próprio; isso não torna todo código desses repos parte do APK nativo. |
 
 APK seriesTest rastreado em `dist/STARLINK-IPTV-SERIES-TESTE.apk`:
 SHA256 `9439283324ff750220c77370def11e5ce64c1bbffaefbdee7ecef6a15f236fbe`.
@@ -60,28 +60,35 @@ aceito, `PlayerViewModel.SaveSource` adiciona a M3U quando ausente. Isso NÃO
 significa que as duas sejam mescladas ou que saibamos qual está selecionada:
 `selectedSourceId` e o catálogo salvo no aparelho decidem o fluxo efetivo.
 
-## Inventário informado pelo proprietário em 25/10
+## Auditoria dos repositórios da imagem — 2026-10-25
 
-A captura de “Repositórios Principais” contém repositórios de diferentes usos.
-O proprietário confirmou os sete abaixo como base do projeto e excluiu
-explicitamente airgeddon e Evil-Twin; não os tratar como integrações IPTV. Registrar essa informação junto das
-ligações verificadas no código; não reduzir o projeto ao APK do telefone.
+A captura é uma lista de candidatos, não uma prova de integração. Airgeddon e
+Evil-Twin foram explicitamente excluídos pelo proprietário. Os sete restantes
+foram examinados por referências de importação, configuração e workflows. A
+classificação abaixo substitui a afirmação anterior de que todos os sete estavam
+confirmados no projeto.
 
-| Repositório do proprietário | Papel identificado na documentação/código | Referência para integração |
+| Repositório da imagem | Resultado | Evidência e alcance |
 |---|---|---|
-| [sempaio/ottplay-foss](https://github.com/sempaio/ottplay-foss) | Player FOSS web/TV/desktop e seus componentes. | README, docs/architecture.md e contratos de provedores/controle remoto. PRs upstream podem beneficiar esta parte do projeto mesmo sem alterar o Android nativo. |
-| [sempaio/ottplay-control-server](https://github.com/sempaio/ottplay-control-server) | Entrega de comandos remotos aos players; filas por dispositivo e contratos de capacidades. | README e docs/reliable-control.md. Os workflows herdados no repo Android/FOSS também testam o controlador upstream open-ott-play/ottplay-control-server; isso demonstra ligação de compatibilidade, não uma instalação ativa do fork. |
-| [sempaio/harden-runner](https://github.com/sempaio/harden-runner) | Ferramenta de monitoramento/proteção de runners CI/CD. | Workflows inspecionados usam step-security/harden-runner por SHA. O fork do proprietário faz parte do inventário; a URL efetivamente executada deve ser conferida em cada workflow. Não é carregador de capas nem servidor de mídia. |
-| [sempaio/ottplay-android](https://github.com/sempaio/ottplay-android) | Linha Android nativa, Kotlin/Compose/Media3. | README descreve app standalone e provedores M3U/Xtream/Stalker. O APK STARLINK 0.3.2-series-test identificado nesta tarefa está no repo ottplay-foss-android, conforme tabela de artefatos acima; manter a relação entre linhas Android explícita. |
-| [sempaio/app-m3u-generator](https://github.com/sempaio/app-m3u-generator) | Geração de listas FAST e referências EPG para Pluto, Plex TV, Samsung TV Plus, Roku e Tubi. | generate_playlists.py, playlists/ e workflows. O código M81 inspecionado referencia o upstream BuddyChewChew; ver seção seguinte. |
-| [sempaio/ottplay-foss-server-epg](https://github.com/sempaio/ottplay-foss-server-epg) | Serviço de associação/entrega de EPG para canais; README referencia ott-play-epg-converter. | README e samples/. Identificar a URL EPG configurada em cada cliente/serviço para confirmar a ligação operacional específica. |
-| [sempaio/Iptv-Brasil-2025](https://github.com/sempaio/Iptv-Brasil-2025) | Repositório de listas/referências IPTV do proprietário. | Não confundir com Ramys/Iptv-Brasil-2026, que aparece literalmente nos presets BR04/BR05 do M81. Não copiar credenciais contidas em documentação de terceiros para este mapa. |
+| [sempaio/ottplay-foss](https://github.com/sempaio/ottplay-foss) | **Vínculo direto no build TV preparado** | No painel, branch starlink/foss-tv-m81-20261024, `.github/workflows/starlink-foss-tv.yml:38–39` faz checkout desse repo no commit `5018806dc9b77928e6302362a701c7b896cac1a0`; `scripts/build_starlink_foss_tv.py` grava essa procedência. A candidata usa launcher/login M81. Isso comprova integração de código/build, não instalação numa TV. |
+| [sempaio/ottplay-android](https://github.com/sempaio/ottplay-android) | **Base direta importada do Android STARLINK** | `native/STARLINK_UPSTREAM.md` identifica esse repo e o commit `4fc46551af1cdce6eabd879719eb6e6e82d73a35`. Importação preservada no commit `930363d378348fb9a1277997f8472c94cebff607` do repo ottplay-foss-android; a árvore native/app e native/core é a base modificada do cliente. |
+| [sempaio/app-m3u-generator](https://github.com/sempaio/app-m3u-generator) | **Componente integrado; referência executável aponta ao upstream** | `app/services/pluto_catalog.py:26` e `fast_playlist_catalog.py:15–16` no M81 apontam a `BuddyChewChew/app-m3u-generator`, incluindo playlists/plutotv_br.m3u. O fork sempaio existe e é registrado na documentação M81; não há troca automática para ele. |
+| [sempaio/ottplay-control-server](https://github.com/sempaio/ottplay-control-server) | **Integração de compatibilidade com o controlador upstream demonstrada; fork pessoal não confirmado como destino** | `.github/workflows/ci.yml:65–75` no repo Android/FOSS faz checkout de `open-ott-play/ottplay-control-server` por SHAs e executa testes com seus binários. O componente fornece comandos remotos. Esses testes não provam que um servidor sempaio esteja implantado ou conectado ao APK nativo. |
+| [sempaio/harden-runner](https://github.com/sempaio/harden-runner) | **Ferramenta CI integrada pelo upstream; fork pessoal não usado nas referências inspecionadas** | Workflows como `.github/workflows/ci.yml:57` e codeql.yml usam `step-security/harden-runner` fixado em SHA. É proteção do ambiente de build, não geração de listas/capas ou reprodução. |
+| [sempaio/ottplay-foss-server-epg](https://github.com/sempaio/ottplay-foss-server-epg) | **Papel identificado, ligação específica ainda não demonstrada** | README descreve associação de EPG e referência ao ott-play-epg-converter. Nas referências inspecionadas não foi encontrada dependência direta desse fork. O M81 configura EPG por EPG_URL/fontes de EPG, e o Android lê XMLTV das fontes. Ter EPG no produto não demonstra que esse serviço específico o forneça. |
+| [sempaio/Iptv-Brasil-2025](https://github.com/sempaio/Iptv-Brasil-2025) | **Repo de listas confirmado; consumo pelo código inspecionado ainda não demonstrado** | A árvore contém `Lista BR 01.m3u8` a `Lista BR 08.m3u8` e outras M3U. Porém os presets BR04/BR05 do M81 apontam a `Ramys/Iptv-Brasil-2026/CanaisBR04.m3u8` e CanaisBR05.m3u8, não a esse fork. Não tratar nomes parecidos como prova de mesma fonte. |
+
+Assim, a auditoria distingue dependência/importação comprovada, integração com
+upstream, compatibilidade de testes e vínculo ainda não localizado. Não declara
+os dois últimos repositórios “fora do projeto”: configurações externas podem
+fornecer ligações que não aparecem nas árvores inspecionadas. Nenhum cadastro,
+workflow operacional, fonte publicada ou serviço foi alterado nesta auditoria.
 
 **Regra para avaliar PRs:** identificar componente afetado, consumidor no projeto,
 versão/commit usado e pré-requisitos entre player/controlador/CLI. Um PR que ajuda
-OTT-play FOSS pode ser relevante ao produto completo sem ser uma correção para
-as capas no Android. **Plex TV em listas FAST não é automaticamente Plex Media
-Server com biblioteca pessoal**; distinguir esses dois usos ao avaliar PR #871.
+OTT-play FOSS pode ser relevante ao produto completo sem corrigir o Android.
+**Plex TV em listas FAST não é automaticamente Plex Media Server com biblioteca
+pessoal**; distinguir esses usos ao avaliar PR #871.
 
 ## Repositórios externos que integram o catálogo
 
