@@ -116,3 +116,9 @@ Testes novos: origens/tempo por tipo, remoção de credenciais/paths/queries/men
 limite de histórico, reset durante pedido e cancelamento separado de sucesso.
 Workflow isolado: starlink-artwork-diagnostics.yml, build+testes+lint+assinatura,
 apenas artefato de Actions; não altera main, a branch anterior ou a produção.
+
+A candidata inclui também identificação da versão/revisão de build, protocolo
+e fonte selecionada (rótulo gerenciado), host configurado e contagens do catálogo
+local por tipo. Não exporta nomes particulares da fonte, IDs ou credenciais.
+Mapa de entrada do produto: `PROJETO_ATUAL.md`. Esses dados não identificam
+a publicação do servidor sem uma consulta autenticada ao runtime.

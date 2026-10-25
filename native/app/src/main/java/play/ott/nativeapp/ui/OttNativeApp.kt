@@ -540,7 +540,7 @@ private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, cus
     var showLanguages by rememberSaveable { mutableStateOf(false) }
     var showArtworkDiagnostics by remember { mutableStateOf(false) }
     if (showArtworkDiagnostics) {
-        ArtworkDiagnosticsDialog { showArtworkDiagnostics = false }
+        ArtworkDiagnosticsDialog(state) { showArtworkDiagnostics = false }
         return
     }
     var restoreLanguageFocus by rememberSaveable { mutableStateOf(false) }

@@ -1,3 +1,5 @@
+> **Projeto STARLINK IPTV:** comece por [PROJETO_ATUAL.md](PROJETO_ATUAL.md) para identificar o aplicativo, suas integrações e as referências corretas.
+
 # OTT-play FOSS
 
 Local files without Internet: see [Local videos and offline playback](docs/offline-media.md).

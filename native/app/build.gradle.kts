@@ -6,6 +6,8 @@ plugins { id("com.android.application"); kotlin("plugin.compose"); kotlin("plugi
 val appVersion = Properties().apply {
     rootProject.file("version.properties").inputStream().use(::load)
 }
+val sourceRevision = providers.environmentVariable("GITHUB_SHA").orNull
+    ?.takeIf { it.matches(Regex("[0-9a-f]{40}")) } ?: "local"
 val signingVariant = providers.environmentVariable("OTTPLAY_SIGNING_VARIANT").orNull
 val signingNames = listOf("OTTPLAY_KEYSTORE", "OTTPLAY_STORE_PASSWORD", "OTTPLAY_KEY_ALIAS", "OTTPLAY_KEY_PASSWORD")
 val signingValues = signingNames.associateWith { providers.environmentVariable(it).orNull }
@@ -29,6 +31,7 @@ android {
         buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
         buildConfigField("boolean", "CUSTOMER_MODE", "false")
         buildConfigField("boolean", "ARTWORK_DIAGNOSTICS", "false")
+        buildConfigField("String", "SOURCE_REVISION", "\"$sourceRevision\"")
         manifestPlaceholders["allowCleartextTraffic"] = "false"
     }
     testBuildType = "layout"

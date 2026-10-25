@@ -59,4 +59,23 @@ class ArtworkDiagnosticsTest {
         assertTrue(report.contains("CANCELLED: 1 imagens"))
         assertFalse(report.contains("NETWORK:"))
     }
+
+    @Test fun identifiesSelectedCatalogueWithoutLeakingAccountOrOtherSources() {
+        val source = play.ott.nativeapp.core.SourceConfig("selected", "private-account-title",
+            play.ott.nativeapp.core.SourceKind.XTREAM, "https://operator:password@panel.example/private?token=secret",
+            username = "private-username", password = "private-password")
+        val entries = listOf(
+            play.ott.nativeapp.core.MediaEntry("private-id", source.id, "private-title", kind = play.ott.nativeapp.core.MediaKind.SERIES),
+            play.ott.nativeapp.core.MediaEntry("other-id", "other-source", "other-title", kind = play.ott.nativeapp.core.MediaKind.MOVIE))
+        val report = artworkContextReport("0.3.2-artwork-test", "a".repeat(40), source, entries, false)
+        assertTrue(report.contains("Fonte selecionada: XTREAM"))
+        assertTrue(report.contains("Servidor configurado: panel.example"))
+        assertTrue(report.contains("canais=0, filmes=0, séries=1, episódios=0"))
+        assertTrue(report.contains("Código: " + "a".repeat(40)))
+        for (secret in listOf("private", "password", "operator", "token", "secret", "other-title", "https://"))
+            assertFalse(report.contains(secret), secret)
+        val managed = artworkContextReport("test", "invalid", StarlinkConfig.playlistSource(), emptyList(), true)
+        assertTrue(managed.contains("Lista STARLINK IPTV (M3U)"))
+        assertTrue(managed.contains("Código: local"))
+    }
 }

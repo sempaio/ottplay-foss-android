@@ -1,5 +1,10 @@
 # Referência para o Codex do computador
 
+> Entrada atual: [mapa do projeto](../PROJETO_ATUAL.md). A captura de 25/10 mostra
+> 0.3.2-series-test, na branch starlink/fix-series-formats-20261024. Os registros
+> de layout abaixo são histórico dessa outra variante e não identificam sozinhos
+> o APK que o proprietário está usando agora.
+
 ## Base confirmada no celular pelo operador
 
 - Versão: **0.3.1-layout**, código 9, pacote `br.starlink.iptv.layout`.

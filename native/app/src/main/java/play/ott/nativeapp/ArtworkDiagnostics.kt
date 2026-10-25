@@ -3,6 +3,10 @@ package play.ott.nativeapp
 import java.net.URI
 import java.util.ArrayDeque
 import java.util.Locale
+import play.ott.nativeapp.core.MediaEntry
+import play.ott.nativeapp.core.MediaKind
+import play.ott.nativeapp.core.SourceConfig
+import play.ott.nativeapp.core.SourceKind
 
 /** Bounded, in-memory diagnostics. Never retain titles, IDs, URL paths, queries or error messages. */
 internal class ArtworkDiagnostics(private val capacity: Int = 300, private val clock: () -> Long = System::nanoTime) {
@@ -60,3 +64,25 @@ internal class ArtworkDiagnostics(private val capacity: Int = 300, private val c
 
     companion object { val session = ArtworkDiagnostics() }
 }
+
+
+/** Identity of the selected local catalogue, never an assertion about server runtime state. */
+internal fun artworkContextReport(version: String, revision: String, source: SourceConfig?,
+                                 entries: List<MediaEntry>, busy: Boolean): String = buildString {
+    appendLine("Aplicativo: STARLINK IPTV $version")
+    appendLine("Código: ${revision.takeIf { it.matches(Regex("[0-9a-f]{40}")) } ?: "local"}")
+    val sourceLabel = when {
+        source == null -> "não selecionada"
+        source.id == StarlinkConfig.PLAYLIST_SOURCE_ID && StarlinkConfig.isManagedSource(source) -> "Lista STARLINK IPTV (M3U)"
+        StarlinkConfig.isStarlinkAccount(source) -> "Conta M81 (XTREAM)"
+        else -> source.kind.name
+    }
+    appendLine("Fonte selecionada: $sourceLabel")
+    val host = runCatching { URI(source?.url.orEmpty()).host?.lowercase(Locale.ROOT) }.getOrNull()
+        ?.takeIf { it.matches(Regex("[a-z0-9.-]{1,253}")) } ?: "sem-host"
+    appendLine("Servidor configurado: $host")
+    val counts = entries.filter { it.sourceId == source?.id }.groupingBy { it.kind }.eachCount()
+    appendLine("Catálogo local: canais=${counts[MediaKind.LIVE] ?: 0}, filmes=${counts[MediaKind.MOVIE] ?: 0}, séries=${counts[MediaKind.SERIES] ?: 0}, episódios=${counts[MediaKind.EPISODE] ?: 0}")
+    appendLine("Carregamento em andamento: ${if (busy) "sim" else "não"}")
+    appendLine("Esses dados descrevem este app. Listas e publicação ativas no servidor ainda precisam ser verificadas no painel.")
+}.trimEnd()
