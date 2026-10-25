@@ -25,7 +25,7 @@ nome do repositório ou assumir que main contém o aplicativo em uso.
 | Android layout anterior | Mesmo repo, branch `starlink/celular-catalogo-032` | `f25fafdcc39ab91390c428dd21dbdb5dda8d90f5`, 0.3.2-layout, pacote `br.starlink.iptv.layout`; NÃO confundir com seriesTest da captura. |
 | Android de diagnóstico | Este repo, branch `starlink/artwork-diagnostics-20261025` | Variante `artworkTest`, pacote `br.starlink.iptv.artwork`, app separado. O relatório identifica a revisão que gerou o APK. Não é o APK já instalado. |
 | Adaptação de provedores/modelos | `native/core` | XtreamProvider, ProviderRepository, M3uParser, Models e políticas de transporte. |
-| Núcleo compartilhado | `native/core/vendor/ottplay-core.jar` e `.manifest.json` | Binário fixado por receipt com hashes dos fontes; `verifySharedCore` valida integridade. Não substituir pelo projeto web/Rust ou por outro repo de nome parecido. |
+| Núcleo compartilhado | `native/core/vendor/ottplay-core.jar` e `.manifest.json`; fonte canônica [open-ott-play/ottplay-core/shared-core](https://github.com/open-ott-play/ottplay-core/tree/main/shared-core) | O README nativo identifica o compartilhamento com FOSS2. Binário fixado por receipt; `verifySharedCore` valida integridade. Não substituir pelo projeto web/Rust. |
 | Painel M81 / CoreAPI | `sempaio/painel-m81-iptv-cloud` | Backend/painel, publicação, fontes e compatibilidade Xtream. A main contém também o pipeline Android LEGADO 100.0.x. Esse pipeline não gera o app da captura. |
 | Referência de investigação M81 | Branch `codex/rootcause-runtime-20261024` | Handoff registra base de código `9ef159835012973fe9a8a9c0bc2810ab8d77fe11`; a própria documentação registra diferenças na imagem. É evidência datada, não inspeção do runtime de hoje. |
 | Outras linhas de código | Repositórios `ottplay-android`, `ottplay-netflix`, `ottplay-foss` e variantes TV | Não tomar automaticamente como fonte do Android da captura. Só seguir dependência demonstrada por manifest/receipt/importação. |
@@ -59,6 +59,24 @@ M81 / CoreAPI
 aceito, `PlayerViewModel.SaveSource` adiciona a M3U quando ausente. Isso NÃO
 significa que as duas sejam mescladas ou que saibamos qual está selecionada:
 `selectedSourceId` e o catálogo salvo no aparelho decidem o fluxo efetivo.
+
+## Repositórios externos que integram o catálogo
+
+Estas ligações são rastreáveis pelo código; não é necessário abrir o painel
+em execução para identificá-las. Provar uma integração de código é diferente de
+confirmar o resultado da última sincronização/publicação.
+
+| Repositório | Papel e ligação demonstrada |
+|---|---|
+| [Ramys/Iptv-Brasil-2026](https://github.com/Ramys/Iptv-Brasil-2026) | **Repositório de listas**. `app/services/fast_playlist_catalog.py` do M81 contém os presets `ramys-br:04` e `ramys-br:05`, com arquivos `CanaisBR04.m3u8` e `CanaisBR05.m3u8`, branch master. Não é o aplicativo Android nem o painel. |
+| [BuddyChewChew/app-m3u-generator](https://github.com/BuddyChewChew/app-m3u-generator) | **Gerador/listas FAST e metadados Pluto**. `fast_playlist_catalog.py` aponta para `playlists/`; `pluto_catalog.py` usa `playlists/plutotv_br.m3u` como catálogo de metadados. O painel cria a entrega/sessão Pluto própria; não confundir essa dependência com reprodução direta da mesma M3U no cliente. |
+| [sempaio/app-m3u-generator](https://github.com/sempaio/app-m3u-generator) | **Fork do proprietário**, encontrado no GitHub. A documentação M81 registra o fork; os módulos inspecionados ainda referenciam BuddyChewChew como upstream. Registrar os dois, sem afirmar que a existência do fork trocou automaticamente a URL usada pelo código. |
+| [open-ott-play/ottplay-core](https://github.com/open-ott-play/ottplay-core) | Núcleo de interpretação/contratos compartilhados com a família FOSS. O Android consome a cópia compilada fixada pelo receipt em native/core/vendor; isso é integração de biblioteca, não mais um servidor de listas. |
+
+Referências no painel: `app/services/fast_playlist_catalog.py`,
+`app/services/pluto_catalog.py`, `app/services/provider_importer.py` e
+`app/services/iptv_content.py`. Referência Android: `native/README.md`, seção
+núcleo compartilhado, além dos adapters em `native/core`.
 
 ## Listas/provedores conhecidos
 
