@@ -4,6 +4,8 @@ Atualizado em 2026-10-25 a partir do GitHub e da captura do proprietário.
 Este documento identifica componentes e referências; não atesta sozinho o que
 está executando no Windows ou instalado byte a byte no celular.
 
+Veja também [comunicação entre componentes e melhorias priorizadas](docs/ARQUITETURA_E_MELHORIAS_20261025.md).
+
 ## Começar aqui
 
 O produto do proprietário é **STARLINK IPTV**. Ele usa componentes distribuídos
