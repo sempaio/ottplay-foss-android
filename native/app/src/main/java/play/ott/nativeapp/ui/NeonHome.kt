@@ -28,7 +28,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import play.ott.nativeapp.R
@@ -129,7 +128,7 @@ internal fun PosterCard(entry: MediaEntry, onClick: () -> Unit, modifier: Modifi
         Box(Modifier.fillMaxWidth().aspectRatio(if (landscape) 16f / 9 else 2f / 3)
             .background(Brush.linearGradient(listOf(Color(0xFF12344B), Color(0xFF251330)))), contentAlignment = Alignment.Center) {
             NeonEmblem(Modifier.size(48.dp))
-            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null, Modifier.fillMaxSize(), contentScale = if (landscape) ContentScale.Fit else ContentScale.Crop)
+            if (entry.logo.isNotBlank()) CatalogArtwork(entry, Modifier.fillMaxSize(), contentScale = if (landscape) ContentScale.Fit else ContentScale.Crop, surface = "inicio")
         }
         Text(entry.name, Modifier.padding(10.dp), maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
     }

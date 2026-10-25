@@ -153,7 +153,7 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                             ) {
                                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    if (episode.logo.isNotBlank()) coil.compose.AsyncImage(episode.logo, null, Modifier.widthIn(max = 140.dp).weight(.4f))
+                                    if (episode.logo.isNotBlank()) CatalogArtwork(episode, Modifier.widthIn(max = 140.dp).weight(.4f), surface = "episodio")
                                     Column(Modifier.weight(1f)) {
                                         episode.episode?.let { Text(stringResource(R.string.dialog_episode, it), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary) }
                                         Text(episode.name, style = MaterialTheme.typography.titleMedium)

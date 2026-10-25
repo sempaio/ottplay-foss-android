@@ -28,6 +28,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
         buildConfigField("boolean", "CUSTOMER_MODE", "false")
+        buildConfigField("boolean", "ARTWORK_DIAGNOSTICS", "false")
         manifestPlaceholders["allowCleartextTraffic"] = "false"
     }
     testBuildType = "layout"
@@ -72,6 +73,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "layout"
             resValue("string", "app_name", "STARLINK IPTV Series Teste")
+        }
+        create("artworkTest") {
+            initWith(getByName("seriesTest"))
+            applicationIdSuffix = ".artwork"
+            versionNameSuffix = "-artwork-test"
+            buildConfigField("boolean", "ARTWORK_DIAGNOSTICS", "true")
+            matchingFallbacks += "seriesTest"
+            resValue("string", "app_name", "STARLINK IPTV Capas Teste")
         }
         release {
             isMinifyEnabled = true
