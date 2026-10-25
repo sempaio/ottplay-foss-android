@@ -1,0 +1,24 @@
+{
+  "application": "STARLINK IPTV Capas Teste",
+  "package": "br.starlink.iptv.artwork",
+  "version_name": "0.3.2-artwork-test",
+  "version_code": 10,
+  "source_repository": "sempaio/ottplay-foss-android",
+  "source_commit": "12ac2cd69863115bfd3e66107b57d75c085b8298",
+  "source_branch": "starlink/artwork-diagnostics-20261025",
+  "base_series_commit": "2b4297174ac5c6308bbcb58e03c688790609b049",
+  "workflow_run": "https://github.com/sempaio/ottplay-foss-android/actions/runs/40237509163",
+  "apk_sha256": "2340d84d584a201e39a70f4711204e752cd561ace229b55e09a37fac66dd703c",
+  "apk_bytes": 22971648,
+  "validation": {
+    "core_tests": 71,
+    "app_unit_tests": 125,
+    "failures": 0,
+    "skipped": 0,
+    "lint_errors": 0,
+    "lint_warnings": 21,
+    "apk_signature_verified": true,
+    "physical_phone_tested": false
+  },
+  "installation": "Separate test app; does not share account state or image cache with the original app."
+}

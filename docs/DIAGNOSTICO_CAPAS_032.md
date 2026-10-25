@@ -122,3 +122,18 @@ e fonte selecionada (rótulo gerenciado), host configurado e contagens do catál
 local por tipo. Não exporta nomes particulares da fonte, IDs ou credenciais.
 Mapa de entrada do produto: `PROJETO_ATUAL.md`. Esses dados não identificam
 a publicação do servidor sem uma consulta autenticada ao runtime.
+
+## Entrega validada
+
+Código compilado: `12ac2cd69863115bfd3e66107b57d75c085b8298`.
+CI: https://github.com/sempaio/ottplay-foss-android/actions/runs/40237509163 .
+71 testes core + 125 testes app: **196 aprovados**, sem falhas/skips.
+Lint: zero erros, 21 avisos. Build e verificação de assinatura/pacote aprovados.
+Sem teste em telefone físico nesta execução.
+
+Artefato: `dist/STARLINK-IPTV-CAPAS-TESTE.apk`, 22.971.648 bytes.
+SHA256: `2340d84d584a201e39a70f4711204e752cd561ace229b55e09a37fac66dd703c`.
+O ZIP de Actions foi baixado e o checksum interno conferido antes da inclusão
+na branch isolada. Receipt em `dist/STARLINK-IPTV-CAPAS-TESTE.json`.
+O APK conserva o protocolo/loader/cache do cliente base e coleta os resultados
+Coil; sua primeira abertura tem catálogo/cache próprios, não os do APK original.
