@@ -16,9 +16,9 @@ class ArtworkDiagnosticsTest {
             diagnostics.finish(ticket, origin)
         }
         val report = diagnostics.report()
-        assertTrue(report.contains("SERIES | image.tmdb.org | TMDB | MEMORY_CACHE: 1 imagens; mediana 25ms"))
-        assertTrue(report.contains("MOVIE | image.tmdb.org | TMDB | DISK"))
-        assertTrue(report.contains("LIVE | image.tmdb.org | TMDB | NETWORK"))
+        assertTrue(report.contains("SERIES | grade | image.tmdb.org | TMDB | MEMORY_CACHE: 1 imagens; mediana 25ms"))
+        assertTrue(report.contains("MOVIE | grade | image.tmdb.org | TMDB | DISK"))
+        assertTrue(report.contains("LIVE | grade | image.tmdb.org | TMDB | NETWORK"))
     }
 
     @Test fun excludesSecretsTitlesPathsQueriesAndErrors() {

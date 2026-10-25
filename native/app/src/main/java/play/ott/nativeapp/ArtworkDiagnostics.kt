@@ -42,11 +42,12 @@ internal class ArtworkDiagnostics(private val capacity: Int = 300, private val c
         appendLine("STARLINK — diagnóstico das capas")
         appendLine("Últimos ${events.size}/$capacity resultados desta sessão; tempos até a imagem ficar pronta.")
         appendLine("MEMORY/MEMORY_CACHE = memória; DISK = disco; NETWORK = rede.")
+        appendLine("Domínio solicitado, antes de possíveis redirecionamentos. CANCELLED = pedido interrompido.")
         appendLine("Sem títulos, IDs, links completos ou credenciais. Reiniciar o app apaga este relatório.")
         appendLine()
-        events.groupBy { listOf(it.ticket.kind, it.ticket.host, it.ticket.route, it.result) }.forEach { (key, rows) ->
+        events.groupBy { listOf(it.ticket.kind, it.ticket.surface, it.ticket.host, it.ticket.route, it.result) }.forEach { (key, rows) ->
             val timings = rows.map { it.elapsedMs }.sorted()
-            appendLine("${key.joinToString(" | ")}: ${rows.size} imagens; mediana ${timings[timings.size / 2]}ms; máximo ${timings.last()}ms")
+            appendLine("${key.joinToString(" | ")}: ${rows.size} imagens; mediana ${(timings[(timings.size - 1) / 2] + timings[timings.size / 2]) / 2}ms; máximo ${timings.last()}ms")
         }
         appendLine()
         events.forEach { event ->
