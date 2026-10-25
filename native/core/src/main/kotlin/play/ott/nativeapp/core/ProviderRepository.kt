@@ -20,6 +20,41 @@ class ProviderRepository(
     private val xtream = XtreamProvider(http)
     private val stalker = StalkerProvider(http)
 
+    // Only the most recently opened movie is retained, briefly, in this repository instance.
+    // Do not persist Xtream URLs/credentials or share them across accounts and sources.
+    private data class MovieDetail(
+        val source: SourceConfig,
+        val original: MediaEntry,
+        val enriched: MediaEntry,
+        val loadedAtNanos: Long,
+    )
+    @Volatile private var recentMovieDetail: MovieDetail? = null
+
+    /** Called on source edits/removal; the refresh path also invalidates before loading. */
+    fun invalidateMovieDetails(sourceId: String) = synchronized(this) {
+        if (recentMovieDetail?.source?.id == sourceId) recentMovieDetail = null
+    }
+
+    private fun takeMovieDetail(source: SourceConfig, entry: MediaEntry): MediaEntry? = synchronized(this) {
+        val saved = recentMovieDetail ?: return@synchronized null
+        val elapsed = System.nanoTime() - saved.loadedAtNanos
+        if (elapsed < 0 || elapsed >= MOVIE_DETAIL_TTL_NANOS) {
+            recentMovieDetail = null
+            return@synchronized null
+        }
+        if (saved.source != source || entry.kind != MediaKind.MOVIE ||
+            entry.id != saved.original.id || entry.sourceId != saved.original.sourceId ||
+            entry.providerId != saved.original.providerId ||
+            (entry.url != saved.original.url && entry.url != saved.enriched.url)) return@synchronized null
+        // Consume once so a later playback re-resolves a potentially expiring media URL.
+        recentMovieDetail = null
+        saved.enriched
+    }
+
+    private companion object {
+        const val MOVIE_DETAIL_TTL_NANOS = 30_000_000_000L
+    }
+
     suspend fun authenticate(config: SourceConfig) = withContext(Dispatchers.IO) {
         validate(config)
         require(config.kind == SourceKind.XTREAM)
@@ -27,6 +62,7 @@ class ProviderRepository(
     }
 
     suspend fun load(config: SourceConfig): Catalog = withContext(Dispatchers.IO) {
+        invalidateMovieDetails(config.id)
         validate(config)
         when (config.kind) {
             SourceKind.M3U -> {
@@ -47,7 +83,9 @@ class ProviderRepository(
             "FOLDER_REQUIRED" -> throw ProviderException("Choose an episode before playing a series")
         }
         val stream = if (config.kind == SourceKind.STALKER) stalker.resolve(config, entry) else {
-            val resolved = if (config.kind == SourceKind.XTREAM && entry.kind == MediaKind.MOVIE) xtream.vod(config, entry) else entry
+            val resolved = if (config.kind == SourceKind.XTREAM && entry.kind == MediaKind.MOVIE)
+                takeMovieDetail(config, entry) ?: xtream.vod(config, entry)
+            else entry
             val url = http.checkedUrl(resolved.url).toString()
             PlaybackStream(url, mimeType = inferMimeType(url))
         }
@@ -57,7 +95,15 @@ class ProviderRepository(
 
     suspend fun loadMovieInfo(config: SourceConfig, entry: MediaEntry): MediaEntry = withContext(Dispatchers.IO) {
         require(config.id == entry.sourceId && entry.kind == MediaKind.MOVIE)
-        if (config.kind == SourceKind.XTREAM && entry.providerId.isNotBlank()) xtream.vod(config, entry) else entry
+        if (config.kind == SourceKind.XTREAM && entry.providerId.isNotBlank()) {
+            val detail = xtream.vod(config, entry)
+            // An HTTP error/unsupported detail endpoint returns the original entry:
+            // only a genuinely enriched result is safe to reuse as a successful lookup.
+            synchronized(this@ProviderRepository) {
+                recentMovieDetail = if (detail != entry) MovieDetail(config, entry, detail, System.nanoTime()) else null
+            }
+            detail
+        } else entry
     }
 
     suspend fun loadEpisodes(config: SourceConfig, series: MediaEntry): List<MediaEntry> = withContext(Dispatchers.IO) {

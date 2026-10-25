@@ -95,6 +95,7 @@ class NativeRepository(
             val previous = sources.firstOrNull { it.id == source.id }
             if (previous != null && previous != saved) db.delete(source.id)
             vault.write(sources.filterNot { it.id == source.id } + saved)
+            providers.invalidateMovieDetails(source.id)
             recentState.value = db.recent()
         }}
     }
@@ -122,6 +123,7 @@ class NativeRepository(
         refreshMutex.withLock {
             sourceMutex.withLock { vault.write(vault.read().filterNot { it.id == id }) }
             db.delete(id)
+            providers.invalidateMovieDetails(id)
             recentState.value = db.recent()
         }
     }
@@ -163,6 +165,7 @@ class NativeRepository(
 
     suspend fun refresh(source: SourceConfig): Catalog = withContext(Dispatchers.IO) {
         refreshMutex.withLock {
+            providers.invalidateMovieDetails(source.id)
             val catalog = when {
                 source.url == DEMO_URL -> Catalog(listOf(bundledDemoEntry(source.id)))
                 source.url.startsWith("content://") -> {
