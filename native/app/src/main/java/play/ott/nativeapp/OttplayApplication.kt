@@ -8,7 +8,6 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import okhttp3.OkHttpClient
 import play.ott.nativeapp.data.NativeRepository
 import play.ott.nativeapp.data.EpgRefreshWorker
 class OttplayApplication : Application(), ImageLoaderFactory {
@@ -47,7 +46,5 @@ class OttplayApplication : Application(), ImageLoaderFactory {
         EpgRefreshWorker.schedule(this)
     }
 
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient(AppTransportPolicy.current.secure(OkHttpClient()))
-        .build()
+    override fun newImageLoader(): ImageLoader = createArtworkImageLoader(this)
 }
