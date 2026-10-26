@@ -11,20 +11,24 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.request.ErrorResult
 import play.ott.nativeapp.ArtworkDiagnostics
+import play.ott.nativeapp.ArtworkRequestPolicy
 import play.ott.nativeapp.BuildConfig
 import play.ott.nativeapp.core.MediaEntry
 
-/** Same Coil loader, URL, size resolver and cache keys as before; only listeners are added. */
+/** Shared loader and size resolver; movie thumbnails may use a smaller TMDB representation. */
 @Composable
 internal fun CatalogArtwork(entry: MediaEntry, modifier: Modifier = Modifier,
                             contentScale: ContentScale = ContentScale.Fit, surface: String = "grade") {
     val context = LocalContext.current
-    val model = remember(context, entry.logo, entry.kind, surface) {
-        if (!BuildConfig.ARTWORK_DIAGNOSTICS) entry.logo
-        else ImageRequest.Builder(context).data(entry.logo).listener(object : ImageRequest.Listener {
+    val artworkUrl = remember(entry.logo, entry.kind, surface) {
+        ArtworkRequestPolicy.url(entry.logo, entry.kind, surface)
+    }
+    val model = remember(context, artworkUrl, entry.kind, surface) {
+        if (!BuildConfig.ARTWORK_DIAGNOSTICS) artworkUrl
+        else ImageRequest.Builder(context).data(artworkUrl).listener(object : ImageRequest.Listener {
             private var ticket: ArtworkDiagnostics.Ticket? = null
             override fun onStart(request: ImageRequest) {
-                ticket = ArtworkDiagnostics.session.begin(entry.kind.name, surface, entry.logo)
+                ticket = ArtworkDiagnostics.session.begin(entry.kind.name, surface, artworkUrl)
             }
             private fun finish(result: String, error: String = "") {
                 val current = ticket ?: return
