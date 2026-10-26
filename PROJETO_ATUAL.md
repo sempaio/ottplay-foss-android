@@ -4,6 +4,8 @@ Atualizado em 2026-10-25 a partir do GitHub e da captura do proprietário.
 Este documento identifica componentes e referências; não atesta sozinho o que
 está executando no Windows ou instalado byte a byte no celular.
 
+**Estado das candidatas atualizado em 26/10:** consulte a [consolidação técnica](docs/ARQUITETURA_E_MELHORIAS_20261025.md). A candidata VOD `0ca37a18` implementa reuso de detalhe e tem CI Android aprovada, mas o PR #4 segue aberto e o Quality Gate geral falhou; isso não identifica uma nova versão instalada.
+
 Veja também [comunicação entre componentes e melhorias priorizadas](docs/ARQUITETURA_E_MELHORIAS_20261025.md).
 
 ## Começar aqui
