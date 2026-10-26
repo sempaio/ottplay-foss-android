@@ -1,273 +1,243 @@
-# STARLINK IPTV — comunicação, funções e melhorias
+# STARLINK IPTV — arquitetura e estado consolidado das candidatas Android
 
-Data: 2026-10-25. Análise do Android 0.3.2-series-test, base
-2b4297174ac5c6308bbcb58e03c688790609b049; painel nas referências documentadas
-em PROJETO_ATUAL.md, em especial rootcause-runtime-20261024 e foss-tv-m81-20261024.
-É uma análise do código/configuração; não uma medição dos serviços em execução.
+Atualizado em **2026-10-26**, por consulta ao GitHub. Repositório:
+[sempaio/ottplay-foss-android](https://github.com/sempaio/ottplay-foss-android).
+Este documento substitui a análise de 25/10 que tratava a reutilização VOD como
+proposta não implementada. Distingue código, build, testes, artefato e uso real.
 
-## Como os dados circulam
+**Base desta revisão documental:** `starlink/vod-performance-20261025`, commit
+`0ca37a184ceb3a1456d1d45cb26b56dbde86a3ae`, a candidata mais recente entre as
+referências solicitadas. A branch de documentação deriva desse commit e preserva
+integralmente o código. Não houve merge, substituição da main, instalação de APK,
+deploy da CoreAPI, alteração de configuração operacional ou execução de testes de
+mídia nesta tarefa. Os resultados abaixo são evidências das execuções citadas.
+
+## 1. Branches e PR #4: o que realmente diverge
+
+| Referência | HEAD consultado | Conteúdo e relação |
+|---|---|---|
+| `main` | `9d3b859a67e1d325735ffd09fd59181a14a32324` | Apenas README.md; não contém native/, workflows ou este documento. Não representa o APK em uso. |
+| `starlink/fix-series-formats-20261024` | `2b4297174ac5c6308bbcb58e03c688790609b049` | Android 0.3.2-series-test: normalização de episódios e retenção de listas válidas de episódios. Sem diagnóstico de capas e sem reutilização VOD. |
+| `starlink/artwork-diagnostics-20261025` | `6d8370ee8741f64206c4e2e0450ca782b69ab26e` | Descende de series, com dez commits adicionais; inclui diagnóstico Coil, identificação do cliente/fonte, variante artworkTest e documentação. Não contém a otimização VOD. |
+| `starlink/vod-performance-20261025` | `0ca37a184ceb3a1456d1d45cb26b56dbde86a3ae` | Descende de artwork, com cinco commits adicionais; muda somente quatro arquivos em relação a essa base: ProviderRepository, NativeRepository, StarlinkXtreamTest e workflow VOD. |
+| [PR #4](https://github.com/sempaio/ottplay-foss-android/pull/4) | head `0ca37a18`, base `6d8370ee` | Aberto, não draft e não merged na consulta; propõe VOD → artwork, **não VOD → main**. Não equivale a uma atualização aprovada/distribuída. |
+
+A ancestralidade consultada é linear: main → series → artwork → VOD. Entre main
+e series existem 1.404 commits alcançáveis adicionais e uma importação grande do
+projeto; isso não é um diff pequeno de Android. A contagem é de história Git,
+não de alterações originais STARLINK. Não copiar árvores ou fazer main apontar à
+candidata para “resolver” a divergência. Revisão documental tem VOD como base.
+
+O blob deste documento era **idêntico** em artwork e VOD
+(`28d5be6002e98ace2c4873952c9c005dee8b9857`), embora o código VOD tivesse mudado.
+Essa é a origem demonstrada de parte das afirmações desatualizadas.
+
+## 2. Afirmações corrigidas após os últimos commits
+
+| Afirmação anterior | Estado consolidado |
+|---|---|
+| A análise usa somente series 2b429717 como base atual. | Series é a referência de origem; esta revisão usa VOD 0ca37a18 e compara explicitamente as quatro branches. |
+| get_vod_info é sempre repetido ao tocar em Assistir. | Continua sendo o fallback. Na candidata VOD há reuso contextual de um detalhe enriquecido recente, evitando a segunda chamada quando elegível. |
+| Reutilização de detalhe é uma candidata ainda não implementada. | Implementada nos commits 1fb426e1/82ff797b e proposta no PR #4; não merged. |
+| Não houve experimento de requestCount. | StarlinkXtreamTest agora testa requestCount=1 em detalhe → play e nova consulta no segundo play; esses testes foram executados na CI VOD. |
+| 196 testes descrevem a última candidata Android. | 196 é a evidência artwork. VOD tem 73 core + 125 app = 198, na execução identificada abaixo. |
+| Existir código de diagnóstico na branch significa que o APK performance mostra o diagnóstico. | O workflow VOD compila seriesTest; ARTWORK_DIAGNOSTICS fica false. O código do diagnóstico permanece na árvore, mas sua UI/coleta está habilitada somente em artworkTest. |
+| Um arquivo em dist/ de uma branch nova contém necessariamente seu código novo. | Os APKs versionados em dist/ não mudaram no PR #4. O novo APK VOD está no artefato da execução Actions, não nesses arquivos antigos. |
+
+## 3. O que já está implementado
+
+### Séries
+
+- `normalizeXtreamEpisodeRows`, em XtreamProvider, adapta formatos de episódios
+  explícitos sem inventar temporadas, URLs ou associações.
+- `SeriesEpisodeCache` retém em memória listas de episódios bem-sucedidas por
+  fonte/série; resposta vazia válida remove o anterior, falha não fabrica lista.
+- Limpeza em logout/edição/exclusão de fontes e proteção contra aplicar resultado
+  a outra série/fonte. É cache de **episódios**, não de imagens.
+
+### Capas e identificação do cliente
+
+- Coil 2.7.0 e ImageLoaderFactory compartilhado, com cache padrão em memória e
+  disco, já faziam parte do cliente. Catálogo local em SQLite é outro mecanismo.
+- ArtworkDiagnostics/CatalogArtwork registram tipo, tela, domínio/rota genérica,
+  origem Coil e duração; relatório limitado a 300 resultados, sem URLs completas,
+  títulos, credenciais ou mensagens brutas de exceção.
+- A variante artworkTest expõe Mais → Diagnóstico das capas, com identificação da
+  versão, SOURCE_REVISION, fonte selecionada e contagens locais. Registro é local,
+  sem upload automático; há cópia voluntária do relatório.
+- Os dados privados de artworkTest não são os do APK seriesTest. A candidata de
+  diagnóstico não inspeciona retroativamente o cache do aplicativo anterior.
+- NETWORK pode incluir validação HTTP 304 e reuso de bytes já no disco; não prova
+  download integral. O relatório atual não separa status HTTP/bytes nesse caso.
+
+### Reutilização VOD — implementada apenas na candidata/PR #4
+
+Em ProviderRepository, `recentMovieDetail` guarda **no máximo um** detalhe em
+memória. É elegível por menos de 30 segundos, medidos com System.nanoTime, e
+consumido uma única vez pelo play correspondente. Há comparação da SourceConfig
+completa, ID/sourceId/providerId e URL original ou enriquecida do item.
+
+`loadMovieInfo` só guarda um resultado diferente do entry original. Uma resposta
+bem-sucedida sem enriquecimento pode portanto não gerar reuso; não descrever isso
+como cache de todo 200. Erros/endpoint não suportado não são convertidos em detalhe
+válido. Se não houver detalhe elegível, resolve chama XtreamProvider.vod normalmente.
+Container/URL retornados pelo provedor continuam sendo respeitados.
+
+Invalidação explícita está em ProviderRepository.load e NativeRepository.save,
+remove e refresh. O estado não é persistido nem um cache global de contas.
+
+Testes novos comprovam reuso imediato/consumo único, isolamento ao trocar senha
+da SourceConfig e invalidação explícita, preservando credenciais na ordem dos
+pedidos. **Não demonstram** expiração temporal por relógio simulado, todas as
+interleavings de refresh/edição com busca concorrente, nem ganho em aparelho.
+Esses limites permanecem itens de revisão; não são correções adicionais desta tarefa.
+
+## 4. O que foi compilado/testado e em qual commit
+
+| Linha | Execução e código | Evidência e limite |
+|---|---|---|
+| Séries | [40076339230](https://github.com/sempaio/ottplay-foss-android/actions/runs/40076339230), `157e77d7b2b9041235d75bc78a6b104074e86121` | Workflow de validação passou com core:test, app:testLayoutUnitTest, lintLayout e assembleSeriesTest. A subárvore native/ desse commit é idêntica à de 2b429717; o HEAD posterior também publica o artefato. Não é evidência de performance física. |
+| Capas | [40237509163](https://github.com/sempaio/ottplay-foss-android/actions/runs/40237509163), `12ac2cd69863115bfd3e66107b57d75c085b8298` | 71 core + 125 app = **196** aprovados; zero falhas/skips, lintArtworkTest com zero erros/21 avisos; assembleArtworkTest e assinatura/pacote verificados. native/ é idêntica à do HEAD artwork 6d8370ee. |
+| VOD | [40242597595](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242597595), `0ca37a184ceb3a1456d1d45cb26b56dbde86a3ae` | **73 core + 125 app = 198** aprovados; zero falhas/skips; lintSeriesTest com zero erros/21 avisos; assembleSeriesTest e apksigner/aapt passaram. O HEAD da candidata é o próprio SHA testado. |
+
+Comando do workflow VOD: `:core:test :app:testLayoutUnitTest :app:lintSeriesTest
+:app:assembleSeriesTest`. Testes da camada app são da variante layout; o APK
+produzido e o lint são seriesTest. Não anunciar isso como testes instrumentados
+executados dentro do APK performance nem como validação em telefone/TV físicos.
+
+Os relatórios VOD foram baixados do artefato **STARLINK-PERFORMANCE-TEST-REPORTS**
+(ID 12617820546). Contagens vieram dos índices HTML, não de uma soma presumida.
+Há avisos de depreciação Gradle/AGP e LocalClipboardManager, além dos 21 avisos de
+lint; build bem-sucedido não significa ausência de avisos.
+
+### Artefatos e identidade: código da branch não é o APK de dist/
+
+| Artefato | Origem efetiva | Identidade e disponibilidade |
+|---|---|---|
+| `dist/STARLINK-IPTV-SERIES-TESTE.apk` | Baseline series, não VOD | `br.starlink.iptv.series`, 0.3.2-series-test/código 10; SHA256 `9439283324ff750220c77370def11e5ce64c1bbffaefbdee7ecef6a15f236fbe`. Igual nas três branches candidatas. |
+| `dist/STARLINK-IPTV-CAPAS-TESTE.apk` | Build artwork 12ac2cd6 | `br.starlink.iptv.artwork`, 0.3.2-artwork-test/código 10; SHA256 `2340d84d584a201e39a70f4711204e752cd561ace229b55e09a37fac66dd703c`. Igual em artwork e VOD; **não inclui** o reuso VOD posterior. Receipt JSON acompanha esse build antigo. |
+| `STARLINK-IPTV-PERFORMANCE-TESTE.apk` em Actions | Build VOD 0ca37a18 | [Artefato ID 12617790673](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242597595/artifacts/12617790673), nome STARLINK-IPTV-PERFORMANCE-TESTE; pacote `br.starlink.iptv.series`, 0.3.2-series-test/código 10. Não foi copiado para dist/ pelo PR #4. |
+
+O APK performance tem 22.971.648 bytes e SHA256
+`d66a0e7591b9b0f7e2582debc6e14ea159f9053a4cdc1528e1f45d668a80e7ab`.
+O ZIP foi lido e o SHA conferido contra seu SHA256SUMS nesta revisão; isso não
+constitui instalação. O artefato está sujeito à retenção de 30 dias do workflow.
+
+O build performance e o baseline series compartilham pacote/versão. Um nome de
+arquivo diferente **não** permite instalação lado a lado; chaves debug de jobs
+separados também não têm identidade estável demonstrada. Não presumir atualização
+compatível ou sugerir desinstalação para contornar assinatura. Nenhuma instalação
+ou nova versão foi gerada nesta tarefa documental.
+
+## 5. Quality Gate: falhas restantes do PR #4
+
+[Execução 40242652992](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242652992),
+HEAD do PR `0ca37a18`, terminou **failure**, embora a CI VOD específica tenha passado.
+Foram consultados os 38 jobs da execução, incluindo os que não cabem na primeira
+página da API. As duas falhas de origem e sua propagação são:
+
+| Job/etapa | Evidência nos logs | Estado e encaminhamento pendente |
+|---|---|---|
+| [check-0 / Lint — Biome lint](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242652992/job/121317767482) | `biome check . && npm run lint:correctness`: 823 arquivos, 20 erros, quatro diagnósticos omitidos pelo limite de exibição. Quatro segmentos HLS segment00.ts…segment03.ts são tratados como texto e falham UTF-8; também há diagnósticos de formatação em fixtures JSON e HTML nativos. | Corrigir o escopo de lint para os binários e revisar a formatação dos arquivos pertinentes em tarefa separada. Não apagar mídia/fixtures ou alterar código nesta revisão. Como o primeiro comando falha, lint:correctness não chegou a executar nessa etapa. |
+| [check-3 / dependency-review — Dependency Review](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242652992/job/121317767454) | “Dependency review is not supported on this repository. Please ensure that Dependency graph is enabled”. | Verificar configuração/suporte e Dependency graph do repositório. É falha de disponibilidade/configuração da análise, **não** resultado que demonstre uma vulnerabilidade específica. Não desativar a verificação para declarar aprovação. |
+| [CI gate — Require every validation workflow](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242652992/job/121323612923) | `check-0` e `check-3`: actual=failure, expected=success. | Consequência das duas falhas anteriores, não um terceiro defeito independente do cache VOD. |
+
+Nos logs visíveis do lint também aparecem, por exemplo,
+`native/app/src/test/resources/android-selections-before-core.json`,
+`epg-refresh-before-core.json`, `native/core/src/test/resources/guide-before-core.json`,
+`native-import-before-core.json`, `stalker-before-core.json` e
+`native/docs/site/index.html`. A saída é truncada: essa lista não enumera todos os
+20 erros. Texto “HTTP 503” que aparece dentro de diff de fixture JSON nesse log
+**não é sondagem da CoreAPI em execução**.
+
+Passaram, entre outros, Change scope, contratos de configuração/release,
+Typecheck, Frontend Tests, Rust Core and Server Tests, Remote control and
+diagnostics integration, análises CodeQL, Android native plugins e o Build web.
+Jobs condicionais skipped não equivalem a testes executados. Esses jobs FOSS
+não substituem os testes do native/app Kotlin do workflow Android específico.
+
+Esta tarefa documenta as falhas: não altera workflows, habilita configurações do
+GitHub, corrige lint ou afrouxa o gate. O PR #4 continua sem aprovação integral.
+O resultado de um futuro PR documental deve ser lido separado desta execução.
+
+## 6. Integração com a CoreAPI M81
+
+### Ligação comprovada no Android atual
 
 ```mermaid
 flowchart TD
-    L[Repositórios de listas BR e gerador FAST] -->|Importação e sincronização| M[M81: contas, fontes e publicação]
-    M -->|Catálogo Xtream ou M3U| A[Android STARLINK]
-    M -.->|Login e atribuição de lista: candidata TV| F[OTT-play FOSS TV / web]
-    I[Servidores de imagens ou cache de logos M81] -->|URL da capa| C[Coil: memória, disco e rede]
-    C --> A
-    V[Fontes de vídeo / CDN] -->|HLS, DASH ou arquivo: Media3| A
-    V -->|Motor de reprodução compatível| F
-    E[Fontes XMLTV / EPG configuradas] --> M
-    E --> A
-    R[Control Server compatível] -.->|Fila de comandos e respostas| F
+    G[Repositórios BR e gerador FAST] -->|Importação e publicação| M[CoreAPI M81]
+    M -->|player_api.php: Xtream| A[Android STARLINK]
+    M -->|playlist.m3u: fonte adicional| A
+    I[Origem das capas / cache de logos M81] -->|Coil e cache local| A
+    A -->|play e autenticação na rota de mídia| M
+    M -->|redirect: contrato Xtream de referência| V[Vídeo na fonte / CDN]
+    V -->|Media3| A
 ```
 
-Linhas tracejadas não afirmam instalação ativa: a integração TV é uma candidata
-no código e os contratos de controlador são demonstrados nos testes FOSS.
-O fork pessoal do servidor EPG não foi comprovado como a fonte XMLTV configurada.
+- `StarlinkConfig.kt`: base `https://panel.taila5c5c2.ts.net` e M3U
+  `/app/starlink-iptv/playlist.m3u`. Login do cliente nativo usa autenticação
+  Xtream, não o launcher web TV.
+- SaveSource autentica e adiciona a M3U gerenciada se ausente. `selectedSourceId`
+  escolhe uma fonte; não foi implementada mesclagem automática dos catálogos.
+- ProviderRepository/XtreamProvider consultam conta, categorias, live/VOD/séries,
+  get_series_info/get_vod_info. SQLite guarda catálogo interpretado e metadados;
+  a leitura local não prova que uma fonte foi sincronizada no servidor agora.
+- O reuso VOD muda o cliente, não o schema ou as rotas do M81. Resolve mantém
+  fallback e o acesso à URL de mídia; não torna credenciais dispensáveis.
 
-### Android → painel → fonte de vídeo
+### O que o GitHub do painel permite afirmar
 
-1. StarlinkConfig.kt fixa o host M81 e a URL da M3U.
-2. SaveSource autentica a conta Xtream e cadastra também a M3U gerenciada.
-3. selectedSourceId decide qual catálogo é carregado; não há prova de mesclagem
-   automática das duas fontes. NativeRepository.cached lê o SQLite local;
-   refresh/providers.load consulta a rede quando pedido ou sem catálogo salvo.
-4. Xtream usa player_api.php para categorias/live/VOD/séries. Detalhes de séries
-   e filmes são consultados separadamente. M3U é interpretada pelo adapter/core.
-5. Ao reproduzir um filme Xtream, ProviderRepository.resolve consulta os detalhes
-   necessários ao container/URL. PlayerViewModel chama prepare/play do Media3.
-6. No caminho Xtream do M81, a URL /live, /movie ou /series autentica e devolve
-   redirect 307 para a fonte. Não concluir que o vídeo inteiro passa pelo painel.
-   Para Pluto existem manifestos/sessões próprios; no modo de entrega direta
-   documentado, segmentos seguem da CDN para o aparelho.
+Na consulta, `sempaio/painel-m81-iptv-cloud` tem:
+- main `3635440e055351479a168ba35437dff36343fb7c`;
+- `codex/rootcause-runtime-20261024` em `4dfa39686b3aa1c2fcd7b0860c3c1607ab61f192`;
+- `starlink/foss-tv-m81-20261024` em `6fa8e00ce9bebe88f51c5e0c656bd721c14b4d30`.
 
-### Capas
+As referências de backend descrevem publicação editorial, caches de catálogo,
+gzip/ETag, autenticação e redirect 307 no Xtream. Os presets BR04/BR05 apontam
+a Ramys/Iptv-Brasil-2026 e a Pluto usa metadados de BuddyChewChew/app-m3u-generator.
+Não confundir esses caminhos com o fork do proprietário apenas por nome parecido.
 
-A URL vem do campo logo do MediaEntry. Grade, início e detalhes usam Coil/AsyncImage.
-O ImageLoader é comum aos tipos, com cache Coil. As abas filtram o catálogo já
-carregado no cliente. Não existe um loader exclusivo de capas das séries nessa
-versão. A diferença percebida pode estar nos links/origens, bytes/decodificação,
-reuso de cache e concorrência, mas a causa no telefone ainda não foi medida.
+A integração TV FOSS preparada é outra linha: launcher com /app/auth/login e
+/api/v1/tv-m3u/source?platform=..., fonte atribuída e guard de revisão. O workflow
+fixa sempaio/ottplay-foss em 5018806dc9b77928e6302362a701c7b896cac1a0. Não é prova
+de que essa variante esteja instalada numa TV ou dentro do APK Kotlin atual.
 
-O painel também pode publicar /channel-logo/<id>.png; quando o arquivo cacheado
-não existe, esse endpoint retorna SVG fallback. O loader nativo não instala um
-decodificador SVG específico. Verificar respostas reais antes de atribuir falha
-ou lentidão a isso; fallback sem imagem não é a mesma coisa que download lento.
+**Não verificado nesta tarefa:** imagem/revisão efetivamente executada da CoreAPI,
+publicação/fontes atualmente ativas, disponibilidade pública, conteúdo do catálogo
+salvo no telefone, vídeo/áudio reais ou ganho de latência. O 503 anotado em 25/10
+é histórico da sessão após reboot informado; não foi repetido nem tratado como
+estado atual em 26/10. Nenhum acesso/escrita ao runtime operacional foi necessário.
 
-### TV FOSS → M81
+## 7. Estado das quatro recomendações e pendências
 
-A branch foss-tv-m81-20261024 faz checkout de sempaio/ottplay-foss no commit
-5018806dc9b77928e6302362a701c7b896cac1a0. O launcher autentica por
-/app/auth/login e lê /api/v1/tv-m3u/source?platform=... com sessão e device ID.
-Aplica source_url ao provedor M3U do FOSS e um guard consulta revisão/revogação.
-É integração preparada; não foi demonstrada instalação física nesta análise.
-
-## Função de cada componente
-
-| Componente | Função e comunicação demonstrada | Benefício principal |
+| Item | Estado atual | Pendência |
 |---|---|---|
-| Painel M81 | Autentica, organiza/aprova fontes, publica catálogo e entrega Xtream/M3U. | Catálogo coerente e controle central de acesso/publicação. |
-| ottplay-android | Base importada do Android STARLINK em native/. Native/core adapta os protocolos; Media3 reproduz vídeo; Coil carrega imagens. | Experiência nativa e ponto principal para melhorar o celular. |
-| ottplay-foss | Player web/TV e contratos de provedores/controle; base do build TV preparado. | Suporte a outras plataformas e reutilização de recursos FOSS. |
-| app-m3u-generator | Busca metadados FAST e gera M3U/EPG no GitHub. M81 referencia BuddyChewChew; fork sempaio existe. | Atualização do catálogo FAST, não aceleração automática das capas. |
-| Repositórios BR | Fornecem arquivos de entrada ao importador. Os presets atuais apontam a Ramys/Iptv-Brasil-2026. O repo sempaio/Iptv-Brasil-2025 contém listas, mas seu consumo direto não foi localizado. | Conteúdo/metadados; não são o player nem o servidor de imagens necessariamente. |
-| ottplay-control-server | Distribui comandos aos players FOSS por conexões de saída e recebe resultados. Há testes contra o upstream. | Administração remota/diagnóstico em consumidores compatíveis; não acelera mídia por si só. |
-| ottplay-foss-server-epg | Serviço EPG conforme README; consumidor específico não localizado. M81/Android recebem fontes XMLTV configuradas. | Pode padronizar associação/programação se houver necessidade e configuração confirmada. |
-| harden-runner | Ferramenta de proteção/auditoria dos jobs GitHub Actions, chamada pelo upstream step-security nos workflows. | Segurança das builds; não melhora o tempo de reprodução ou capas. |
-| ottplay-core compartilhado | JAR compilado fixado por receipt, com parsing/contratos usados por adapters. | Regras consistentes entre clientes; atualizações exigem receipt e regressões compatíveis. |
+| Capas | Cache Coil existente e diagnóstico implementado/compilado em artworkTest. Hipótese de séries já salvas é compatível com o código. | Relatório no aparelho/cache relevante; bytes/status para distinguir download completo de validação 304. Não criar cache paralelo ou limpar o original por suposição. |
+| Detalhes VOD | Reuso de um detalhe, TTL de 30s, consumo único e invalidação implementados e testados no PR #4. | Revisão/Quality Gate completo, testes temporais/concorrência pertinentes e medição A/B em aparelho. Não afirmar latência melhor já comprovada. |
+| Início do vídeo | Media3 oferece AnalyticsListener; esse diagnóstico por etapas ainda não foi implementado no cliente. | Medir clique/resolução/prepare/primeiro quadro, diferenciando READY e renderização; filtrar dados sensíveis. Não alterar buffer sem evidência. |
+| Refresh do catálogo | SQLite local + gzip transparente do OkHttp já existem; backend de referência suporta ETag. | ProviderHttp ainda não oferece revalidação condicional com corpo associado e isolamento por conta/ação. 304 fora de um cache compatível ainda é erro. Isso não acelera diretamente uma capa local. |
 
-## Quatro recomendações — revisão aprofundada de 2026-10-25
+Continuam pendentes: conciliar/revisar a cadeia de branches sem substituir main;
+resolver as falhas gerais da CI; decidir qual variante/artefato será distribuído
+após aprovação e provar sua assinatura/procedência; validar login, categorias,
+séries, filmes, canais, atualização/revogação e primeiro quadro com a CoreAPI real.
+As atualizações de FOSS/Control Server/EPG são decisões por consumidor e versão;
+Plex TV FAST não demonstra uso de biblioteca Plex Media Server do PR upstream #871.
 
-Esta revisão usa o código da versão do cliente e fontes oficiais. Ela substitui
-as recomendações genéricas anteriores. Não foi criada uma nova versão do APK nem
-alterado o comportamento do cache/reprodução para realizar esta pesquisa.
+## 8. Evidências e manutenção do documento
 
-| Item | O que já existe | Conclusão após pesquisa | Prioridade |
-|---|---|---|---|
-| Capas | Coil 2.7.0 com memória + disco e AsyncImage; catálogo SQLite local | A hipótese de capas já salvas é compatível com a implementação. Confirmar origem no mesmo app; não criar outro cache. | Alta: confirmar e depois corrigir somente o gargalo encontrado. |
-| Detalhes de filmes | get_vod_info ao abrir detalhes e novamente ao resolver o Play Xtream | Há dois caminhos de chamada concretos para a mesma informação. Reutilização curta/contextual é uma candidata focalizada. | Alta entre otimizações funcionais; ganho ainda não medido. |
-| Início de vídeo | Media3/ExoPlayer já oferece eventos de carregamento/renderização | Usar AnalyticsListener para separar espera da API e do player; não acrescentar outro motor nem alterar buffer às cegas. | Alta para localizar a lentidão da reprodução. |
-| Atualização de catálogo | SQLite no cliente, gzip transparente no OkHttp, gzip/ETag na referência M81 | Não propor “ativar gzip”: já vem pelo OkHttp. A oportunidade restante é revalidação condicional autenticada em refresh. | Condicional: não acelera imagem já local ou simplesmente trocar de aba. |
+- [PR #4 e diff de quatro arquivos](https://github.com/sempaio/ottplay-foss-android/pull/4/files).
+- [Código VOD exato](https://github.com/sempaio/ottplay-foss-android/tree/0ca37a184ceb3a1456d1d45cb26b56dbde86a3ae/native).
+- [Workflow VOD desse commit](https://github.com/sempaio/ottplay-foss-android/blob/0ca37a184ceb3a1456d1d45cb26b56dbde86a3ae/.github/workflows/starlink-vod-performance-20261025.yml).
+- [Build VOD aprovado](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242597595) e [Quality Gate reprovado](https://github.com/sempaio/ottplay-foss-android/actions/runs/40242652992).
+- [Receipt do APK de capas anterior](https://github.com/sempaio/ottplay-foss-android/blob/6d8370ee8741f64206c4e2e0450ca782b69ab26e/dist/STARLINK-IPTV-CAPAS-TESTE.json).
+- [Coil 2.7.0: cache/loader](https://github.com/coil-kt/coil/blob/2.7.0/docs/image_loaders.md) e [tratamento de rede/304](https://github.com/coil-kt/coil/blob/2.7.0/coil-base/src/main/java/coil/fetch/HttpUriFetcher.kt).
+- [Media3 Analytics](https://developer.android.com/media/media3/exoplayer/analytics).
+- [Fontes OkHttp 5.4.0](https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-jvm/5.4.0/okhttp-jvm-5.4.0-sources.jar): BridgeInterceptor fornece gzip transparente no caminho padrão.
+- [Mapa do projeto](../PROJETO_ATUAL.md) e [diagnóstico de capas](DIAGNOSTICO_CAPAS_032.md): contexto complementar, com esta consolidação como referência de estado das candidatas em 26/10.
 
-### 1. Capas — a hipótese de cache local tem fundamento
-
-**Confirmado no cliente:** OttplayApplication implementa ImageLoaderFactory e usa
-ImageLoader.Builder sem desativar caches. Na tag **Coil 2.7.0**, ImageLoader.Builder
-cria por padrão MemoryCache e SingletonDiskCache. A documentação dessa mesma tag
-recomenda um ImageLoader compartilhado, precisamente como o app já faz. Portanto,
-OkHttpClient sem `.cache(...)` NÃO significa que as imagens estejam sem cache:
-Coil 2 tem cache em disco próprio.
-
-Na inicialização, PlayerViewModel chama load(selected, refresh=false).
-NativeRepository lê o catálogo do SQLite; só chama refresh se solicitado ou se
-não houver entradas salvas. Esse catálogo contém links/metadados, não o arquivo
-da capa. O arquivo/bitmap é responsabilidade do Coil. São dois caches distintos.
-Isso explica como a grade pode reaparecer e capas carregarem mesmo sem consultar
-a API de catálogo naquele momento. Ainda não prova a origem em cada telefone.
-
-**Memória, disco e rede precisam ser distinguidos:**
-- MEMORY_CACHE: bitmap reutilizado em memória.
-- DISK: arquivo reutilizado do cache em disco sem precisar da rede nesse caminho.
-- NETWORK: houve passagem pelo caminho de rede; NÃO equivale necessariamente a
-  baixar novamente todos os bytes. HttpUriFetcher 2.7.0 pode validar por ETag,
-  receber 304, manter os bytes locais e retornar DataSource.NETWORK.
-- CANCELLED/ERROR não são imagens carregadas. O tempo do listener inclui fila,
-  busca e decodificação; não é exclusivamente tempo de download.
-
-O fetcher respeita Cache-Control por padrão. Uma imagem em disco pode estar
-expirada e exigir validação; no-store pode impedir gravação. Memória e disco
-não têm necessariamente a mesma política de validade. A chave de disco padrão
-é a URL completa: mudanças de query/assinatura podem impedir reuso, ainda que o
-arquivo aparente ser igual. Não retirar tokens ou parâmetros indiscriminadamente.
-
-**Como confirmar sem destruir a evidência:** no app original, fechar o processo,
-ativar modo avião e reabrir as mesmas telas. Imagens novas nunca visitadas e já
-visitadas devem ser distinguidas. Sucesso offline após encerramento do processo
-é evidência de persistência local, mas o diagnóstico identifica a origem com
-mais precisão. Não limpar dados/cache nem desinstalar o original. O APK Capas
-Teste tem armazenamento próprio e não inspeciona os arquivos privados do Séries
-Teste já instalado: suas medições valem para a candidata, não retroativamente.
-
-**O que poderia melhorar depois:**
-- AsyncImage já resolve o tamanho visual e o pipeline pode amostrar o bitmap;
-  isso reduz decodificação/memória, mas não necessariamente os bytes baixados.
-- Só reduzir bytes solicitando miniatura suportada pela CDN/API ou servindo uma
-  derivada do cache do painel. TMDB documenta base_url + file_size + file_path;
-  selecionar tamanhos suportados e adequados aos pixels/densidade da tela, sem
-  aplicar substituição arbitrária a outros hosts.
-- Comparar cache frio/quente, tamanho exibido, quantidade de bytes, hit/miss e
-  respostas HTTP das mesmas classes de imagem. Não adicionar prefetch maciço:
-  a grade já é virtualizada e pedidos fora da tela podem competir com vídeo.
-- Não desabilitar globalmente respectCacheHeaders nem adicionar um segundo cache
-  OkHttp ao ImageLoader Coil 2 para tentar “forçar rapidez”. A própria documentação
-  Coil 2 desaconselha esse segundo cache de disco.
-
-### 2. Filme Xtream — consulta duplicada antes da reprodução
-
-O encadeamento foi reconferido em todos os consumidores:
-1. PlayerViewModel.OpenMovie → ProviderRepository.loadMovieInfo → XtreamProvider.vod.
-2. MovieDialog recebe o entry detalhado e dispara AppAction.Play(entry).
-3. PlayerViewModel.play → NativeRepository.stream → ProviderRepository.resolve.
-4. resolve chama XtreamProvider.vod novamente para filme Xtream, mesmo recebendo
-   o entry do diálogo; vod executa get_vod_info sem cache próprio.
-
-Isso é uma duplicação concreta no fluxo normal detalhes → Assistir, não apenas
-uma busca textual por funções parecidas. Seu custo depende da latência da API.
-Ainda não foi medido em milissegundos no aparelho nem executado um experimento de
-requestCount nesta pesquisa. Não atribuir a ela a lentidão de canais ou capas.
-M3U não segue esse get_vod_info; série abre get_series_info e episódios têm outro
-fluxo. O registro correto da fonte selecionada é necessário.
-
-**Candidata recomendada:** um resultado de detalhe bem-sucedido reutilizável,
-limitado em tamanho/tempo e contexto, em vez de simplesmente remover a segunda
-consulta. Conta/fonte/configuração, identidade do item e versão local do catálogo
-precisam coincidir; troca de conta/fonte, refresh e expiração invalidam o resultado.
-Uma resposta anterior não pode se aplicar a outro item ou recuperar uma conta
-removida. Falhas não devem ser convertidas em detalhe válido. URLs temporárias
-exigem atenção ao vencimento e nova resolução quando necessário.
-
-A extensão de container retornada em movie_data é usada para compor a URL;
-remover todos os pedidos de detalhe pode quebrar arquivos MKV/MP4. A referência
-M81 atualmente devolve get_vod_info como um objeto de detalhe, fora do cache de
-representações de listagens: ETag de catálogo não resolve sozinho esta duplicação.
-
-**Verificação necessária antes da implementação:** MockWebServer contando duas
-consultas na referência e uma na candidata, mesmo resultado/URL/headers; casos de
-conta/fonte/catalog refresh/TTL distintos e detalhes inválidos/404. Depois medir
-clique em Assistir → primeiro quadro, preservando codecs e comportamento de erros.
-
-### 3. Reprodução — usar o diagnóstico que o Media3 já oferece
-
-PlaybackService é o dono do ExoPlayer; é ali que um AnalyticsListener pode ser
-registrado. PlayerViewModel controla a resolução anterior a setMediaItem/prepare,
-portanto apenas medir BUFFERING no player perde parte da espera real.
-
-O diagnóstico adequado contém marcas monotônicas por solicitação de reprodução:
-- T0: clique em Assistir/troca de canal;
-- T1: detalhe/resolução concluídos;
-- T2: setMediaItem/prepare;
-- carregamento: tipo manifesto/mídia, duração e bytes nos eventos correspondentes;
-- T3: primeiro onRenderedFirstFrame desse pedido, além de READY e falhas.
-
-STATE_READY não é prova de imagem visível. onRenderedFirstFrame pode ocorrer
-novamente por mudança de superfície/renderer; contar somente a primeira ocorrência
-pertinente ao pedido e tratar cancelamentos/trocas por geração. Vídeo e áudio
-sozinho precisam de métricas apropriadas, não presumir primeiro quadro para áudio.
-
-Isso distingue rede do painel, redirect/fonte, download, preparação e decoder.
-PlaybackStatsListener também fornece estatísticas, mas seu histórico completo tem
-custo de memória: manter só eventos/contadores necessários. Usar listener restrito;
-um EventLogger bruto pode registrar endereços e não deve ser exportado sem filtro.
-
-**Decisão após medir:** só ajustar buffer, conexão, pré-carregamento ou formato
-quando a etapa responsável estiver comprovada. Não instalar outro player, relay
-no M81 ou transcodificação como primeira resposta à demora. Não há ganho estimado
-porcentual justificável sem essas medições.
-
-### 4. Catálogo — gzip já está presente; ETag ajuda principalmente no refresh
-
-**Confirmado no artefato-fonte exato do OkHttp 5.4.0:** BridgeInterceptor adiciona
-Accept-Encoding: gzip quando o pedido não define Accept-Encoding nem Range e faz
-descompressão transparente. ProviderHttp usa esse cliente sem substituir esses
-headers por padrão. Logo, não é necessário “ativar gzip” no caminho comum. Se
-alguma configuração fornecer os próprios headers, ela precisa de verificação
-separada; inserir Accept-Encoding manualmente pode desligar a descompressão
-transparente que já existia.
-
-**O que falta no cliente para revalidar catálogo:**
-- ProviderHttp.defaultClient não instala um cache HTTP de respostas de catálogo.
-- HttpPayload devolve bytes, URL final e Content-Type, sem expor ETag/Last-Modified.
-- Não há envio de If-None-Match pelo fluxo comum. Uma resposta 304 recebida por
-  ProviderHttp é tratada como erro por estar fora de 2xx.
-- CatalogDatabase guarda catálogo interpretado e updated_ms, não todos os corpos
-  HTTP com seus validadores por ação/endpoint.
-
-O helper HTTP do M81 de referência negocia gzip, emite ETag e permite 304. As rotas
-Xtream autenticam antes de construir/retornar essas representações. O header
-`private, no-cache, must-revalidate` permite armazenar privadamente, exigindo
-revalidação; no-cache não significa no-store. Isso não confirma que a imagem
-operacional do servidor seja idêntica à branch pesquisada.
-
-**Projeto correto para ETag:** armazenar validator associado ao corpo/resultado
-compatível, fonte/conta, endpoint, ação e variante de representação. Em 304,
-reutilizar somente a representação correspondente. Sem corpo local compatível,
-refazer pedido sem condição; não interpretar 304 vazio como catálogo vazio.
-Autenticação e revogação precisam continuar verificadas. Não usar cache público
-compartilhado entre contas nem manter credenciais em chaves/logs exportados.
-
-O ganho é reduzir bytes e eventualmente parsing/escrita no refresh sem mudança;
-SQL/autenticação e tempo de rede podem continuar existindo. Exibir o catálogo
-salvo e trocar abas já não exige atualização remota neste app. Portanto essa
-recomendação tem prioridade inferior para o sintoma de capas de séries já salvas.
-
-## Fontes primárias e arquivos confrontados
-
-- [Coil 2.7.0 — ImageLoaders e caches](https://github.com/coil-kt/coil/blob/2.7.0/docs/image_loaders.md).
-- [Coil 2.7.0 — defaults do builder](https://github.com/coil-kt/coil/blob/2.7.0/coil-base/src/main/java/coil/ImageLoader.kt).
-- [Coil 2.7.0 — HttpUriFetcher, 304 e DataSource](https://github.com/coil-kt/coil/blob/2.7.0/coil-base/src/main/java/coil/fetch/HttpUriFetcher.kt).
-- [Coil 2.7.0 — CacheStrategy](https://github.com/coil-kt/coil/blob/2.7.0/coil-base/src/main/java/coil/network/CacheStrategy.kt).
-- [Migração oficial Coil 2: cache próprio, sem segundo cache OkHttp](https://coil-kt.github.io/coil/upgrading_to_coil2/).
-- [TMDB: montagem de URLs e tamanhos de imagens](https://developer.themoviedb.org/docs/image-basics).
-- [Media3: AnalyticsListener e PlaybackStatsListener](https://developer.android.com/media/media3/exoplayer/analytics).
-- [Media3: referência dos eventos](https://developer.android.com/reference/androidx/media3/exoplayer/analytics/AnalyticsListener).
-- [OkHttp JVM 5.4.0: fontes do artefato usado](https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp-jvm/5.4.0/okhttp-jvm-5.4.0-sources.jar), arquivo commonJvmAndroid/okhttp3/internal/http/BridgeInterceptor.kt.
-- [RFC 9111: cache HTTP](https://www.rfc-editor.org/rfc/rfc9111.html).
-- Cliente: OttplayApplication, PlayerViewModel, MovieDialog, NativeRepository,
-  CatalogDatabase, ProviderRepository, ProviderHttp, XtreamProvider e PlaybackService.
-- Painel rootcause-runtime-20261024: app/services/http_delivery.py,
-  app/routers/xtream_api.py e suas rotas autenticadas.
-
-## Resultado e limites desta revisão
-
-A conclusão mais forte para capas é que o mecanismo para salvá-las no celular
-já existe. A confirmação do estado específico do telefone continua pendente do
-relatório/teste no mesmo app. A candidata funcional mais focalizada é reaproveitar
-get_vod_info no fluxo de filme Xtream; ela não foi implementada nesta pesquisa.
-Gzip não é uma funcionalidade nova necessária. ETag deve ser considerado para
-refresh; diagnóstico Media3 usa APIs já presentes.
-
-Foram inspecionados fontes da versão das bibliotecas, documentação oficial e
-caminhos do projeto; o JAR-fonte exato do OkHttp foi baixado e aberto. `git diff
---check` valida a alteração documental. Não houve novos testes de execução, benchmark,
-instalação de APK, alteração de buffer/cache/reprodução nem implantação. Os 196
-testes do APK anterior continuam evidência daquela build, não desta revisão.
+Em próximas revisões, registrar SHA da branch, SHA efetivamente compilado,
+variante/pacote/assinatura, hash do artefato e ID/status dos workflows. Não trocar
+“implementado” por “instalado”, “build passou” por “Quality Gate passou”, nem
+“MockWebServer passou” por “CoreAPI operacional homologada”.
