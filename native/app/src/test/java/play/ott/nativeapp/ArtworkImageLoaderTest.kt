@@ -5,10 +5,17 @@ import androidx.test.core.app.ApplicationProvider
 import coil.decode.DataSource
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Test
+import org.junit.After
+import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -18,8 +25,14 @@ import kotlin.test.assertIs
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = PlaybackTestApplication::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class ArtworkImageLoaderTest {
-    @Test fun svgLogoAtPngPathDecodesAndReusesTheSharedMemoryCache() = runBlocking {
+    // Coil resumes image requests on Main. Robolectric's paused Android looper
+    // must not hold a runBlocking test waiting for its own callback forever.
+    @Before fun prepareMainDispatcher() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
+    @After fun restoreMainDispatcher() { Dispatchers.resetMain() }
+
+    @Test(timeout = 30_000) fun svgLogoAtPngPathDecodesAndReusesTheSharedMemoryCache() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setHeader("Content-Type", "image/svg+xml")
