@@ -92,3 +92,22 @@ Compilar/testar o observador não comprova a causa da rapidez no telefone.
 O diagnóstico precisa do percurso do aparelho para escolher a correção. Até
 essa evidência, nenhuma alteração de desempenho foi implantada no aplicativo
 funcional ou no painel, e o APK de download operacional continua preservado.
+
+
+## Validação concluída da candidata
+
+Código compilado: 37aba146559c924be81757eb5ac32f95a6f30907.
+Execução: https://github.com/sempaio/ottplay-foss-android/actions/runs/40975706917 .
+
+- Core: 69 testes; app originsTest: 126 testes; **195 aprovados**, zero falhas e zero ignorados.
+- Os oito testes novos (seis de origens e dois de cache Coil) foram executados e aprovados.
+- Lint: zero erros, 21 avisos. assembleOriginsTest e apksigner/aapt aprovados.
+- APK: 23.086.970 bytes; SHA256 53a51d9c5e2b5e958772aa196a020cf64e96c6d73887d2676a7b3f49ffd3b722.
+- O ZIP de Actions foi baixado e o digest do APK conferido contra SHA256SUMS.
+- O resultado é da CI Android específica. Não equivale à aprovação de todos os
+  workflows gerais do repositório nem à medição no telefone do proprietário.
+
+A validação inicial encontrou testes desabilitados para a nova variante e uma
+chamada de encerramento que não existe na API pública DiskCache do Coil 2.7.0.
+O harness foi corrigido sem retirar testes ou enfraquecer asserções. A execução
+acima é a validação final; execuções anteriores não devem ser tratadas como aprovadas.
