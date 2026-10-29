@@ -63,7 +63,7 @@ class ArtworkCacheOriginTest {
             val report = session.report()
             for (origin in listOf("MEMORY_CACHE", "DISK", "NETWORK")) assertTrue(report.contains(origin))
             assertFalse(report.contains("private-title")); assertFalse(report.contains("token=secret"))
-        }} finally { loader.shutdown(); cache.shutdown() }
+        }} finally { loader.shutdown() }
     }
 
     @Test(timeout = 30_000) fun network304ReusesCachedImageBytesAndKeepsItsActualStatus() = runBlocking {
@@ -86,7 +86,7 @@ class ArtworkCacheOriginTest {
             server.takeRequest()
             assertEquals("fixture", server.takeRequest().getHeader("If-None-Match"))
             assertTrue(session.report().contains("| 304 | 0 bytes |"))
-        }} finally { loader.shutdown(); cache.shutdown() }
+        }} finally { loader.shutdown() }
     }
 }
 
