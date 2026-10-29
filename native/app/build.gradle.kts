@@ -153,3 +153,8 @@ androidComponents.beforeVariants(androidComponents.selector().withBuildType("lay
     it.hostTests.values.filter { test -> test.type == "UnitTest" }.forEach { test -> test.enable = true }
 
 }
+
+configurations.named("originsTestImplementation") { extendsFrom(configurations.getByName("debugImplementation")) }
+androidComponents.beforeVariants(androidComponents.selector().withBuildType("originsTest")) {
+    it.hostTests.values.filter { test -> test.type == "UnitTest" }.forEach { test -> test.enable = true }
+}

@@ -18,6 +18,7 @@ class ArtworkOriginsTest {
         assertEquals("dados embutidos", artworkOrigin("data:image/png;base64,private-bytes"))
         assertEquals("não identificada", artworkOrigin("not a URL with private text"))
         assertEquals("sem imagem", artworkOrigin(""))
+        assertEquals("https | 2001:db8::1 | imagem", artworkOrigin("https://[2001:db8::1]/private"))
     }
 
     @Test fun comparesAllKindsAndBoundsResultsWithoutKeepingStaleMeasurements() {
@@ -83,6 +84,21 @@ class ArtworkOriginsTest {
             OkHttpClient.Builder().eventListenerFactory(session.httpFactory()).build()
                 .newCall(request).execute().use { assertEquals(304, it.code); it.body.bytes() }
             assertTrue(session.report().contains("| 304 | 0 bytes |"))
+        }
+    }
+
+    @Test fun clearingReportDoesNotAdmitAnOldHttpResponseOrModifyItsBody() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("unchanged-image-bytes")); server.start()
+            val session = ArtworkOrigins()
+            val request = Request.Builder().url(server.url("/private"))
+                .tag(ArtworkTag::class.java, ArtworkTag("LIVE", "grade")).build()
+            OkHttpClient.Builder().eventListenerFactory(session.httpFactory()).build()
+                .newCall(request).execute().use {
+                    session.clear()
+                    assertEquals("unchanged-image-bytes", it.body.string())
+                }
+            assertFalse(session.report().contains("HTTP | R"))
         }
     }
 }

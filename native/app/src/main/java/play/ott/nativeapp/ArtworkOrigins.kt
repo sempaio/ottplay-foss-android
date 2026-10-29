@@ -20,7 +20,7 @@ internal fun artworkOrigin(url: String): String {
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
     return when (scheme) {
         "http", "https" -> {
-            val host = uri.host?.lowercase(Locale.ROOT)
+            val host = uri.host?.lowercase(Locale.ROOT)?.removePrefix("[")?.removeSuffix("]")
                 ?.takeIf { it.matches(Regex("[a-z0-9.:-]{1,253}")) } ?: return "não identificada"
             val route = if (uri.path.orEmpty().startsWith("/channel-logo/")) "cache-painel" else "imagem"
             "$scheme | $host | $route"

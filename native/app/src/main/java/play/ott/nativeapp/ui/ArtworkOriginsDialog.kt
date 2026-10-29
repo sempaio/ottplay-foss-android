@@ -21,6 +21,7 @@ internal fun ArtworkOriginsDialog(state: AppUiState, onDismiss: () -> Unit) {
     val report by produceState("Preparando relatório…", revision, state.selectedSourceId, state.entries) {
         value = withContext(Dispatchers.Default) {
             "STARLINK IPTV ${BuildConfig.VERSION_NAME}\nCódigo: ${BuildConfig.SOURCE_REVISION}\n" +
+                "Fonte selecionada: ${state.sources.firstOrNull { it.id == state.selectedSourceId }?.kind?.name ?: "não selecionada"}\n" +
                 artworkInventory(state.selectedSourceId, state.entries) + "\n\n" + ArtworkOrigins.session.report()
         }
     }
