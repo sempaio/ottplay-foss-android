@@ -86,7 +86,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.media3.session.MediaController
-import coil.compose.AsyncImage
 import play.ott.nativeapp.R
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
@@ -482,7 +481,7 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
             contentAlignment = Alignment.Center,
         ) {
             Text(entry.name.take(2).uppercase(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, contentDescription = null, modifier = Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
+            if (entry.logo.isNotBlank()) OriginArtwork(entry, Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
             if (playing) Text(stringResource(R.string.library_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.BottomStart).background(MaterialTheme.colorScheme.background.copy(alpha = .85f)).padding(6.dp))
         }
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -535,6 +534,8 @@ private fun SourcesDialog(state: AppUiState, onAction: (AppAction) -> Unit, onDi
 
 @Composable
 private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onDismiss: () -> Unit) {
+    var showOrigins by remember { mutableStateOf(false) }
+    if (showOrigins) { ArtworkOriginsDialog(state) { showOrigins = false }; return }
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     var languageTag by remember(configuration) { mutableStateOf(AppLanguages.currentTag()) }
@@ -575,6 +576,7 @@ private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, cus
                 ActionButton(stringResource(R.string.library_tv_guide), onGuide, Modifier.fillMaxWidth())
                 SupportButton()
                 ActionButton(stringResource(R.string.neon_updates), { onAction(AppAction.CheckUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
+                if (play.ott.nativeapp.BuildConfig.ARTWORK_ORIGINS) ActionButton("Origem das capas", { showOrigins = true }, Modifier.fillMaxWidth())
                 if (state.updateAvailable) ActionButton(stringResource(R.string.neon_update_install), { onAction(AppAction.InstallUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
                 Text("STARLINK IPTV Prévia · " + play.ott.nativeapp.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
                 Text(stringResource(R.string.library_language), style = MaterialTheme.typography.titleSmall)
@@ -647,7 +649,7 @@ internal fun FeaturedContent(entry: MediaEntry, onAction: (AppAction) -> Unit) {
     Card(onClick = { onAction(when (entry.kind) { MediaKind.SERIES -> AppAction.OpenSeries(entry); MediaKind.MOVIE -> AppAction.OpenMovie(entry); else -> AppAction.Play(entry) }) },
         modifier = Modifier.fillMaxWidth().testTag("featured-content")) {
         Box(Modifier.fillMaxWidth().height(240.dp).background(Brush.horizontalGradient(listOf(Color(0xFF112E46), Color(0xFF211130))))) {
-            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(320.dp), contentScale = ContentScale.Crop)
+            if (entry.logo.isNotBlank()) OriginArtwork(entry, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(320.dp), contentScale = ContentScale.Crop, surface = "destaque")
             Column(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE080B16), Color.Transparent))).padding(20.dp), verticalArrangement = Arrangement.Center) {
                 Text("DESTAQUE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)

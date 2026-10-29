@@ -6,6 +6,8 @@ plugins { id("com.android.application"); kotlin("plugin.compose"); kotlin("plugi
 val appVersion = Properties().apply {
     rootProject.file("version.properties").inputStream().use(::load)
 }
+val sourceRevision = providers.environmentVariable("GITHUB_SHA").orNull
+    ?.takeIf { it.matches(Regex("[0-9a-f]{40}")) } ?: "local"
 val signingVariant = providers.environmentVariable("OTTPLAY_SIGNING_VARIANT").orNull
 val signingNames = listOf("OTTPLAY_KEYSTORE", "OTTPLAY_STORE_PASSWORD", "OTTPLAY_KEY_ALIAS", "OTTPLAY_KEY_PASSWORD")
 val signingValues = signingNames.associateWith { providers.environmentVariable(it).orNull }
@@ -28,6 +30,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
         buildConfigField("boolean", "CUSTOMER_MODE", "false")
+        buildConfigField("boolean", "ARTWORK_ORIGINS", "false")
+        buildConfigField("String", "SOURCE_REVISION", "\"$sourceRevision\"")
         manifestPlaceholders["allowCleartextTraffic"] = "false"
     }
     testBuildType = "layout"
@@ -62,6 +66,15 @@ android {
             versionNameSuffix = "-layout"
             matchingFallbacks += "debug"
             resValue("string", "app_name", "STARLINK IPTV Prévia")
+        }
+        create("originsTest") {
+            initWith(getByName("layout"))
+            applicationIdSuffix = ".origins"
+            versionNameSuffix = "-origins-test"
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "ARTWORK_ORIGINS", "true")
+            matchingFallbacks += "layout"
+            resValue("string", "app_name", "STARLINK IPTV Origens")
         }
         release {
             isMinifyEnabled = true
@@ -139,4 +152,9 @@ configurations.named("layoutImplementation") { extendsFrom(configurations.getByN
 androidComponents.beforeVariants(androidComponents.selector().withBuildType("layout")) {
     it.hostTests.values.filter { test -> test.type == "UnitTest" }.forEach { test -> test.enable = true }
 
+}
+
+configurations.named("originsTestImplementation") { extendsFrom(configurations.getByName("debugImplementation")) }
+androidComponents.beforeVariants(androidComponents.selector().withBuildType("originsTest")) {
+    it.hostTests.values.filter { test -> test.type == "UnitTest" }.forEach { test -> test.enable = true }
 }
