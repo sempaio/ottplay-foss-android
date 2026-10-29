@@ -48,6 +48,8 @@ class OttplayApplication : Application(), ImageLoaderFactory {
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient(AppTransportPolicy.current.secure(OkHttpClient()))
+        .okHttpClient(AppTransportPolicy.current.secure(OkHttpClient.Builder().apply {
+            if (BuildConfig.ARTWORK_ORIGINS) eventListenerFactory(ArtworkOrigins.session.httpFactory())
+        }.build()))
         .build()
 }
