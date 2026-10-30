@@ -7,6 +7,9 @@ gradle.beforeProject { p ->
             dsl.buildTypes.create('paraVoceQa') {
                 initWith(dsl.buildTypes.getByName('paraVoceTest'))
                 applicationIdSuffix = '.paravoce.qa'
+                // QA-only: the synthetic demo source is intentionally not an operator-managed customer account.
+                // This fixture must exercise playback, not stop at the customer login screen.
+                buildConfigField 'boolean', 'CUSTOMER_MODE', 'false'
                 matchingFallbacks += ['paraVoceTest', 'debug']
             }
             dsl.testBuildType = 'paraVoceQa'
