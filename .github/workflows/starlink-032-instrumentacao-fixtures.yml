@@ -47,11 +47,7 @@ jobs:
           arch: x86_64
           profile: pixel_7
           disable-animations: true
-          script: |
-            cd native
-            ./gradlew --no-daemon --max-workers=1 -I consolidation-qa.init.gradle \
-              :app:connectedParaVoceQaAndroidTest \
-              '-Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.ForYouConsolidationInstrumentedTest,play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest#disabledBackgroundStopsAtHomeWithoutAutomaticPip'
+          script: cd native && ./gradlew --no-daemon --max-workers=1 -I consolidation-qa.init.gradle :app:connectedParaVoceQaAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.ForYouConsolidationInstrumentedTest,play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest#disabledBackgroundStopsAtHomeWithoutAutomaticPip'
       - name: Verify XML test evidence (at least four tests; none failed or skipped)
         if: success()
         run: |
