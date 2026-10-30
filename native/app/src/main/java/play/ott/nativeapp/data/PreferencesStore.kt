@@ -19,6 +19,12 @@ private val Context.preferences by preferencesDataStore("player")
     val resumePositions: Map<String, Long> = emptyMap(),
     val audioTrack: TrackPreference = TrackPreference(),
     val subtitleTrack: TrackPreference = TrackPreference(),
+    /** The default profile preserves legacy favorites; secondary profiles stay isolated. */
+    val activeForYouProfileId: String = "default",
+    val forYouProfiles: Map<String, ForYouProfile> = emptyMap(),
+    val favoritesByProfile: Map<String, Set<String>> = emptyMap(),
+    val resumeByProfile: Map<String, Map<String, Long>> = emptyMap(),
+
 )
 
 /** A track number belongs to one manifest; only language/role/label survive replacement. */
@@ -59,7 +65,13 @@ class PreferencesStore(context: Context) {
     }
 
     suspend fun saveResumePosition(id: String, positionMs: Long) = update { preferences ->
-        val positions = play.ott.core.DurableSelections.saveResume(preferences.resumePositions, id, positionMs)
-        if (positions === preferences.resumePositions) preferences else preferences.copy(resumePositions = positions)
+        val profile = preferences.activeForYouProfileId
+        if (profile == "default") {
+            val positions = play.ott.core.DurableSelections.saveResume(preferences.resumePositions, id, positionMs)
+            if (positions === preferences.resumePositions) preferences else preferences.copy(resumePositions = positions)
+        } else {
+            val positions = play.ott.core.DurableSelections.saveResume(preferences.resumeByProfile[profile].orEmpty(), id, positionMs)
+            preferences.copy(resumeByProfile = preferences.resumeByProfile + (profile to positions))
+        }
     }
 }

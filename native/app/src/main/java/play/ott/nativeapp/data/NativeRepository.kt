@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -68,7 +69,10 @@ class NativeRepository(
     internal val progressWriter by lazy { ResumePositionWriter(preferences::saveResumePosition, persistRecent = { value ->
         // Source removal and late player callbacks must not resurrect deleted credentials.
         sourceMutex.withLock {
-            if (vault.read().any { it.id == value.entry.sourceId }) db.saveRecent(value)
+            // Legacy recent playback belongs exclusively to the default profile.
+            // Never leak profile 2 viewing into the default profile SQLite history.
+            if (preferences.data.first().activeForYouProfileId == "default" &&
+                vault.read().any { it.id == value.entry.sourceId }) db.saveRecent(value)
             recentState.value = db.recent()
         }
     }) }

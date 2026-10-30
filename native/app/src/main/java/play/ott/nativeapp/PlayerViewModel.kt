@@ -16,6 +16,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import play.ott.nativeapp.core.*
 import play.ott.nativeapp.data.NativeRepository
+import play.ott.nativeapp.data.ForYouProfile
+import play.ott.nativeapp.data.ForYouEngine
 import play.ott.nativeapp.playback.PlaybackItems
 import play.ott.nativeapp.ui.AppAction
 import play.ott.nativeapp.ui.AppUiState
@@ -99,11 +101,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     init {
         checkUpdate(false)
-        viewModelScope.launch { repository.recent.collect { recent -> updateState { it.copy(recent = recent) } } }
+        viewModelScope.launch {
+            repository.recent.collect { recent ->
+                updateState {
+                    it.copy(recent = if (it.activeForYouProfileId == "default") recent else emptyList(),
+                        forYouRecentlyViewedKeys = if (it.activeForYouProfileId == "default")
+                            recent.map { item -> ForYouEngine.key(item.entry) }.toSet() else emptySet())
+                }
+            }
+        }
         viewModelScope.launch { runCatching { repository.loadRecent() } }
         viewModelScope.launch {
             repository.preferences.data.collect { preferences ->
-                updateState { it.copy(favoriteIds = preferences.favorites, backgroundPlayback = preferences.backgroundPlayback) }
+                val profileId = preferences.activeForYouProfileId.takeIf { it in setOf("default", "secondary") } ?: "default"
+                val profile = preferences.forYouProfiles[profileId] ?: ForYouProfile(
+                    id = profileId, name = if (profileId == "default") "Principal" else "Perfil 2")
+                val recent = if (profileId == "default") repository.recent.value else emptyList()
+                updateState { it.copy(
+                    favoriteIds = if (profileId == "default") preferences.favorites else preferences.favoritesByProfile[profileId].orEmpty(),
+                    backgroundPlayback = preferences.backgroundPlayback,
+                    forYouProfile = profile, activeForYouProfileId = profileId,
+                    recent = recent, forYouRecentlyViewedKeys = recent.map { item -> ForYouEngine.key(item.entry) }.toSet()
+                ) }
             }
         }
         viewModelScope.launch {
@@ -256,9 +275,59 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             AppAction.Refresh -> state.value.selectedSourceId?.let { load(it, true) }
             is AppAction.ToggleFavorite -> operation {
-                repository.preferences.update {
-                    it.copy(favorites = play.ott.core.DurableSelections.toggle(it.favorites, action.entry.id))
+                repository.preferences.update { previous ->
+                    val id = previous.activeForYouProfileId
+                    if (id == "default") previous.copy(favorites = play.ott.core.DurableSelections.toggle(previous.favorites, action.entry.id))
+                    else previous.copy(favoritesByProfile = previous.favoritesByProfile +
+                        (id to play.ott.core.DurableSelections.toggle(previous.favoritesByProfile[id].orEmpty(), action.entry.id)))
                 }
+            }
+            is AppAction.SaveForYou -> operation {
+                repository.preferences.update { previous ->
+                    val id = previous.activeForYouProfileId
+                    val before = previous.forYouProfiles[id] ?: ForYouProfile(id = id)
+                    previous.copy(forYouProfiles = previous.forYouProfiles + (id to before.copy(
+                        onboardingDone = true,
+                        interests = action.interests.intersect(ForYouEngine.topics.toSet()),
+                        subInterests = action.subInterests.intersect(ForYouEngine.validSubInterests).filter {
+                            it.substringBefore(":") in action.interests
+                        }.toSet(),
+                        dislikedInterests = action.dislikedInterests.intersect(ForYouEngine.topics.toSet()),
+                        allowViewingSignals = action.allowViewingSignals
+                    )))
+                }
+            }
+            AppAction.SkipForYou -> operation {
+                repository.preferences.update { previous ->
+                    val id = previous.activeForYouProfileId
+                    val before = previous.forYouProfiles[id] ?: ForYouProfile(id = id)
+                    previous.copy(forYouProfiles = previous.forYouProfiles + (id to before.copy(onboardingDone = true)))
+                }
+            }
+            is AppAction.VoteForYou -> operation {
+                repository.preferences.update { previous ->
+                    val id = previous.activeForYouProfileId
+                    val before = previous.forYouProfiles[id] ?: ForYouProfile(id = id)
+                    val key = ForYouEngine.key(action.entry)
+                    val likes = (before.likedEntries - key) + if (action.interested) setOf(key) else emptySet()
+                    val dislikes = (before.dislikedEntries - key) + if (!action.interested) setOf(key) else emptySet()
+                    previous.copy(forYouProfiles = previous.forYouProfiles + (id to before.copy(
+                        likedEntries = likes.take(500).toSet(), dislikedEntries = dislikes.take(500).toSet()
+                    )))
+                }
+            }
+            AppAction.ResetForYou -> operation {
+                repository.preferences.update { previous ->
+                    val id = previous.activeForYouProfileId
+                    previous.copy(forYouProfiles = previous.forYouProfiles + (id to ForYouProfile(
+                        id = id, name = if (id == "default") "Principal" else "Perfil 2")))
+                }
+            }
+            is AppAction.SwitchForYouProfile -> if (action.id in setOf("default", "secondary")) operation {
+                // Prevent a playing session from sending new playback checkpoints to a different profile.
+                repository.progressWriter.awaitIdle()
+                stop()
+                repository.preferences.update { it.copy(activeForYouProfileId = action.id) }
             }
             is AppAction.Play -> play(action.entry)
             is AppAction.OpenEpg -> {
@@ -370,7 +439,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playJob = operation {
             val source = availableSources().first { it.id == entry.sourceId }
             val stream = resolved ?: repository.stream(source, entry)
-            val position = if (entry.kind == MediaKind.LIVE) 0L else repository.preferences.data.first().resumePositions[entry.id] ?: 0L
+            val pref = repository.preferences.data.first()
+            val resume = if (pref.activeForYouProfileId == "default") pref.resumePositions else pref.resumeByProfile[pref.activeForYouProfileId].orEmpty()
+            val position = if (entry.kind == MediaKind.LIVE) 0L else resume[entry.id] ?: 0L
             ensureActive()
             if (generation != playGeneration) return@operation
             if (availableSources().firstOrNull { it.id == source.id } != source) error("Source changed during playback request")

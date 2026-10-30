@@ -134,6 +134,7 @@ fun OttNativeApp(
     var group by rememberSaveable(state.selectedSourceId, tab) { mutableStateOf("") }
     var showSources by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showForYouPreferences by rememberSaveable { mutableStateOf(false) }
     var showGuidePicker by rememberSaveable { mutableStateOf(false) }
     var showPrivacy by rememberSaveable { mutableStateOf(false) }
     var sourceEditorOpen by rememberSaveable { mutableStateOf(false) }
@@ -279,7 +280,7 @@ fun OttNativeApp(
                                         NeonHome(state, onAction, welcomeFocus, Modifier.weight(1f), customerMode = customerMode, onBrowse = { kind, category ->
                                             tab = when (kind) { MediaKind.LIVE -> LibraryTab.LIVE; MediaKind.SERIES -> LibraryTab.SERIES; else -> LibraryTab.MOVIES }
                                             group = category; search = ""
-                                        })
+                                        }, onPreferences = { showForYouPreferences = true })
                                     } else {
                                     LazyVerticalGrid(
                                         state = gridState,
@@ -363,8 +364,18 @@ fun OttNativeApp(
                 sourceEditorId = source?.id; sourceEditorOpen = true
             })
         }
-        if (showSettings && !showPrivacy) SettingsDialog(state, onAction, customerMode = customerMode, onGuide = { showGuidePicker = true; showSettings = false }, onFavorites = { tab = LibraryTab.FAVORITES; showSettings = false }, onSources = { showSettings = false; if (customerMode) sourceEditorOpen = true else showSources = true }, onPrivacy = { showPrivacy = true }) { showSettings = false }
+        if (showSettings && !showPrivacy) SettingsDialog(state, onAction, customerMode = customerMode, onGuide = { showGuidePicker = true; showSettings = false }, onFavorites = { tab = LibraryTab.FAVORITES; showSettings = false }, onSources = { showSettings = false; if (customerMode) sourceEditorOpen = true else showSources = true }, onPrivacy = { showPrivacy = true }, onForYou = { showSettings = false; showForYouPreferences = true }) { showSettings = false }
         if (showPrivacy) PrivacyPolicyDialog { showPrivacy = false }
+        if (state.sources.isNotEmpty() && !state.isBusy && !fullscreen &&
+            (showForYouPreferences || !state.forYouProfile.onboardingDone)) {
+            ForYouDialog(state.forYouProfile, onSave = { topics, subtopics, dislikes, consent ->
+                onAction(AppAction.SaveForYou(topics, subtopics, dislikes, consent))
+                showForYouPreferences = false
+            }, onSkip = {
+                onAction(AppAction.SkipForYou)
+                showForYouPreferences = false
+            })
+        }
         if (sourceEditorOpen && customerMode) {
             androidx.compose.ui.window.Dialog(onDismissRequest = { sourceEditorOpen = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
                 CustomerLoginScreen(state.sources.firstOrNull { it.kind == play.ott.nativeapp.core.SourceKind.XTREAM }, state.isBusy,
@@ -534,7 +545,7 @@ private fun SourcesDialog(state: AppUiState, onAction: (AppAction) -> Unit, onDi
 }
 
 @Composable
-private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onDismiss: () -> Unit) {
+private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onForYou: () -> Unit, onDismiss: () -> Unit) {
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     var languageTag by remember(configuration) { mutableStateOf(AppLanguages.currentTag()) }
@@ -573,6 +584,17 @@ private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, cus
                 ActionButton(stringResource(R.string.library_tab_favorites), onFavorites, Modifier.fillMaxWidth())
                 ActionButton(stringResource(if (customerMode) R.string.customer_account else R.string.library_sources), onSources, Modifier.fillMaxWidth())
                 ActionButton(stringResource(R.string.library_tv_guide), onGuide, Modifier.fillMaxWidth())
+                Text("Personalização STARLINK", style = MaterialTheme.typography.titleMedium)
+                ActionButton("Editar preferências · Para Você", onForYou, Modifier.fillMaxWidth().testTag("settings-for-you"))
+                Text("Perfil local: " + state.forYouProfile.name, style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionButton("Principal", { onAction(AppAction.SwitchForYouProfile("default")); onDismiss() },
+                        Modifier.weight(1f), compact = true, selected = state.activeForYouProfileId == "default")
+                    ActionButton("Perfil 2", { onAction(AppAction.SwitchForYouProfile("secondary")); onDismiss() },
+                        Modifier.weight(1f), compact = true, selected = state.activeForYouProfileId == "secondary")
+                }
+                ActionButton("Redefinir recomendações", { onAction(AppAction.ResetForYou); onDismiss() }, Modifier.fillMaxWidth(), compact = true)
+
                 SupportButton()
                 ActionButton(stringResource(R.string.neon_updates), { onAction(AppAction.CheckUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
                 if (state.updateAvailable) ActionButton(stringResource(R.string.neon_update_install), { onAction(AppAction.InstallUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
