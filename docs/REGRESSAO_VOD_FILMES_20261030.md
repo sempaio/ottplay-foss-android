@@ -1,12 +1,14 @@
 # STARLINK IPTV 0.3.2 — regressão relatada na reprodução de filmes (30/10/2026)
 
+> **Atualização do proprietário — 30/10/2026:** depois de tocar um filme com sucesso e **atualizar a lista/catálogo no aplicativo**, o proprietário informou que os demais filmes **aparentemente voltaram a reproduzir** e que as outras funções continuam funcionando. **Situação: falha não reproduzida após atualização da lista, sob observação; nenhuma correção de código aplicada.** O problema não deve permanecer descrito como regressão generalizada confirmada nem ser atribuído ao player. Não é evidência suficiente para afirmar que 100% dos títulos e formatos foram homologados. Se reaparecer, comparar o estado do catálogo antes e depois de atualizar, registrar só o erro sanitizado e evitar mudanças no serviço.
+
 ## Relato do proprietário
 
 Em 30/10/2026, durante testes do Android STARLINK com `Para Você`, foi informado: **"Os filmes agora eles não estão reproduzindo. Mas todo o outro resto tá ok."** Captura enviada na conversa. **Não há ainda comprovação técnica suficiente para atribuir a falha ao painel, ao stream, ao contêiner ou ao player**. Não assumir código HTTP ou causa específica a partir da descrição.
 
 ## Status e gravidade
 
-**Bloqueador para promoção ou distribuição da candidata como atualização oficial** até validar a reprodução de filmes VOD no aparelho com conta autorizada. A CI [41126645448](https://github.com/sempaio/ottplay-foss-android/actions/runs/41126645448) aprovou testes de unidade, lint e build, **não a reprodução VOD com fonte real**. O app antigo 0.3.2-layout deve permanecer disponível para comparação; nenhum rollback ou limpeza de dados deve ser executado automaticamente.
+**Atenção: ocorrência aparentemente normalizada após atualização da lista.** Não há bloqueio confirmado e persistente por reprodução VOD no relato mais recente; a distribuição oficial ainda exige os testes de homologação gerais e uma amostra de reprodução de filmes no aparelho com conta autorizada. A CI [41126645448](https://github.com/sempaio/ottplay-foss-android/actions/runs/41126645448) aprovou testes de unidade, lint e build, **não a reprodução VOD com fonte real**. O app antigo 0.3.2-layout deve permanecer disponível para comparação; nenhum rollback ou limpeza de dados deve ser executado automaticamente.
 
 ## Caminho identificado no código-fonte do commit ca1e59e4
 
