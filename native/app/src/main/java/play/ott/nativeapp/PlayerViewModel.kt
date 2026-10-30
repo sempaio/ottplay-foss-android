@@ -320,6 +320,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
             is AppAction.SwitchForYouProfile -> if (action.id in setOf("default", "secondary")) operation {
+                // Prevent a playing session from sending new playback checkpoints to a different profile.
+                repository.progressWriter.awaitIdle()
+                stop()
                 repository.preferences.update { it.copy(activeForYouProfileId = action.id) }
             }
             is AppAction.Play -> play(action.entry)
@@ -432,7 +435,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playJob = operation {
             val source = availableSources().first { it.id == entry.sourceId }
             val stream = resolved ?: repository.stream(source, entry)
-            val position = if (entry.kind == MediaKind.LIVE) 0L else repository.preferences.data.first().resumePositions[entry.id] ?: 0L
+            val pref = repository.preferences.data.first()
+            val resume = if (pref.activeForYouProfileId == "default") pref.resumePositions else pref.resumeByProfile[pref.activeForYouProfileId].orEmpty()
+            val position = if (entry.kind == MediaKind.LIVE) 0L else resume[entry.id] ?: 0L
             ensureActive()
             if (generation != playGeneration) return@operation
             if (availableSources().firstOrNull { it.id == source.id } != source) error("Source changed during playback request")
