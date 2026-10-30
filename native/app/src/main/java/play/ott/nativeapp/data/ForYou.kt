@@ -13,6 +13,7 @@ data class ForYouProfile(
     val name: String = "Principal",
     val onboardingDone: Boolean = false,
     val interests: Set<String> = emptySet(),
+    val subInterests: Set<String> = emptySet(),
     val dislikedInterests: Set<String> = emptySet(),
     val likedEntries: Set<String> = emptySet(),
     val dislikedEntries: Set<String> = emptySet(),
@@ -26,6 +27,66 @@ object ForYouEngine {
         "futebol", "gospel", "filmes", "series", "desenhos", "animes",
         "novelas", "documentarios", "comedia", "acao", "romance",
         "infantil", "esportes", "natureza", "ficcao cientifica"
+    )
+
+    /** Subtopics are explicitly chosen, never inferred from sensitive attributes. */
+    val subtopics: Map<String, List<Pair<String, String>>> = linkedMapOf(
+        "futebol" to listOf("brasileiro" to "Futebol brasileiro", "europeu" to "Futebol europeu",
+            "selecoes" to "Seleções", "ao-vivo" to "Jogos ao vivo", "programas" to "Programas esportivos"),
+        "gospel" to listOf("louvor" to "Louvor e música", "cultos" to "Cultos ao vivo",
+            "pregacoes" to "Pregações", "filmes" to "Filmes gospel"),
+        "desenhos" to listOf("classicos" to "Clássicos", "infantis" to "Infantis",
+            "educativos" to "Educativos", "animacoes" to "Animações"),
+        "filmes" to listOf("acao" to "Ação", "comedia" to "Comédia", "romance" to "Romance",
+            "suspense" to "Suspense", "terror" to "Terror", "infantil" to "Infantil"),
+        "series" to listOf("drama" to "Drama", "comedia" to "Comédia", "crime" to "Crime",
+            "ficcao" to "Ficção científica", "coreanas" to "Séries coreanas"),
+        "documentarios" to listOf("natureza" to "Natureza", "ciencia" to "Ciência",
+            "historia" to "História", "esportes" to "Esportes"),
+        "animes" to listOf("acao" to "Ação", "aventura" to "Aventura",
+            "fantasia" to "Fantasia", "infantis" to "Infantis"),
+        "novelas" to listOf("brasileiras" to "Brasileiras", "latinas" to "Latinas",
+            "classicas" to "Clássicas")
+    )
+    val validSubInterests: Set<String> = subtopics.flatMap { (topic, values) ->
+        values.map { item -> topic + ":" + item.first }
+    }.toSet()
+    private val subTerms = mapOf(
+        "futebol:brasileiro" to listOf("brasileirao", "copa do brasil", "futebol brasileiro"),
+        "futebol:europeu" to listOf("champions", "premier league", "la liga", "bundesliga", "serie a italiana"),
+        "futebol:selecoes" to listOf("selecao", "copa do mundo", "nations league"),
+        "futebol:ao-vivo" to listOf("ao vivo", "live"),
+        "futebol:programas" to listOf("mesa redonda", "debate esportivo", "esporte espetacular"),
+        "gospel:louvor" to listOf("louvor", "musica gospel", "adoracao"),
+        "gospel:cultos" to listOf("culto ao vivo", "culto", "live gospel"),
+        "gospel:pregacoes" to listOf("pregacao", "sermao"),
+        "gospel:filmes" to listOf("filme gospel", "cinema cristao"),
+        "desenhos:classicos" to listOf("desenho classico", "classicos"),
+        "desenhos:infantis" to listOf("infantil", "kids", "criancas"),
+        "desenhos:educativos" to listOf("educativo", "aprender", "educacional"),
+        "desenhos:animacoes" to listOf("animacao", "animation"),
+        "filmes:acao" to listOf("acao", "action"),
+        "filmes:comedia" to listOf("comedia", "humor"),
+        "filmes:romance" to listOf("romance", "romantico"),
+        "filmes:suspense" to listOf("suspense", "thriller"),
+        "filmes:terror" to listOf("terror", "horror"),
+        "filmes:infantil" to listOf("infantil", "kids"),
+        "series:drama" to listOf("drama"),
+        "series:comedia" to listOf("comedia"),
+        "series:crime" to listOf("crime", "policial"),
+        "series:ficcao" to listOf("ficcao cientifica", "sci fi"),
+        "series:coreanas" to listOf("dorama", "kdrama", "coreana"),
+        "documentarios:natureza" to listOf("natureza", "animal", "selvagem"),
+        "documentarios:ciencia" to listOf("ciencia", "science"),
+        "documentarios:historia" to listOf("historia", "history"),
+        "documentarios:esportes" to listOf("esporte", "sport"),
+        "animes:acao" to listOf("acao", "action"),
+        "animes:aventura" to listOf("aventura", "adventure"),
+        "animes:fantasia" to listOf("fantasia", "fantasy"),
+        "animes:infantis" to listOf("infantil", "kids"),
+        "novelas:brasileiras" to listOf("novela brasileira", "globoplay"),
+        "novelas:latinas" to listOf("novela mexicana", "latina", "televisa"),
+        "novelas:classicas" to listOf("novela classica", "classicas")
     )
 
     private val terms = mapOf(
@@ -86,6 +147,21 @@ object ForYouEngine {
                     (topic == "series" && entry.kind == MediaKind.SERIES)
                 if (matches(topic, group) || kindMatches) score += 12
                 else if (matches(topic, title)) score += 6
+            }
+            // Subtopics refine only a matched parent interest, never create a
+            // fabricated item or override a rejected topic.
+            if (score > 0) {
+                profile.subInterests.forEach { sub ->
+                    val parent = sub.substringBefore(":")
+                    if (parent in profile.interests && sub in validSubInterests) {
+                        val matched = subTerms[sub].orEmpty().any { word ->
+                            val needle = normalized(word)
+                            (" " + group + " ").contains(" " + needle + " ") ||
+                                (" " + title + " ").contains(" " + needle + " ")
+                        }
+                        if (matched) score += 9
+                    }
+                }
             }
             if (key in profile.likedEntries) score += 30
             if (entry.id in favoriteIds) score += 9
