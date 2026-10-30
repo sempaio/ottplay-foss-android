@@ -115,11 +115,10 @@ object ForYouEngine {
             .replace(Regex("[^a-z0-9]+"), " ")
             .trim()
 
+    private val normalizedTerms by lazy { terms.mapValues { (_, value) -> value.map(::normalized) } }
+    private val normalizedSubTerms by lazy { subTerms.mapValues { (_, value) -> value.map(::normalized) } }
     private fun matches(topic: String, text: String): Boolean =
-        terms[topic].orEmpty().any { term ->
-            val needle = normalized(term)
-            (" $text ").contains(" $needle ")
-        }
+        normalizedTerms[topic].orEmpty().any { (" " + text + " ").contains(" " + it + " ") }
 
     /** Return only a bounded set of real catalogue entries without sorting all 30k items. */
     fun recommend(
@@ -140,7 +139,11 @@ object ForYouEngine {
             if (key in profile.dislikedEntries) return@forEachIndexed
             val group = normalized(entry.group)
             val title = normalized(entry.name)
-            if (profile.dislikedInterests.any { matches(it, group) || matches(it, title) }) return@forEachIndexed
+            if (profile.dislikedInterests.any { topic ->
+                matches(topic, group) || matches(topic, title) ||
+                    (topic == "filmes" && entry.kind == MediaKind.MOVIE) ||
+                    (topic == "series" && entry.kind == MediaKind.SERIES)
+            }) return@forEachIndexed
             var score = 0
             profile.interests.forEach { topic ->
                 val kindMatches = (topic == "filmes" && entry.kind == MediaKind.MOVIE) ||
@@ -154,8 +157,7 @@ object ForYouEngine {
                 profile.subInterests.forEach { sub ->
                     val parent = sub.substringBefore(":")
                     if (parent in profile.interests && sub in validSubInterests) {
-                        val matched = subTerms[sub].orEmpty().any { word ->
-                            val needle = normalized(word)
+                        val matched = normalizedSubTerms[sub].orEmpty().any { needle ->
                             (" " + group + " ").contains(" " + needle + " ") ||
                                 (" " + title + " ").contains(" " + needle + " ")
                         }
