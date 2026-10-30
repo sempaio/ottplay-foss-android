@@ -63,6 +63,15 @@ android {
             matchingFallbacks += "debug"
             resValue("string", "app_name", "STARLINK IPTV Prévia")
         }
+        create("paraVoceTest") {
+            initWith(getByName("debug"))
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            applicationIdSuffix = ".paravoce"
+            versionNameSuffix = "-para-voce-test"
+            matchingFallbacks += "debug"
+            resValue("string", "app_name", "STARLINK Para Você Teste")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
