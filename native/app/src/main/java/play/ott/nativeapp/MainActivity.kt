@@ -4,6 +4,7 @@ import android.app.PictureInPictureParams
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
@@ -123,6 +124,12 @@ open class MainActivity : AppCompatActivity() {
 
     private fun setFullscreen(enabled: Boolean) {
         fullScreen = enabled
+        // Phones should open real videos in immersive landscape, restoring system orientation
+        // when the player closes. TV mode retains the device's native orientation.
+        if (!isTelevision && !isInPictureInPictureMode) {
+            requestedOrientation = if (enabled) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             if (enabled) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
@@ -132,7 +139,9 @@ open class MainActivity : AppCompatActivity() {
     private val isTelevision: Boolean
         get() = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
 
-    private fun supportsPip(): Boolean = !isTelevision && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    private fun supportsPip(): Boolean =
+        !isTelevision && model.state.value.backgroundPlayback &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     private fun pipParameters(): PictureInPictureParams {
         val size = controller?.videoSize
@@ -165,8 +174,11 @@ open class MainActivity : AppCompatActivity() {
     }
     override fun onStop() {
         // The service owns TV visibility, including after this Activity is destroyed.
-        if (!isTelevision && !isChangingConfigurations && !isInPictureInPictureMode && !model.state.value.backgroundPlayback) {
-            controller?.pause()
+        if (!isTelevision && !isChangingConfigurations && !isInPictureInPictureMode &&
+            !model.state.value.backgroundPlayback) {
+            // Pause is insufficient: the MediaSessionService can keep a playing item alive
+            // when the activity disappears. Stop also cancels pending stream resolution.
+            model.dispatch(AppAction.StopPlayback)
         }
         super.onStop()
     }
