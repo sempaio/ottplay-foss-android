@@ -1,3 +1,5 @@
+> **Atualização documental de 30/10/2026:** consultar [ESTADO_GITHUB_STARLINK_032_20261030.md](ESTADO_GITHUB_STARLINK_032_20261030.md) para o snapshot do commit `ca1e59e4`, CI, limitações e pendências. Este documento mantém as evidências e decisões do momento em que foi escrito.
+
 # STARLINK 0.3.2 — consolidação local
 
 Branch: starlink/032-consolidacao-local-20261030. Sem merge ou modificação M81.

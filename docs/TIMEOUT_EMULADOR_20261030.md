@@ -1,3 +1,5 @@
+> **Atualização documental de 30/10/2026:** consultar [ESTADO_GITHUB_STARLINK_032_20261030.md](ESTADO_GITHUB_STARLINK_032_20261030.md) para o snapshot do commit `ca1e59e4`, CI, limitações e pendências. Este documento mantém as evidências e decisões do momento em que foi escrito.
+
 # Timeout no emulador — 30/10/2026
 
 Status: experimento Android isolado, NÃO validado como solução real.

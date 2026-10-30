@@ -1,3 +1,5 @@
+> **Atualização documental de 30/10/2026:** o estado mais recente verificado para a candidata Android 0.3.2/Para Você está em [docs/ESTADO_GITHUB_STARLINK_032_20261030.md](docs/ESTADO_GITHUB_STARLINK_032_20261030.md). O restante deste arquivo é registro histórico e não constitui aprovação da candidata atual.
+
 # STARLINK IPTV — Consolidação Android
 
 ## Objetivo
