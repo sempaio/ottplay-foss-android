@@ -34,6 +34,7 @@ import kotlinx.coroutines.withContext
 import play.ott.nativeapp.R
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
+import play.ott.nativeapp.data.ForYouEngine
 
 /** Original geometric mark, used until the supplied brand master is available as a file. */
 @Composable
@@ -44,7 +45,7 @@ internal fun NeonEmblem(modifier: Modifier = Modifier) {
 private data class HomeRail(val title: String, val kind: MediaKind, val category: String, val entries: List<MediaEntry>)
 
 @Composable
-internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialFocus: FocusRequester, modifier: Modifier = Modifier, customerMode: Boolean = false, onBrowse: (MediaKind, String) -> Unit) {
+internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialFocus: FocusRequester, modifier: Modifier = Modifier, customerMode: Boolean = false, onBrowse: (MediaKind, String) -> Unit, onPreferences: () -> Unit = {}) {
     val live = stringResource(R.string.library_heading_live)
     val movies = stringResource(R.string.neon_featured_movies)
     val series = stringResource(R.string.neon_featured_series)
@@ -66,6 +67,15 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
     val hero = rails.firstOrNull { it.kind != MediaKind.LIVE }?.entries?.firstOrNull() ?: rails.firstOrNull()?.entries?.firstOrNull()
     val sourceIds = remember(state.sources) { state.sources.map { it.id }.toSet() }
     val recent = remember(state.recent, sourceIds) { state.recent.filter { it.entry.sourceId in sourceIds && it.positionMs > 0 }.take(20) }
+    val recommendations by produceState<List<MediaEntry>>(
+        emptyList(), state.entries, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (!state.forYouProfile.onboardingDone) emptyList()
+            else ForYouEngine.recommend(state.entries, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys)
+        }
+    }
+
     LazyColumn(modifier.fillMaxWidth().testTag("neon-home"), verticalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item(key = "welcome") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -103,6 +113,41 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 }
             }
         }
+
+        if (state.forYouProfile.onboardingDone) item(key = "for-you") {
+            Column(Modifier.testTag("for-you-rail"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Para Você", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    ActionButton("Preferências", onPreferences, compact = true)
+                }
+                if (recommendations.isEmpty()) {
+                    Text("Escolha seus interesses para ver recomendações do catálogo.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(recommendations, key = { ForYouEngine.key(it) }) { entry ->
+                            Column(Modifier.width(if (entry.kind == MediaKind.LIVE) 220.dp else 160.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                PosterCard(entry, {
+                                    onAction(when (entry.kind) {
+                                        MediaKind.SERIES -> AppAction.OpenSeries(entry)
+                                        MediaKind.MOVIE -> AppAction.OpenMovie(entry)
+                                        else -> AppAction.Play(entry)
+                                    })
+                                }, landscape = entry.kind == MediaKind.LIVE)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton(onClick = { onAction(AppAction.VoteForYou(entry, true)) }, modifier = Modifier.weight(1f)) {
+                                        Text("Gosto", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    TextButton(onClick = { onAction(AppAction.VoteForYou(entry, false)) }, modifier = Modifier.weight(1f)) {
+                                        Text("Não gosto", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         items(rails, key = { "${it.kind}:${it.category}:${it.title}" }) { rail ->
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
