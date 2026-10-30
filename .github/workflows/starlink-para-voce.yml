@@ -28,14 +28,14 @@ jobs:
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
       - name: Run core and app tests, lint and build isolated test APK
         working-directory: native
-        run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout :app:assembleLayout
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout :app:assembleParaVoceTest
       - name: Validate APK and record checksum
         run: |
           set -euo pipefail
           mkdir -p release-candidate
-          cp native/app/build/outputs/apk/layout/app-layout.apk release-candidate/STARLINK-PARA-VOCE-TESTE.apk
+          cp native/app/build/outputs/apk/paraVoceTest/app-paraVoceTest.apk release-candidate/STARLINK-PARA-VOCE-TESTE.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify release-candidate/STARLINK-PARA-VOCE-TESTE.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging release-candidate/STARLINK-PARA-VOCE-TESTE.apk | grep "package: name="
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging release-candidate/STARLINK-PARA-VOCE-TESTE.apk | grep -F "package: name='br.starlink.iptv.paravoce'"
           sha256sum release-candidate/STARLINK-PARA-VOCE-TESTE.apk | tee release-candidate/SHA256SUMS
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
