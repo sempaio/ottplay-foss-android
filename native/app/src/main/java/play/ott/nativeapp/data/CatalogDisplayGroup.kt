@@ -26,6 +26,17 @@ object CatalogDisplayGroup {
         "scooby doo", "ben 10", "as meninas superpoderosas",
         "the powerpuff girls", "hora de aventura", "adventure time"
     )
+    private val sports = listOf(
+        "nfl channel", "nba tv", "espn", "sportv", "premiere", "tnt sports",
+        "fox sports", "combate"
+    )
+    private val football = listOf("fifa", "fifa+", "premiere futebol")
+    private val clearCartoonNetworks = listOf(
+        "cartoon network", "boomerang", "tooncast", "nick jr",
+        "discovery kids", "disney junior", "gloobinho"
+    )
+    private val diacritics = Regex("\\p{M}+")
+    private val nonAlphaNumeric = Regex("[^a-z0-9]+")
     private val anime = listOf(
         "hunter x hunter", "beyblade", "pokemon", "naruto",
         "dragon ball", "one piece", "demon slayer", "attack on titan",
@@ -34,8 +45,8 @@ object CatalogDisplayGroup {
 
     private fun normalize(value: String): String =
         Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
-            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(diacritics, "")
+            .replace(nonAlphaNumeric, " ")
             .trim()
 
     private fun startsWithTitle(title: String, name: String): Boolean =
@@ -49,7 +60,9 @@ object CatalogDisplayGroup {
         val title = normalize(entry.name)
         return when {
             anime.any { startsWithTitle(title, it) } -> "Animes"
-            animation.any { startsWithTitle(title, it) } -> "Desenhos"
+            (animation + clearCartoonNetworks).any { startsWithTitle(title, it) } -> "Desenhos"
+            football.any { startsWithTitle(title, it) } -> "Futebol"
+            sports.any { startsWithTitle(title, it) } -> "Esportes"
             else -> original
         }
     }
