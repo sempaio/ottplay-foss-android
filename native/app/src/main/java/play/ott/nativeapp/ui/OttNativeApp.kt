@@ -213,7 +213,7 @@ fun OttNativeApp(
         state.notice?.let { snackbar.showSnackbar(it); onAction(AppAction.DismissNotice) }
     }
     BackHandler(enabled = state.playingEntry != null && state.epgEntry == null && state.seriesEntry == null && state.movieEntry == null && !showSources && !showSettings && !showPrivacy && !sourceEditorOpen && !showGuidePicker) {
-        if (fullscreen) fullscreen = false else onAction(AppAction.StopPlayback)
+        onAction(AppAction.StopPlayback)
     }
     OttTheme {
         Surface(modifier = Modifier.tvRemoteInput().fillMaxSize().then(if (inPictureInPicture) Modifier else Modifier.safeDrawingPadding()), color = MaterialTheme.colorScheme.background) {
