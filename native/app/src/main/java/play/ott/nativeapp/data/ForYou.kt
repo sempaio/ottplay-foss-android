@@ -97,7 +97,7 @@ object ForYouEngine {
         "desenhos" to listOf("desenho", "animacao", "cartoon", "animation"),
         "animes" to listOf("anime", "animacao japonesa"),
         "novelas" to listOf("novela", "telenovela"),
-        "documentarios" to listOf("documentario", "documentary"),
+        "documentarios" to listOf("documentario", "documentarios", "documentary", "documentaries"),
         "comedia" to listOf("comedia", "humor"),
         "acao" to listOf("acao", "action"),
         "romance" to listOf("romance", "romantico"),
