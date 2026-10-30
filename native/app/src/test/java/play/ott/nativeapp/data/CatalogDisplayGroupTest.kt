@@ -46,6 +46,17 @@ class CatalogDisplayGroupTest {
         assertEquals("", CatalogDisplayGroup.group(item("Sem indicação", "")))
     }
 
+    @Test fun knownSportsAndCartoonChannelBrandsAreOnlyLocallyGrouped() {
+        val fifa = item("FIFA+", "Variedades")
+        val nfl = item("NFL Channel", "Outros")
+        val cartoon = item("Cartoon Network", "Geral")
+        assertEquals("Futebol", CatalogDisplayGroup.group(fifa))
+        assertEquals("Esportes", CatalogDisplayGroup.group(nfl))
+        assertEquals("Desenhos", CatalogDisplayGroup.group(cartoon))
+        assertEquals("Variedades", fifa.group)
+        assertEquals(MediaKind.LIVE, nfl.kind)
+    }
+
     @Test fun normalizationSupportsPunctuationAndAccents() {
         assertEquals("Animes", CatalogDisplayGroup.group(item("Pokémon HD", "VARIEDADES")))
         assertEquals("Desenhos", CatalogDisplayGroup.group(item("Inspetor Bugiganga [FHD]", "Diversos")))
