@@ -5,6 +5,7 @@ import java.util.PriorityQueue
 import kotlinx.serialization.Serializable
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
+import play.ott.nativeapp.data.CatalogDisplayGroup
 
 /** Stored locally only: no provider URLs, credentials, or viewing history. */
 @Serializable
@@ -94,9 +95,9 @@ object ForYouEngine {
         "gospel" to listOf("gospel", "louvor", "musica crista"),
         "filmes" to listOf("filme", "movie", "cinema"),
         "series" to listOf("serie", "series", "seriado"),
-        "desenhos" to listOf("desenho", "animacao", "cartoon", "animation"),
-        "animes" to listOf("anime", "animacao japonesa"),
-        "novelas" to listOf("novela", "telenovela"),
+        "desenhos" to listOf("desenho", "desenhos", "animacao", "cartoon", "animation"),
+        "animes" to listOf("anime", "animes", "animacao japonesa"),
+        "novelas" to listOf("novela", "novelas", "telenovela"),
         "documentarios" to listOf("documentario", "documentarios", "documentary", "documentaries"),
         "comedia" to listOf("comedia", "humor"),
         "acao" to listOf("acao", "action"),
@@ -137,7 +138,7 @@ object ForYouEngine {
         entries.forEachIndexed { index, entry ->
             val key = key(entry)
             if (key in profile.dislikedEntries) return@forEachIndexed
-            val group = normalized(entry.group)
+            val group = normalized(CatalogDisplayGroup.group(entry))
             val title = normalized(entry.name)
             if (profile.dislikedInterests.any { topic ->
                 matches(topic, group) || matches(topic, title) ||
