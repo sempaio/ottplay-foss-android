@@ -37,6 +37,7 @@ import play.ott.nativeapp.R
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.data.ForYouEngine
+import play.ott.nativeapp.data.CatalogDisplayGroup
 
 /** Original geometric mark, used until the supplied brand master is available as a file. */
 @Composable
@@ -61,7 +62,7 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                     if (entries.isNotEmpty()) add(HomeRail(label, kind, "", entries.take(20)))
                 }
                 // Bound the home preview; complete categories remain available in the virtual grid.
-                state.entries.groupBy { it.kind to it.group }.entries.asSequence().filter { it.key.second.isNotBlank() }.take(12).forEach { (key, entries) ->
+                state.entries.groupBy { it.kind to CatalogDisplayGroup.group(it) }.entries.asSequence().filter { it.key.second.isNotBlank() }.take(12).forEach { (key, entries) ->
                     add(HomeRail(key.second, key.first, key.second, entries.take(20)))
                 }
             }
@@ -78,7 +79,7 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
             else state.entries.asSequence().filter {
                 it.kind == MediaKind.LIVE &&
                     (it.name.contains(quickChannelSearch, ignoreCase = true) ||
-                        it.group.contains(quickChannelSearch, ignoreCase = true))
+                        CatalogDisplayGroup.group(it).contains(quickChannelSearch, ignoreCase = true))
             }.take(18).toList()
         }
     }
