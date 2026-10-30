@@ -41,7 +41,7 @@ sealed interface AppAction {
     data object InstallUpdate : AppAction
     data object Refresh : AppAction
     data class ToggleFavorite(val entry: MediaEntry) : AppAction
-    data class SaveForYou(val interests: Set<String>, val allowViewingSignals: Boolean) : AppAction
+    data class SaveForYou(val interests: Set<String>, val dislikedInterests: Set<String>, val allowViewingSignals: Boolean) : AppAction
     data object SkipForYou : AppAction
     data class VoteForYou(val entry: MediaEntry, val interested: Boolean) : AppAction
     data object ResetForYou : AppAction
