@@ -280,7 +280,9 @@ fun OttNativeApp(
                                         NeonHome(state, onAction, welcomeFocus, Modifier.weight(1f), customerMode = customerMode, onBrowse = { kind, category ->
                                             tab = when (kind) { MediaKind.LIVE -> LibraryTab.LIVE; MediaKind.SERIES -> LibraryTab.SERIES; else -> LibraryTab.MOVIES }
                                             group = category; search = ""
-                                        }, onPreferences = { showForYouPreferences = true })
+                                        }, onPreferences = { showForYouPreferences = true },
+                                            onFavorites = { tab = LibraryTab.FAVORITES; group = ""; search = "" },
+                                            onGuide = { showGuidePicker = true })
                                     } else {
                                     LazyVerticalGrid(
                                         state = gridState,
