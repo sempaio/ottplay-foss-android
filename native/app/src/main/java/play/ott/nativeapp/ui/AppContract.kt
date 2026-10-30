@@ -4,6 +4,7 @@ import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.Programme
 import play.ott.nativeapp.core.SourceConfig
 import play.ott.nativeapp.data.TrackPreference
+import play.ott.nativeapp.data.ForYouProfile
 
 /** A presentation snapshot. Network, persistence and playback ownership stay outside Compose. */
 data class AppUiState(
@@ -15,6 +16,9 @@ data class AppUiState(
     val checkingUpdate: Boolean = false,
     val recent: List<play.ott.nativeapp.data.RecentPlayback> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
+    val forYouProfile: ForYouProfile = ForYouProfile(),
+    val activeForYouProfileId: String = "default",
+    val forYouRecentlyViewedKeys: Set<String> = emptySet(),
     val epgEntry: MediaEntry? = null,
     val programmes: List<Programme> = emptyList(),
     val movieEntry: MediaEntry? = null,
@@ -37,6 +41,11 @@ sealed interface AppAction {
     data object InstallUpdate : AppAction
     data object Refresh : AppAction
     data class ToggleFavorite(val entry: MediaEntry) : AppAction
+    data class SaveForYou(val interests: Set<String>, val allowViewingSignals: Boolean) : AppAction
+    data object SkipForYou : AppAction
+    data class VoteForYou(val entry: MediaEntry, val interested: Boolean) : AppAction
+    data object ResetForYou : AppAction
+    data class SwitchForYouProfile(val id: String) : AppAction
     data class Play(val entry: MediaEntry) : AppAction
     data class OpenEpg(val entry: MediaEntry) : AppAction
     data class PlayProgramme(val entry: MediaEntry, val programme: Programme) : AppAction
