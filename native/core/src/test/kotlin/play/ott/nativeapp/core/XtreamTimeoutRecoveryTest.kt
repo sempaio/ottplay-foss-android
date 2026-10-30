@@ -48,6 +48,19 @@ class XtreamTimeoutRecoveryTest {
         }
     }
 
+    @Test fun `alternate route rotates only target host and preserves all DNS addresses`() {
+        val addresses = listOf("192.0.2.1", "192.0.2.2", "2001:db8::1").map(java.net.InetAddress::getByName)
+        val dns = AlternateRouteDns(object : okhttp3.Dns {
+            override fun lookup(hostname: String) = addresses
+        }, "fixture.invalid")
+        assertEquals(listOf(addresses[1], addresses[2], addresses[0]), dns.lookup("fixture.invalid"))
+        assertEquals(addresses, dns.lookup("other.invalid"))
+        val single = AlternateRouteDns(object : okhttp3.Dns {
+            override fun lookup(hostname: String) = addresses.take(1)
+        }, "fixture.invalid")
+        assertEquals(addresses.take(1), single.lookup("fixture.invalid"))
+    }
+
     @Test fun `one transient catalog timeout recovers without repeating completed stages`() {
         val calls = exercise("get_vod_streams", 1, true)
         assertEquals(2, calls.count { it == "get_vod_streams" })

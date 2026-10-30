@@ -20,7 +20,7 @@ private data class CatalogMetadata(val format: Int = 2, val epgUrls: List<String
 
 /** Transactional EPG index and encrypted catalog blocks. All calls run on Dispatchers.IO. */
 class CatalogDatabase(context: Context, private val vault: SourceVault) :
-    SQLiteOpenHelper(context, "catalog.db", null, 2) {
+    SQLiteOpenHelper(context, "catalog.db", null, 3) {
     private val json = Json { ignoreUnknownKeys = true }
     init { setWriteAheadLoggingEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
@@ -28,30 +28,48 @@ class CatalogDatabase(context: Context, private val vault: SourceVault) :
         db.execSQL("CREATE TABLE epg(source_id TEXT NOT NULL,channel_id TEXT NOT NULL,title TEXT NOT NULL,start_ms INTEGER NOT NULL,end_ms INTEGER NOT NULL,description TEXT NOT NULL,PRIMARY KEY(source_id,channel_id,start_ms,end_ms))")
         db.execSQL("CREATE INDEX epg_channel_time ON epg(source_id,channel_id COLLATE NOCASE,start_ms,end_ms)")
         createRecent(db)
+        createProfileRecent(db)
         db.execSQL("CREATE TABLE catalogs(source_id TEXT PRIMARY KEY,payload BLOB NOT NULL,updated_ms INTEGER NOT NULL)")
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createRecent(db)
+        if (oldVersion < 3) createProfileRecent(db)
     }
 
     private fun createRecent(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS recent(source_id TEXT NOT NULL,id TEXT NOT NULL,payload BLOB NOT NULL,updated_ms INTEGER NOT NULL,PRIMARY KEY(source_id,id))")
     }
 
-    fun saveRecent(value: RecentPlayback) {
+    private fun createProfileRecent(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS profile_recent(profile_id TEXT NOT NULL,source_id TEXT NOT NULL,id TEXT NOT NULL,payload BLOB NOT NULL,updated_ms INTEGER NOT NULL,PRIMARY KEY(profile_id,source_id,id))")
+    }
+
+    fun saveRecent(value: RecentPlayback, profileId: String = "default") {
+        require(profileId in setOf("default", "secondary"))
+        val table = if (profileId == "default") "recent" else "profile_recent"
         writableDatabase.transaction {
-            if (value.positionMs <= 0) delete("recent", "source_id=? AND id=?", arrayOf(value.entry.sourceId, value.entry.id))
-            else insertWithOnConflict("recent", null, ContentValues().apply {
+            val where = if (profileId == "default") "source_id=? AND id=?" else "profile_id=? AND source_id=? AND id=?"
+            val args = if (profileId == "default") arrayOf(value.entry.sourceId, value.entry.id)
+                else arrayOf(profileId, value.entry.sourceId, value.entry.id)
+            if (value.positionMs <= 0) delete(table, where, args)
+            else insertWithOnConflict(table, null, ContentValues().apply {
+                if (profileId != "default") put("profile_id", profileId)
                 put("source_id", value.entry.sourceId); put("id", value.entry.id)
                 put("payload", vault.encrypt(json.encodeToString(value).encodeToByteArray()))
                 put("updated_ms", value.updatedMs)
             }, SQLiteDatabase.CONFLICT_REPLACE)
-            execSQL("DELETE FROM recent WHERE rowid NOT IN (SELECT rowid FROM recent ORDER BY updated_ms DESC LIMIT 100)")
+            if (profileId == "default") execSQL("DELETE FROM recent WHERE rowid NOT IN (SELECT rowid FROM recent ORDER BY updated_ms DESC LIMIT 100)")
+            else execSQL("DELETE FROM profile_recent WHERE profile_id=? AND rowid NOT IN (SELECT rowid FROM profile_recent WHERE profile_id=? ORDER BY updated_ms DESC LIMIT 100)", arrayOf(profileId, profileId))
         }
     }
 
-    fun recent(): List<RecentPlayback> = readableDatabase.rawQuery("SELECT payload FROM recent ORDER BY updated_ms DESC LIMIT 100", null).use { cursor ->
-        buildList { while (cursor.moveToNext()) add(json.decodeFromString<RecentPlayback>(vault.decrypt(cursor.getBlob(0)).decodeToString())) }
+    fun recent(profileId: String = "default"): List<RecentPlayback> {
+        require(profileId in setOf("default", "secondary"))
+        val query = if (profileId == "default") "SELECT payload FROM recent ORDER BY updated_ms DESC LIMIT 100"
+            else "SELECT payload FROM profile_recent WHERE profile_id=? ORDER BY updated_ms DESC LIMIT 100"
+        return readableDatabase.rawQuery(query, if (profileId == "default") null else arrayOf(profileId)).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(json.decodeFromString<RecentPlayback>(vault.decrypt(cursor.getBlob(0)).decodeToString())) }
+        }
     }
 
 
@@ -151,7 +169,7 @@ class CatalogDatabase(context: Context, private val vault: SourceVault) :
     fun delete(sourceId: String) {
         val db = writableDatabase
         db.transaction {
-            listOf("entries", "epg", "catalogs", "recent").forEach { db.delete(it, "source_id=?", arrayOf(sourceId)) }
+            listOf("entries", "epg", "catalogs", "recent", "profile_recent").forEach { db.delete(it, "source_id=?", arrayOf(sourceId)) }
         }
     }
 }

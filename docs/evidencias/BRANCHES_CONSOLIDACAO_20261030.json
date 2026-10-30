@@ -1,0 +1,27 @@
+[
+  {
+    "branch": "starlink/celular-catalogo-032",
+    "sha": "6fbc0b626f8b335103dbbfc1175e5171c5cf346b",
+    "ancestor_of_candidate": true
+  },
+  {
+    "branch": "starlink/032-para-voce-player-fixes-20261030",
+    "sha": "0f476cd4be845d35a45afdb231c7084358b39712",
+    "ancestor_of_candidate": true
+  },
+  {
+    "branch": "starlink/para-voce-20261030",
+    "sha": "c80f93df3ef64fe23e4d01fe5184f620d04a68b5",
+    "ancestor_of_candidate": true
+  },
+  {
+    "branch": "starlink/artwork-diagnostics-20261025",
+    "sha": "6d8370ee8741f64206c4e2e0450ca782b69ab26e",
+    "ancestor_of_candidate": false
+  },
+  {
+    "branch": "starlink/origens-capas-layout-20261029",
+    "sha": "a1dcbaf14b2d140729564c114e084c091ac6acdc",
+    "ancestor_of_candidate": false
+  }
+]

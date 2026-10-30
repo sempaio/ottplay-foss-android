@@ -6,6 +6,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Dns
+import java.net.InetAddress
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -56,6 +58,12 @@ internal class ProviderHttp(client: OkHttpClient, private val transportPolicy: R
 
     suspend fun get(url: String, headers: Map<String, String> = emptyMap(), limit: Int = MAX_CATALOG_BYTES): HttpPayload =
         request(url, headers, null, limit)
+
+    /** Same authenticated GET and TLS hostname; only prefer the next DNS route after timeout. */
+    suspend fun getOnAlternateRoute(url: String, headers: Map<String, String>): HttpPayload {
+        val alternate = http.newBuilder().dns(AlternateRouteDns(http.dns, checkedUrl(url).host)).build()
+        return ProviderHttp(alternate, transportPolicy).get(url, headers)
+    }
 
     suspend fun postJson(url: String, json: String, headers: Map<String, String>): HttpPayload =
         request(url, headers, json, MAX_CATALOG_BYTES)
@@ -146,3 +154,12 @@ internal fun networkFailure(error: IOException): ProviderException = ProviderExc
         else -> ProviderFailure.CONNECTION
     }
 )
+
+/** Request-scoped DNS ordering, never a pinned IP or a substitute hostname. */
+internal class AlternateRouteDns(private val delegate: Dns, private val targetHost: String) : Dns {
+    override fun lookup(hostname: String): List<InetAddress> {
+        val addresses = delegate.lookup(hostname)
+        return if (hostname == targetHost && addresses.size > 1)
+            addresses.drop(1) + addresses.take(1) else addresses
+    }
+}

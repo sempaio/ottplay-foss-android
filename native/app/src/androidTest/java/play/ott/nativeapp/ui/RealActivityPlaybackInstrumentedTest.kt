@@ -21,6 +21,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -82,7 +83,7 @@ class RealActivityPlaybackInstrumentedTest {
         savedPreferences = repository.preferences.data.first()
         repository.save(source)
         repository.refresh(source)
-        repository.preferences.update { it.copy(selectedSourceId = source.id, backgroundPlayback = true) }
+        repository.preferences.update { it.copy(selectedSourceId = source.id, backgroundPlayback = true, forYouProfiles = it.forYouProfiles + ("default" to play.ott.nativeapp.data.ForYouProfile(onboardingDone = true)), activeForYouProfileId = "default") }
     }
 
     @After fun restoreUserPreferencesAndRemoveOnlyOurSource(): Unit = runBlocking {
@@ -165,9 +166,22 @@ class RealActivityPlaybackInstrumentedTest {
             compose.onNodeWithTag("player-container").assertIsDisplayed()
         }
         key(KeyEvent.KEYCODE_BACK)
-        awaitNode("now-playing-bar")
-        if (isTv) awaitFocused("catalog-item-$entryId")
-        awaitPlaybackWithoutSurface("Leaving fullscreen must keep the service playing", actualPlayer) { it.isPlaying }
+        awaitState("Back must remove the now-playing bar") {
+            compose.onAllNodesWithTag("now-playing-bar").fetchSemanticsNodes().isEmpty()
+        }
+        awaitPlaybackWithoutSurface("Back must stop and clear the playback session", actualPlayer) {
+            !it.isPlaying && it.playbackState == Player.STATE_IDLE && it.mediaItemCount == 0
+        }
+    }
+
+    @Test fun disabledBackgroundStopsAtHomeWithoutAutomaticPip() {
+        runBlocking { repository.preferences.update { it.copy(backgroundPlayback = false) } }
+        val actualPlayer = requireNotNull(launchAndPlayDemo().player)
+        assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME))
+        awaitPlaybackWithoutSurface("Disabled background playback must not leave hidden audio", actualPlayer) {
+            !it.isPlaying && !it.playWhenReady && it.playbackState == Player.STATE_IDLE && it.mediaItemCount == 0
+        }
+        onMain { assertFalse(requireNotNull(activity).isInPictureInPictureMode) }
     }
 
     @Test fun homePausesTelevisionVideoAndPreservesPhonePictureInPicture() {
@@ -435,6 +449,8 @@ class RealActivityPlaybackInstrumentedTest {
         val launched = requireNotNull(activity)
         assertEquals("The actual launcher Activity must match the device", isTv, launched is TvActivity)
         assertLauncherPipDeclaration(launched)
+        awaitNode("library-tab-MOVIES")
+        compose.onNodeWithTag("library-tab-MOVIES").performClick()
         awaitNode("catalog-item-$entryId")
         awaitActivityWindowReady(requireNotNull(activity), hideIme = true)
         if (isTv) {
@@ -450,6 +466,7 @@ class RealActivityPlaybackInstrumentedTest {
             compose.onNodeWithTag("catalog-item-$entryId").assertIsFocused()
             key(KeyEvent.KEYCODE_DPAD_CENTER)
         } else compose.onNodeWithTag("catalog-item-$entryId").performClick()
+        compose.onNodeWithText(context.getString(play.ott.nativeapp.R.string.dialog_watch)).performClick()
         awaitNode("player-container")
         val playerView = awaitPlayerView()
         // Keep the eight-second deterministic fixture available while interacting with menus.

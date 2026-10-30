@@ -102,11 +102,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     init {
         checkUpdate(false)
         viewModelScope.launch {
-            repository.recent.collect { recent ->
+            repository.recentByProfile.collect { byProfile ->
                 updateState {
-                    it.copy(recent = if (it.activeForYouProfileId == "default") recent else emptyList(),
-                        forYouRecentlyViewedKeys = if (it.activeForYouProfileId == "default")
-                            recent.map { item -> ForYouEngine.key(item.entry) }.toSet() else emptySet())
+                    val recent = byProfile[it.activeForYouProfileId].orEmpty()
+                    it.copy(recent = recent,
+                        forYouRecentlyViewedKeys = recent.map { item -> ForYouEngine.key(item.entry) }.toSet())
                 }
             }
         }
@@ -116,7 +116,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val profileId = preferences.activeForYouProfileId.takeIf { it in setOf("default", "secondary") } ?: "default"
                 val profile = preferences.forYouProfiles[profileId] ?: ForYouProfile(
                     id = profileId, name = if (profileId == "default") "Principal" else "Perfil 2")
-                val recent = if (profileId == "default") repository.recent.value else emptyList()
+                val recent = repository.recentByProfile.value[profileId].orEmpty()
                 updateState { it.copy(
                     favoriteIds = if (profileId == "default") preferences.favorites else preferences.favoritesByProfile[profileId].orEmpty(),
                     backgroundPlayback = preferences.backgroundPlayback,
@@ -325,8 +325,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             is AppAction.SwitchForYouProfile -> if (action.id in setOf("default", "secondary")) operation {
                 // Prevent a playing session from sending new playback checkpoints to a different profile.
-                repository.progressWriter.awaitIdle()
                 stop()
+                repository.progressWriter.awaitIdle()
                 repository.preferences.update { it.copy(activeForYouProfileId = action.id) }
             }
             is AppAction.Play -> play(action.entry)

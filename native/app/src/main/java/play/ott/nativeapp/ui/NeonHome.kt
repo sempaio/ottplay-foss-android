@@ -234,11 +234,11 @@ internal fun PosterCard(entry: MediaEntry, onClick: () -> Unit, modifier: Modifi
         .testTag("poster-${entry.id}"), shape = shape) {
         Box(Modifier.fillMaxWidth().aspectRatio(if (landscape) 16f / 9 else 2f / 3)
             .background(Brush.linearGradient(listOf(Color(0xFF12344B), Color(0xFF251330)))), contentAlignment = Alignment.Center) {
-            // Show the brand placeholder only when no artwork exists; drawing it behind a
-            // transparent source logo causes two logos to appear on one card.
-            if (entry.logo.isBlank()) NeonEmblem(Modifier.size(48.dp))
-            else AsyncImage(entry.logo, null, Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit)
+            var artworkReady by remember(entry.logo) { mutableStateOf(false) }
+            if (!artworkReady) Text(entry.name.take(2).uppercase(),
+                Modifier.testTag("poster-placeholder-${entry.id}"), color = MaterialTheme.colorScheme.secondary)
+            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null, Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit, onSuccess = { artworkReady = true }, onError = { artworkReady = false })
         }
         Text(entry.name, Modifier.padding(10.dp), maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
     }

@@ -42,6 +42,36 @@ class RecentPlaybackTest {
         db.delete(episode.sourceId)
         assertTrue(db.recent().isEmpty())
     }
+    @Test fun profileHistoryIsEncryptedIndependentAndRemovedWithItsSource() {
+        db.saveRecent(RecentPlayback(episode, 1000, 60000, 1))
+        db.saveRecent(RecentPlayback(episode, 9000, 60000, 2), "secondary")
+        assertEquals(1000L, db.recent().single().positionMs)
+        assertEquals(9000L, db.recent("secondary").single().positionMs)
+        db.readableDatabase.rawQuery("SELECT payload FROM profile_recent", null).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertFalse(cursor.getBlob(0).decodeToString().contains("fixture-password"))
+        }
+        db.saveRecent(RecentPlayback(episode, 0, 60000, 3), "secondary")
+        assertTrue(db.recent("secondary").isEmpty())
+        assertEquals(1, db.recent().size)
+        db.saveRecent(RecentPlayback(episode, 9000, 60000, 4), "secondary")
+        db.delete(episode.sourceId)
+        assertTrue(db.recent().isEmpty()); assertTrue(db.recent("secondary").isEmpty())
+    }
+
+    @Test fun versionTwoMigrationPreservesDefaultHistory() {
+        db.saveRecent(RecentPlayback(episode, 1000, 60000, 1))
+        db.writableDatabase.execSQL("DROP TABLE profile_recent")
+        db.writableDatabase.version = 2
+        db.close()
+        val vault: SourceVault = ReflectionHelpers.getField(db, "vault")
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        db = CatalogDatabase(context, vault)
+        assertEquals(3, db.writableDatabase.version)
+        assertEquals(1000L, db.recent().single().positionMs)
+        assertTrue(db.recent("secondary").isEmpty())
+    }
+
     @Test fun versionOneMigrationPreservesEncryptedCatalog() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db.replace(episode.sourceId, Catalog(listOf(episode)))
@@ -51,7 +81,7 @@ class RecentPlaybackTest {
         // Retain the same vault instance/key, as AndroidKeyStore does across restarts.
         val vault: SourceVault = ReflectionHelpers.getField(db, "vault")
         db = CatalogDatabase(context, vault)
-        assertEquals(2, db.writableDatabase.version)
+        assertEquals(3, db.writableDatabase.version)
         assertEquals(episode, db.read(episode.sourceId).entries.single())
         assertTrue(db.recent().isEmpty())
     }

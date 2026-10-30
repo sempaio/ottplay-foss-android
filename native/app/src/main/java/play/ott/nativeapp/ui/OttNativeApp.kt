@@ -495,8 +495,11 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
                 .background(Brush.linearGradient(listOf(Color(0xFF122B42), Color(0xFF24132E)))),
             contentAlignment = Alignment.Center,
         ) {
-            Text(entry.name.take(2).uppercase(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, contentDescription = null, modifier = Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
+            var artworkReady by remember(entry.logo) { mutableStateOf(false) }
+            if (!artworkReady) Text(entry.name.take(2).uppercase(), modifier = Modifier.testTag("artwork-placeholder-${entry.id}"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, contentDescription = null,
+                modifier = Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit,
+                onSuccess = { artworkReady = true }, onError = { artworkReady = false })
             if (playing) Text(stringResource(R.string.library_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.BottomStart).background(MaterialTheme.colorScheme.background.copy(alpha = .85f)).padding(6.dp))
         }
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

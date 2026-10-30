@@ -66,19 +66,26 @@ class NativeRepository(
     val preferences = PreferencesStore(context)
     private val recentState = kotlinx.coroutines.flow.MutableStateFlow<List<RecentPlayback>>(emptyList())
     val recent: kotlinx.coroutines.flow.StateFlow<List<RecentPlayback>> = recentState
+    private val recentProfilesState = kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<RecentPlayback>>>(emptyMap())
+    val recentByProfile: kotlinx.coroutines.flow.StateFlow<Map<String, List<RecentPlayback>>> = recentProfilesState
+    private fun refreshRecentState(sourceIds: Set<String>? = null) {
+        val byProfile = listOf("default", "secondary").associateWith { profile ->
+            db.recent(profile).filter { sourceIds == null || it.entry.sourceId in sourceIds }
+        }
+        recentState.value = byProfile.getValue("default")
+        recentProfilesState.value = byProfile
+    }
     internal val progressWriter by lazy { ResumePositionWriter(preferences::saveResumePosition, persistRecent = { value ->
         // Source removal and late player callbacks must not resurrect deleted credentials.
         sourceMutex.withLock {
-            // Legacy recent playback belongs exclusively to the default profile.
-            // Never leak profile 2 viewing into the default profile SQLite history.
-            if (preferences.data.first().activeForYouProfileId == "default" &&
-                vault.read().any { it.id == value.entry.sourceId }) db.saveRecent(value)
-            recentState.value = db.recent()
+            if (vault.read().any { it.id == value.entry.sourceId })
+                db.saveRecent(value, preferences.data.first().activeForYouProfileId)
+            refreshRecentState()
         }
     }) }
     suspend fun loadRecent() = withContext(Dispatchers.IO) { sourceMutex.withLock {
         val ids = vault.read().map { it.id }.toSet()
-        recentState.value = db.recent().filter { it.entry.sourceId in ids }
+        refreshRecentState(ids)
     } }
     val providers = ProviderRepository(transportPolicy = transportPolicy)
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
@@ -99,7 +106,7 @@ class NativeRepository(
             val previous = sources.firstOrNull { it.id == source.id }
             if (previous != null && previous != saved) db.delete(source.id)
             vault.write(sources.filterNot { it.id == source.id } + saved)
-            recentState.value = db.recent()
+            refreshRecentState()
         }}
     }
 
@@ -126,7 +133,7 @@ class NativeRepository(
         refreshMutex.withLock {
             sourceMutex.withLock { vault.write(vault.read().filterNot { it.id == id }) }
             db.delete(id)
-            recentState.value = db.recent()
+            refreshRecentState()
         }
     }
 

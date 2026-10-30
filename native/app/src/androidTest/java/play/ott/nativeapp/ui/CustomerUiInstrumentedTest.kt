@@ -29,14 +29,14 @@ class CustomerUiInstrumentedTest {
         compose.onNodeWithText("Xtream", substring = true).assertDoesNotExist()
     }
     @Test fun customerHomeDoesNotExposeProviderManagement() {
-        compose.setContent { OttNativeApp(AppUiState(sources = listOf(StarlinkConfig.playlistSource()), selectedSourceId = StarlinkConfig.PLAYLIST_SOURCE_ID), {}, null, {}, {}, customerMode = true) }
+        compose.setContent { OttNativeApp(AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true), sources = listOf(StarlinkConfig.playlistSource()), selectedSourceId = StarlinkConfig.PLAYLIST_SOURCE_ID), {}, null, {}, {}, customerMode = true) }
         compose.onNodeWithText(compose.activity.getString(play.ott.nativeapp.R.string.library_sources)).assertDoesNotExist()
         compose.onNodeWithText(StarlinkConfig.PLAYLIST_URL).assertDoesNotExist()
     }
     @Test fun catalogControlsScrollAwayToRevealMoreContent() {
         val source = StarlinkConfig.playlistSource()
         val entries = (1..50).map { play.ott.nativeapp.core.MediaEntry("scroll-$it", source.id, "Fixture channel $it", "https://example.invalid/$it.m3u8", play.ott.nativeapp.core.MediaKind.LIVE, group = "Fixture") }
-        compose.setContent { OttNativeApp(AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = entries), {}, null, {}, {}, customerMode = true) }
+        compose.setContent { OttNativeApp(AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true), sources = listOf(source), selectedSourceId = source.id, entries = entries), {}, null, {}, {}, customerMode = true) }
         compose.onNodeWithTag("library-tab-LIVE").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("catalog-refresh").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("catalog-refresh").assertIsDisplayed()

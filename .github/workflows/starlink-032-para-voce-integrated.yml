@@ -1,7 +1,7 @@
 name: STARLINK 0.3.2 Para Voce integrated
 on:
   push:
-    branches: [starlink/032-para-voce-player-fixes-20261030]
+    branches: [starlink/032-para-voce-player-fixes-20261030, starlink/032-consolidacao-local-20261030]
     paths:
       - 'native/**'
       - '.github/workflows/starlink-032-para-voce-integrated.yml'

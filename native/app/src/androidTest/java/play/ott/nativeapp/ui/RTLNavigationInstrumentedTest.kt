@@ -51,7 +51,7 @@ class RTLNavigationInstrumentedTest {
                 LocalConfiguration provides television,
                 LocalLayoutDirection provides LayoutDirection.Rtl,
             ) {
-                OttNativeApp(AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = entries),
+                OttNativeApp(AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true), sources = listOf(source), selectedSourceId = source.id, entries = entries),
                     {}, null, {}, {})
             }
         }

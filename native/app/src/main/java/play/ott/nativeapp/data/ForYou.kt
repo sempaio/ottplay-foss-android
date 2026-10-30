@@ -1,6 +1,7 @@
 package play.ott.nativeapp.data
 
 import java.text.Normalizer
+import java.util.Locale
 import java.util.PriorityQueue
 import kotlinx.serialization.Serializable
 import play.ott.nativeapp.core.MediaEntry
@@ -110,10 +111,12 @@ object ForYouEngine {
 
     fun key(entry: MediaEntry) = "${entry.sourceId}:${entry.id}"
 
+    private val marks = Regex("\\p{M}+")
+    private val separators = Regex("[^a-z0-9]+")
     private fun normalized(text: String): String =
-        Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
-            .replace(Regex("[^a-z0-9]+"), " ")
+        Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace(marks, "")
+            .replace(separators, " ")
             .trim()
 
     private val normalizedTerms by lazy { terms.mapValues { (_, value) -> value.map(::normalized) } }

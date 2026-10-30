@@ -57,6 +57,16 @@ class CatalogDisplayGroupTest {
         assertEquals(MediaKind.LIVE, nfl.kind)
     }
 
+    @Test fun nflLiveFootballMismatchIsCorrectedWithoutChangingOtherMeaningfulGroups() {
+        val nfl = item("NFL Channel", "Futebol")
+        assertEquals("Esportes", CatalogDisplayGroup.group(nfl))
+        assertEquals("Futebol", nfl.group)
+        assertEquals(MediaKind.LIVE, nfl.kind)
+        assertEquals("Futebol", CatalogDisplayGroup.group(item("NFL Channel", "Futebol", MediaKind.MOVIE)))
+        assertEquals("Futebol", CatalogDisplayGroup.group(item("FIFA+", "Futebol")))
+        assertEquals("Documentários", CatalogDisplayGroup.group(item("NFL Channel", "Documentários")))
+    }
+
     @Test fun normalizationSupportsPunctuationAndAccents() {
         assertEquals("Animes", CatalogDisplayGroup.group(item("Pokémon HD", "VARIEDADES")))
         assertEquals("Desenhos", CatalogDisplayGroup.group(item("Inspetor Bugiganga [FHD]", "Diversos")))

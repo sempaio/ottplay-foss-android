@@ -30,7 +30,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
                     // Retry a transport timeout once; never retry an HTTP denial or TLS error.
                     if (error.statusCode != null || error.failure != ProviderFailure.TIMEOUT) throw error
                     delay(500)
-                    http.get(url, config.headers)
+                    http.getOnAlternateRoute(url, config.headers)
                 }
                 session.accept(parseProviderJson(payload.text()).toProviderValue())
             }

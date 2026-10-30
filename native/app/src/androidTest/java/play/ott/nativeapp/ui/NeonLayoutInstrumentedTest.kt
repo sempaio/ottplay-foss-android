@@ -32,7 +32,7 @@ class NeonLayoutInstrumentedTest {
         bitmap.recycle()
     }
     @Test fun homeAndMovieDetailsUseTheNativeCatalog() {
-        var state by mutableStateOf(AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = listOf(movie, series)))
+        var state by mutableStateOf(AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true), sources = listOf(source), selectedSourceId = source.id, entries = listOf(movie, series)))
         compose.setContent { OttNativeApp(state, { action -> when(action) {
             is AppAction.OpenMovie -> state = state.copy(movieEntry = action.entry)
             AppAction.CloseMovie -> state = state.copy(movieEntry = null)

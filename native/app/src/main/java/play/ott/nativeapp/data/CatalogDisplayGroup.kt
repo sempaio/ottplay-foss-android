@@ -1,6 +1,8 @@
 package play.ott.nativeapp.data
 
 import java.text.Normalizer
+import java.util.Locale
+import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.MediaEntry
 
 /**
@@ -45,7 +47,7 @@ object CatalogDisplayGroup {
     )
 
     private fun normalize(value: String): String =
-        Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)
+        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
             .replace(diacritics, "")
             .replace(nonAlphaNumeric, " ")
             .trim()
@@ -56,9 +58,11 @@ object CatalogDisplayGroup {
     /** Keep meaningful categories; keep an ambiguous "Variedades" unchanged. */
     fun group(entry: MediaEntry): String {
         val original = entry.group.trim()
-        if (original.lowercase() !in unspecific) return original
-
         val title = normalize(entry.name)
+        // Known live sports mismatch, not a title-based change of media type.
+        if (entry.kind == MediaKind.LIVE && startsWithTitle(title, "nfl channel") &&
+            normalize(original) in setOf("futebol", "football", "soccer")) return "Esportes"
+        if (original.lowercase(Locale.ROOT) !in unspecific) return original
         return when {
             anime.any { startsWithTitle(title, it) } -> "Animes"
             knownAnimation.any { startsWithTitle(title, it) } -> "Desenhos"

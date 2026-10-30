@@ -62,7 +62,7 @@ class NativeUiInstrumentedTest {
     private val entry = MediaEntry("ui-test:movie", source.id, "Тестовый ролик", "https://example.com/video.mp4", kind = MediaKind.MOVIE)
 
     @Test fun onboardingDemoSelectionPlaybackBackAndSourceEditor() {
-        var snapshot by mutableStateOf(AppUiState())
+        var snapshot by mutableStateOf(AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true), ))
         val actions = mutableListOf<AppAction>()
         compose.setContent {
             OttNativeApp(
@@ -102,7 +102,8 @@ class NativeUiInstrumentedTest {
             compose.onAllNodesWithTag("player-container").fetchSemanticsNodes().isEmpty()
         }
         compose.onNodeWithTag("player-container").assertDoesNotExist()
-        compose.onNodeWithTag("now-playing-bar").assertIsDisplayed()
+        compose.onNodeWithTag("now-playing-bar").assertDoesNotExist()
+        compose.runOnIdle { assertTrue(actions.any { it == AppAction.StopPlayback }) }
         compose.onNodeWithText(text(R.string.library_sources)).performSemanticsAction(SemanticsActions.OnClick) { check(it()) }
         compose.onNodeWithText(text(R.string.library_add_by_url)).performScrollTo().activateForDevice()
         compose.onNodeWithText("Outras fontes / opções avançadas").performClick()
@@ -125,7 +126,7 @@ class NativeUiInstrumentedTest {
         compose.setContent {
             CompositionLocalProvider(LocalConfiguration provides television) {
                 OttNativeApp(
-                    state = AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = listOf(entry)), customerMode = false,
+                    state = AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true), sources = listOf(source), selectedSourceId = source.id, entries = listOf(entry)), customerMode = false,
                     onAction = {}, controller = null, onPictureInPicture = {}, onFullscreenChanged = {},
                 )
             }
@@ -143,7 +144,7 @@ class NativeUiInstrumentedTest {
     @Test fun localizedGroupChangeRestoresCatalogAndPreservesProviderGroupFilter() {
         val generated = entry.copy(group = "Local test")
         val provider = entry.copy(id = "provider-movie", name = "Provider movie", group = "Provider group")
-        var snapshot by mutableStateOf(AppUiState(
+        var snapshot by mutableStateOf(AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true),
             sources = listOf(source), selectedSourceId = source.id, entries = listOf(generated, provider),
         ))
         compose.setContent {
@@ -221,7 +222,7 @@ class NativeUiInstrumentedTest {
         ) }
         compose.setContent {
             CompositionLocalProvider(LocalConfiguration provides television) {
-                OttNativeApp(AppUiState(sources = listOf(source), selectedSourceId = source.id, entries = entries),
+                OttNativeApp(AppUiState(forYouProfile = play.ott.nativeapp.data.ForYouProfile(onboardingDone = true), sources = listOf(source), selectedSourceId = source.id, entries = entries),
                     {}, null, {}, {}, customerMode = false)
             }
         }
