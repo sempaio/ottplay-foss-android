@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import javax.crypto.KeyGenerator
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = PlaybackTestApplication::class)
+@Config(sdk = [35], application = PlaybackTestApplication::class, shadows = [PosixAtomicFileShadow::class])
 class EpgRefreshMigrationTest {
     private lateinit var repo: NativeRepository
     private lateinit var vault: SourceVault
@@ -117,7 +117,10 @@ class EpgRefreshMigrationTest {
         run("direct duplicate replacement gives last row ownership") { db.replaceEpg(source.id, listOf(old.copy(title="First"),old.copy(title="Last"))); null to emptyList() }
         check(results.size == 18)
         val expected = requireNotNull(javaClass.getResource("/epg-refresh-before-core.json")).readText()
-        assertEquals(Json.parseToJsonElement(expected), JsonArray(results))
+        val atomicRenameDiagnostics = org.robolectric.shadows.ShadowLog.getLogsForTag("AtomicFile")
+            .map { it.msg }.filter { "rename" in it.lowercase() }
+        assertEquals("AtomicFile rename diagnostics: $atomicRenameDiagnostics",
+            Json.parseToJsonElement(expected), JsonArray(results))
     }
 
     @Test fun cancellationDuringFetchRetainsRowsAndStopsBeforeTheNextUrl() = runBlocking {

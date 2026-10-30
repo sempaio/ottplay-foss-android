@@ -1,0 +1,33 @@
+{
+  "first_install_anr_observed": true,
+  "first_anr_reason": "No response to onStartJob for EpgRefreshWorker",
+  "cause_confirmed": false,
+  "later_main_thread": "MessageQueue.nativePollOnce (idle), no deadlock captured",
+  "repeated_launches": [
+    {
+      "attempt": 1,
+      "wall_ms": 13681,
+      "activity_launch_ok": true,
+      "login_visible": true,
+      "anr_dialog": false
+    },
+    {
+      "attempt": 2,
+      "wall_ms": 19070,
+      "activity_launch_ok": true,
+      "login_visible": true,
+      "anr_dialog": false
+    },
+    {
+      "attempt": 3,
+      "wall_ms": 16596,
+      "activity_launch_ok": true,
+      "login_visible": false,
+      "anr_dialog": false
+    }
+  ],
+  "authenticated_catalog_verified": false,
+  "third_attempt_followup_login_visible": true,
+  "release_approved": false,
+  "real_account_login_pending": true
+}
