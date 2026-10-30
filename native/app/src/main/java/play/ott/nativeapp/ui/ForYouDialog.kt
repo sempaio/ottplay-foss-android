@@ -28,12 +28,13 @@ import play.ott.nativeapp.data.ForYouProfile
 @Composable
 internal fun ForYouDialog(
     profile: ForYouProfile,
-    onSave: (Set<String>, Boolean) -> Unit,
+    onSave: (Set<String>, Set<String>, Boolean) -> Unit,
     onSkip: () -> Unit,
 ) {
     var page by remember(profile.id) { mutableStateOf(0) }
     var topics by remember(profile.id) { mutableStateOf(profile.interests) }
     var learning by remember(profile.id) { mutableStateOf(profile.allowViewingSignals) }
+    var dislikes by remember(profile.id) { mutableStateOf(profile.dislikedInterests) }
     val steps = listOf(
         listOf("futebol", "gospel", "filmes", "series", "desenhos", "animes", "novelas", "documentarios"),
         listOf("comedia", "acao", "romance", "infantil", "esportes", "natureza", "ficcao cientifica")
@@ -66,6 +67,22 @@ internal fun ForYouDialog(
                     }
                 }
                 if (page == 1) {
+                    Text("Quero menos recomendações de:", style = MaterialTheme.typography.titleSmall)
+                    listOf("futebol", "gospel", "filmes", "series", "desenhos", "animes", "novelas", "documentarios").chunked(2).forEach { pair ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pair.forEach { topic ->
+                                FilterChip(
+                                    selected = topic in dislikes,
+                                    onClick = {
+                                        dislikes = if (topic in dislikes) dislikes - topic else dislikes + topic
+                                        if (topic in dislikes) topics -= topic
+                                    },
+                                    label = { Text(names[topic] ?: topic) },
+                                    modifier = Modifier.weight(1f).testTag("negative-topic-$topic")
+                                )
+                            }
+                        }
+                    }
                     Text("Aprendizado opcional", style = MaterialTheme.typography.titleSmall)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(Modifier.weight(1f)) {
@@ -80,7 +97,7 @@ internal fun ForYouDialog(
         },
         dismissButton = { TextButton(onClick = onSkip) { Text("Pular") } },
         confirmButton = {
-            TextButton(onClick = { if (page == 0) page = 1 else onSave(topics, learning) },
+            TextButton(onClick = { if (page == 0) page = 1 else onSave(topics - dislikes, dislikes, learning) },
                 modifier = Modifier.testTag("for-you-next")) {
                 Text(if (page == 0) "Continuar" else "Concluir")
             }
