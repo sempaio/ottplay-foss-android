@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
@@ -64,12 +64,12 @@ jobs:
           cp device-apks/STARLINK-IPTV-layout.apk dist/STARLINK-IPTV-layout.apk
           python3 starlink/validate_native_apk.py dist/STARLINK-IPTV-layout.apk --package br.starlink.iptv.layout --label 'STARLINK IPTV Prévia'
           sha256sum dist/STARLINK-IPTV-layout.apk > dist/SHA256SUMS-layout
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: STARLINK-device-apks
           path: device-apks/
           retention-days: 7
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: STARLINK-IPTV-layout-APK
           path: |
@@ -77,7 +77,7 @@ jobs:
             dist/SHA256SUMS-layout
           if-no-files-found: error
           retention-days: 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: STARLINK-test-reports
@@ -97,12 +97,12 @@ jobs:
             target: google_apis
             profile: pixel_7
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
@@ -111,11 +111,11 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: STARLINK-device-apks
           path: device-apks
-      - uses: reactivecircus/android-emulator-runner@v2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
           target: ${{ matrix.target }}
@@ -123,7 +123,7 @@ jobs:
           profile: ${{ matrix.profile }}
           disable-animations: true
           script: bash starlink/run_device_tests.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: STARLINK-device-${{ matrix.device }}

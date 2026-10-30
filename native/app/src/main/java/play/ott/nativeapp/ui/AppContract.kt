@@ -20,6 +20,7 @@ data class AppUiState(
     val activeForYouProfileId: String = "default",
     val forYouRecentlyViewedKeys: Set<String> = emptySet(),
     val epgEntry: MediaEntry? = null,
+    val epgLoading: Boolean = false,
     val programmes: List<Programme> = emptyList(),
     val movieEntry: MediaEntry? = null,
     val seriesEntry: MediaEntry? = null,
@@ -29,7 +30,7 @@ data class AppUiState(
     val loadingMessage: String = "",
     val error: String? = null,
     val notice: String? = null,
-    val backgroundPlayback: Boolean = true,
+    val backgroundPlayback: Boolean = false,
 )
 
 sealed interface AppAction {

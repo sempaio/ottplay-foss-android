@@ -332,10 +332,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             is AppAction.Play -> play(action.entry)
             is AppAction.OpenEpg -> {
                 detailJob?.cancel()
-                updateState { it.copy(epgEntry = action.entry, programmes = emptyList()) }
+                updateState { it.copy(epgEntry = action.entry, epgLoading = true, programmes = emptyList()) }
                 detailJob = operation {
-                    val programmes = repository.programmes(action.entry)
-                    updateState { if (it.epgEntry?.id == action.entry.id) it.copy(programmes = programmes) else it }
+                    try {
+                        val programmes = repository.programmes(action.entry)
+                        updateState {
+                            if (it.epgEntry?.id == action.entry.id)
+                                it.copy(programmes = programmes, epgLoading = false)
+                            else it
+                        }
+                    } finally {
+                        updateState {
+                            if (it.epgEntry?.id == action.entry.id) it.copy(epgLoading = false) else it
+                        }
+                    }
                 }
             }
             is AppAction.PlayProgramme -> {
@@ -363,7 +373,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
                 }
             }
-            AppAction.CloseEpg -> { detailJob?.cancel(); updateState { it.copy(epgEntry = null, programmes = emptyList()) } }
+            AppAction.CloseEpg -> { detailJob?.cancel(); updateState { it.copy(epgEntry = null, epgLoading = false, programmes = emptyList()) } }
             AppAction.CloseSeries -> { detailJob?.cancel(); updateState { it.copy(seriesEntry = null, episodes = emptyList(), isBusy = false) } }
             AppAction.DismissError -> { errorText = null; updateState { it.copy(error = null) } }
             AppAction.DismissNotice -> { noticeText = null; updateState { it.copy(notice = null) } }

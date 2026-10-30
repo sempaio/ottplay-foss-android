@@ -49,17 +49,23 @@ private val Context.preferences by preferencesDataStore("player")
     val preferences: UserPreferences = UserPreferences()
 )
 
+/**
+ * Fresh installs start with playback in background disabled. Preserve the historical
+ * UserPreferences() defaults for serialized legacy backups and shipping hash receipts.
+ */
+internal fun firstRunPreferences() = UserPreferences(backgroundPlayback = false)
+
 class PreferencesStore(context: Context) {
     private val store = context.preferences
     private val key = stringPreferencesKey("preferences.v1")
     private val json = Json { ignoreUnknownKeys = true }
     internal val resumeWriter by lazy { ResumePositionWriter(::saveResumePosition) }
     val data: Flow<UserPreferences> = store.data.map { preferences ->
-        preferences[key]?.let { json.decodeFromString<UserPreferences>(it) } ?: UserPreferences()
+        preferences[key]?.let { json.decodeFromString<UserPreferences>(it) } ?: firstRunPreferences()
     }
     suspend fun update(transform: (UserPreferences) -> UserPreferences) {
         store.edit { values ->
-            val current = values[key]?.let { json.decodeFromString<UserPreferences>(it) } ?: UserPreferences()
+            val current = values[key]?.let { json.decodeFromString<UserPreferences>(it) } ?: firstRunPreferences()
             values[key] = json.encodeToString(transform(current))
         }
     }
