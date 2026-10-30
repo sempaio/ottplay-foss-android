@@ -289,6 +289,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     previous.copy(forYouProfiles = previous.forYouProfiles + (id to before.copy(
                         onboardingDone = true,
                         interests = action.interests.intersect(ForYouEngine.topics.toSet()),
+                        subInterests = action.subInterests.intersect(ForYouEngine.validSubInterests).filter {
+                            it.substringBefore(":") in action.interests
+                        }.toSet(),
                         dislikedInterests = action.dislikedInterests.intersect(ForYouEngine.topics.toSet()),
                         allowViewingSignals = action.allowViewingSignals
                     )))
