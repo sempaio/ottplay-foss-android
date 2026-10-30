@@ -5,6 +5,7 @@ on:
     paths:
       - 'native/**'
       - '.github/workflows/starlink-032-para-voce-integrated.yml'
+      - '.github/workflows/starlink-android-apk.yml'
   workflow_dispatch:
 permissions:
   contents: read
