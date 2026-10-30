@@ -1,0 +1,331 @@
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+play.ott.nativeapp.ui.StarlinkUiInstrumentedTest:
+INSTRUMENTATION_STATUS: test=publishedPlaylistPresetUsesTheCompleteM3uAddress
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=publishedPlaylistPresetUsesTheCompleteM3uAddress
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=emptyCredentialsCannotSubmit
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=emptyCredentialsCannotSubmit
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=publishedPlaylistCanBeSelectedAlongsideXtreamWithoutTypingAUrl
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=publishedPlaylistCanBeSelectedAlongsideXtreamWithoutTypingAUrl
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=m81LoginNeedsOnlyUsernameAndPassword
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=m81LoginNeedsOnlyUsernameAndPassword
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=publishedPlaylistIsAnExplicitAlternativeWithoutSendingCredentials
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=publishedPlaylistIsAnExplicitAlternativeWithoutSendingCredentials
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.CustomerUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+play.ott.nativeapp.ui.CustomerUiInstrumentedTest:
+INSTRUMENTATION_STATUS: test=loginOnlyAllowsCredentialsAndKeepsTheServerFixed
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.CustomerUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=loginOnlyAllowsCredentialsAndKeepsTheServerFixed
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.CustomerUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=customerHomeDoesNotExposeProviderManagement
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.CustomerUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=customerHomeDoesNotExposeProviderManagement
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.CustomerUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=catalogControlsScrollAwayToRevealMoreContent
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.CustomerUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=catalogControlsScrollAwayToRevealMoreContent
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NeonLayoutInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+play.ott.nativeapp.ui.NeonLayoutInstrumentedTest:
+INSTRUMENTATION_STATUS: test=loginKeepsTwoFieldsAndNeonIdentity
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NeonLayoutInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=loginKeepsTwoFieldsAndNeonIdentity
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NeonLayoutInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=homeAndMovieDetailsUseTheNativeCatalog
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NeonLayoutInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=homeAndMovieDetailsUseTheNativeCatalog
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NeonLayoutInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=seasonsShowOnlyTheirOwnEpisodes
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NeonLayoutInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=seasonsShowOnlyTheirOwnEpisodes
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkStartupInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+play.ott.nativeapp.ui.StarlinkStartupInstrumentedTest:
+INSTRUMENTATION_STATUS: test=installedApplicationStartsAndOpensM81Login
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.StarlinkStartupInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=installedApplicationStartsAndOpensM81Login
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+play.ott.nativeapp.ui.NativeUiInstrumentedTest:
+INSTRUMENTATION_STATUS: test=sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename(NativeUiInstrumentedTest.kt:181)
+
+INSTRUMENTATION_STATUS: stream=
+Error in sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename(play.ott.nativeapp.ui.NativeUiInstrumentedTest):
+java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename(NativeUiInstrumentedTest.kt:181)
+
+INSTRUMENTATION_STATUS: test=sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=onboardingDemoSelectionPlaybackBackAndSourceEditor
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.onboardingDemoSelectionPlaybackBackAndSourceEditor(NativeUiInstrumentedTest.kt:88)
+
+INSTRUMENTATION_STATUS: stream=
+Error in onboardingDemoSelectionPlaybackBackAndSourceEditor(play.ott.nativeapp.ui.NativeUiInstrumentedTest):
+java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.onboardingDemoSelectionPlaybackBackAndSourceEditor(NativeUiInstrumentedTest.kt:88)
+
+INSTRUMENTATION_STATUS: test=onboardingDemoSelectionPlaybackBackAndSourceEditor
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=televisionRailSupportsDirectionalFocusAndSelection
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=televisionRailSupportsDirectionalFocusAndSelection
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=televisionEntersANewTabAfterThePreviousGridWasScrolled
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=AndroidComposeView:-1; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.televisionEntersANewTabAfterThePreviousGridWasScrolled(NativeUiInstrumentedTest.kt:223)
+
+INSTRUMENTATION_STATUS: stream=
+Error in televisionEntersANewTabAfterThePreviousGridWasScrolled(play.ott.nativeapp.ui.NativeUiInstrumentedTest):
+java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=AndroidComposeView:-1; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.televisionEntersANewTabAfterThePreviousGridWasScrolled(NativeUiInstrumentedTest.kt:223)
+
+INSTRUMENTATION_STATUS: test=televisionEntersANewTabAfterThePreviousGridWasScrolled
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=17
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=localizedGroupChangeRestoresCatalogAndPreservesProviderGroupFilter
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.ui.NativeUiInstrumentedTest
+INSTRUMENTATION_STATUS: current=17
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=localizedGroupChangeRestoresCatalogAndPreservesProviderGroupFilter
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest
+INSTRUMENTATION_STATUS: current=18
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest:
+INSTRUMENTATION_STATUS: test=hlsPlaylistItemsDecodeWithTheirOwnHeadersAcrossChannelSwitches
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest
+INSTRUMENTATION_STATUS: current=18
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=hlsPlaylistItemsDecodeWithTheirOwnHeadersAcrossChannelSwitches
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.playback.NativePlaybackInstrumentedTest
+INSTRUMENTATION_STATUS: current=19
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=
+play.ott.nativeapp.playback.NativePlaybackInstrumentedTest:
+INSTRUMENTATION_STATUS: test=sessionSurvivesControllerReleaseAndRestoresPlaybackUntilExplicitStop
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=play.ott.nativeapp.playback.NativePlaybackInstrumentedTest
+INSTRUMENTATION_STATUS: current=19
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=19
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=sessionSurvivesControllerReleaseAndRestoresPlaybackUntilExplicitStop
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 86.263
+There were 3 failures:
+1) sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename(play.ott.nativeapp.ui.NativeUiInstrumentedTest)
+java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename(NativeUiInstrumentedTest.kt:181)
+2) onboardingDemoSelectionPlaybackBackAndSourceEditor(play.ott.nativeapp.ui.NativeUiInstrumentedTest)
+java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=null:null; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.onboardingDemoSelectionPlaybackBackAndSourceEditor(NativeUiInstrumentedTest.kt:88)
+3) televisionEntersANewTabAfterThePreviousGridWasScrolled(play.ott.nativeapp.ui.NativeUiInstrumentedTest)
+java.lang.AssertionError: Activity window did not become ready for a hardware key: windowFocus=false, attached=true, ime=false, focus=AndroidComposeView:-1; tutorialAcknowledged=false; windows=null
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady(UiWindowReadiness.kt:65)
+	at play.ott.nativeapp.ui.UiWindowReadinessKt.awaitActivityWindowReady$default(UiWindowReadiness.kt:16)
+	at play.ott.nativeapp.ui.NativeUiInstrumentedTest.televisionEntersANewTabAfterThePreviousGridWasScrolled(NativeUiInstrumentedTest.kt:223)
+
+FAILURES!!!
+Tests run: 19,  Failures: 3
+
+
+INSTRUMENTATION_CODE: -1

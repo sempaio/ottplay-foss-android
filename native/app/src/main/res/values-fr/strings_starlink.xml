@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Le serveur a refusé le nom d’utilisateur ou le mot de passe (HTTP 401).</string>
+    <string name="starlink_access_denied">Le serveur a refusé l’accès (HTTP 403). Vérifiez si le compte est actif, expiré ou bloqué. Cette réponse seule ne signifie pas que l’adresse du serveur est incorrecte.</string>
+    <string name="starlink_server_unavailable">Le serveur est temporairement indisponible (HTTP 5xx). Réessayez plus tard.</string>
+</resources>

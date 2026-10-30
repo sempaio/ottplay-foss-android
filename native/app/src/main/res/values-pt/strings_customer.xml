@@ -1,0 +1,18 @@
+<resources>
+    <string name="customer_login_title">Bem-vindo</string>
+    <string name="customer_username">Usuário</string>
+    <string name="customer_password">Senha</string>
+    <string name="customer_sign_in">Entrar</string>
+    <string name="customer_signing_in">Entrando…</string>
+    <string name="customer_help">Precisa de ajuda?</string>
+    <string name="customer_missing_credentials">Informe seu usuário e senha.</string>
+    <string name="customer_error_title">Tente novamente</string>
+    <string name="customer_generic_error">Não foi possível continuar. Tente novamente.</string>
+    <string name="customer_connection_error">Não foi possível conectar. Verifique sua internet e tente novamente.</string>
+    <string name="customer_timeout_error">A conexão demorou mais que o esperado. Tente novamente.</string>
+    <string name="customer_access_error">Seu acesso está indisponível. Fale com o suporte.</string>
+    <string name="customer_auth_error">Confira seu usuário e senha e tente novamente.</string>
+    <string name="customer_service_error">Serviço temporariamente indisponível. Tente novamente em instantes.</string>
+    <string name="customer_account">Minha conta</string>
+    <string name="customer_logout">Sair da conta</string>
+</resources>

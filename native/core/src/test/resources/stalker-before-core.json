@@ -1,0 +1,4819 @@
+[
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "News",
+                        "logo": "http://fixture.test/stalker_portal/icon.png",
+                        "epgId": "epg",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": null
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": ""
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker handshake did not return an access token",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": null
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker handshake did not return an access token",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker handshake did not return an access token",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "bad token"
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer bad token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "x\n"
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Invalid HTTP header value",
+                "status": null,
+                "type": "IllegalArgumentException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "x="
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer x="
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": false
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer false"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": 123
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer 123"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": null
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker portal returned no result",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "status": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "status": 0,
+                            "blocked": true
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "status": 0,
+                            "auth_second_step": "1"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": null
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Invalid Stalker response",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {}
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker response has no result",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker handshake did not return an access token",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "error": "secret"
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker portal rejected the request",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "not_valid_token": 1
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker handshake did not return an access token",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": " Authorization failed secret"
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Invalid Stalker response",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                },
+                                {
+                                    "id": "42",
+                                    "name": "Duplicate",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": 2
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": 0,
+                                    "cmd": "/zero"
+                                },
+                                {
+                                    "id": " ",
+                                    "cmd": "/blank"
+                                },
+                                {
+                                    "id": "__proto__",
+                                    "cmd": "/special"
+                                }
+                            ],
+                            "total_items": 3
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": 2,
+                                    "cmd": "bad\ncommand"
+                                },
+                                {
+                                    "id": 3
+                                },
+                                {
+                                    "id": 4,
+                                    "name": "<html>",
+                                    "cmd": "/safe",
+                                    "censored": 1
+                                }
+                            ],
+                            "total_items": 3
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": -1
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": 1.2
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": "bad"
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": 50001
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 599",
+                "status": 599,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": 2
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": 2
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Portal repeated a channel page; refusing an incomplete catalogue",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ],
+                            "total_items": 2
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 2
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Portal channel pagination ended before all channels arrived",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "fixture-token"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "id": 7,
+                            "status": 0
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": [
+                            {
+                                "id": "7",
+                                "title": "News"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "name": "Live",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "tv_genre_id": "7",
+                                    "xmltv_id": "epg",
+                                    "logo": "../icon.png"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": []
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "News",
+                        "logo": "http://fixture.test/stalker_portal/icon.png",
+                        "epgId": "epg",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": null
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=2&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer fixture-token"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "cmd": "ffmpeg https://cdn.test/live.m3u8"
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "stream": {
+                "url": "https://cdn.test/live.m3u8",
+                "headers": {},
+                "mimeType": "application/x-mpegURL"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "cmd": "AUTO ../live.m3u8"
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "error": {
+                "message": "Portal returned an unresolved local playback command",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "cmd": "ffrt https://localhost/live"
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "error": {
+                "message": "Portal returned an unresolved local playback command",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "cmd": "https://127.0.0.1/live"
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "error": {
+                "message": "Portal returned an unresolved local playback command",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "cmd": "https://[::1]/live"
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "error": {
+                "message": "Portal returned an unresolved local playback command",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "cmd": "bad value"
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "error": {
+                "message": "Portal returned an unresolved local playback command",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "cmd": "/relative.ts"
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "error": {
+                "message": "Portal returned an unresolved local playback command",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": "ffmpeg https://cdn.test/live.ts"
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "stream": {
+                "url": "https://cdn.test/live.ts",
+                "headers": {},
+                "mimeType": "video/mp2t"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=create_link&JsHttpRequest=1-xml&cmd=ffmpeg%20http%3A%2F%2Flocalhost%2Fch%2F42_&series=0&forced_storage=0&disable_ad=0&download=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t1"
+                        }
+                    }
+                },
+                {
+                    "status": 401
+                },
+                {
+                    "body": {
+                        "js": {
+                            "token": "t2"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [],
+                            "total_items": 0
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t1"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t2"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t2"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t2"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t1"
+                        }
+                    }
+                },
+                {
+                    "status": 403
+                },
+                {
+                    "body": {
+                        "js": {
+                            "token": "t2"
+                        }
+                    }
+                },
+                {
+                    "status": 401
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Provider returned HTTP 401",
+                "status": 401,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t1"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t2"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                }
+            ],
+            "twice": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "second": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/stalker_portal/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": []
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": [
+                            {
+                                "id": 7,
+                                "name": "Seven",
+                                "genre": [
+                                    "News"
+                                ],
+                                "logo": "/icon.png"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "3f15b64d188c4739c175d5f4c7d7620c",
+                        "sourceId": "portal 🎬",
+                        "name": "Seven",
+                        "url": "http://fixture.test/stalker_portal/stream/7.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                        "kind": "LIVE",
+                        "group": "News",
+                        "logo": "http://fixture.test/icon.png",
+                        "epgId": "7",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "7",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": null
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "stream": {
+                "url": "http://fixture.test/stalker_portal/stream/7.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                "headers": {},
+                "mimeType": "application/x-mpegURL"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": {
+                            "data": [
+                                {
+                                    "id": "a/b",
+                                    "name": "N",
+                                    "url": "../v.mp4",
+                                    "category": "Film"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "3eca64178d3339f5e979a9d3d23cf2c3",
+                        "sourceId": "portal 🎬",
+                        "name": "N",
+                        "url": "http://fixture.test/stalker_portal/v.mp4",
+                        "kind": "LIVE",
+                        "group": "Film",
+                        "logo": "",
+                        "epgId": "a/b",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "a/b",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": null
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "stream": {
+                "url": "http://fixture.test/stalker_portal/v.mp4",
+                "headers": {},
+                "mimeType": "video/mp4"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": {
+                            "items": [
+                                {
+                                    "ch_id": "x",
+                                    "tv_icon": "//cdn.test/x",
+                                    "categories": [
+                                        "",
+                                        "next"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "7bd551c58c0cb232d0480147de756eaa",
+                        "sourceId": "portal 🎬",
+                        "name": "Channel x",
+                        "url": "http://fixture.test/stalker_portal/stream/x.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "http://cdn.test/x",
+                        "epgId": "x",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "x",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": {
+                            "key": "CHANNEL",
+                            "args": [
+                                "x"
+                            ]
+                        },
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "stream": {
+                "url": "http://fixture.test/stalker_portal/stream/x.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                "headers": {},
+                "mimeType": "application/x-mpegURL"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": {
+                            "channels": [
+                                {
+                                    "id": 0,
+                                    "name": "Zero"
+                                },
+                                {
+                                    "id": 0,
+                                    "name": "Duplicate"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "c75268fb9a392bf5e28ccfee5938b8d6",
+                        "sourceId": "portal 🎬",
+                        "name": "Zero",
+                        "url": "http://fixture.test/stalker_portal/stream/0.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "0",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "0",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    },
+                    {
+                        "id": "c75268fb9a392bf5e28ccfee5938b8d6",
+                        "sourceId": "portal 🎬",
+                        "name": "Duplicate",
+                        "url": "http://fixture.test/stalker_portal/stream/0.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "0",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "0",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "stream": {
+                "url": "http://fixture.test/stalker_portal/stream/0.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                "headers": {},
+                "mimeType": "application/x-mpegURL"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": {
+                            "one": {
+                                "id": 1
+                            },
+                            "two": {
+                                "id": 2,
+                                "genre": {},
+                                "category": "Other2"
+                            }
+                        }
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6694921abfd1542a1d6c91acab3c96e9",
+                        "sourceId": "portal 🎬",
+                        "name": "Channel 1",
+                        "url": "http://fixture.test/stalker_portal/stream/1.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "1",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "1",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": {
+                            "key": "CHANNEL",
+                            "args": [
+                                "1"
+                            ]
+                        },
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    },
+                    {
+                        "id": "1358f75c2a7348836148e2c6dde03995",
+                        "sourceId": "portal 🎬",
+                        "name": "Channel 2",
+                        "url": "http://fixture.test/stalker_portal/stream/2.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                        "kind": "LIVE",
+                        "group": "Other2",
+                        "logo": "",
+                        "epgId": "2",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "2",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": {
+                            "key": "CHANNEL",
+                            "args": [
+                                "2"
+                            ]
+                        },
+                        "groupMessage": null
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "stream": {
+                "url": "http://fixture.test/stalker_portal/stream/1.m3u8?mac=00%3A1a%3A79%3A01%3A02%3A03",
+                "headers": {},
+                "mimeType": "application/x-mpegURL"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": false
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC rejected the request",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": 0
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC rejected the request",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": ""
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC rejected the request",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": true
+                    }
+                },
+                {
+                    "body": {
+                        "result": null
+                    }
+                }
+            ],
+            "resolve": true
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC returned no result",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "error": {}
+                    }
+                },
+                {
+                    "body": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC request was rejected",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": false
+                    }
+                },
+                {
+                    "body": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC rejected the request",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": null
+                    }
+                },
+                {
+                    "body": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC returned no result",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": []
+                },
+                {
+                    "body": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Invalid Stalker JSON-RPC response",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "rpc": true,
+            "responses": [
+                {
+                    "body": {
+                        "result": {}
+                    }
+                },
+                {
+                    "body": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                },
+                {
+                    "path": "/stalker_portal/api/",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"get_channels\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "path": "/folder/api/?x=1",
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "error": {
+                "message": "Stalker JSON-RPC returned no result",
+                "status": null,
+                "type": "ProviderException"
+            },
+            "calls": [
+                {
+                    "path": "/folder/api/?x=1",
+                    "method": "POST",
+                    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"handshake\",\"params\":{\"mac\":\"00:1a:79:01:02:03\"}}",
+                    "cookie": null,
+                    "agent": null,
+                    "authorization": null
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "path": "/folder/C/",
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/folder/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/folder/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/folder/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/folder/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "path": "/folder/C/index.html/",
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/folder/C/index.html/server/load.php?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/folder/C/index.html/server/load.php?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/folder/C/index.html/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/folder/C/index.html/server/load.php?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    },
+    {
+        "input": {
+            "path": "/explicit/LOAD.PHP?x=1",
+            "responses": [
+                {
+                    "body": {
+                        "js": {
+                            "token": "t"
+                        }
+                    }
+                },
+                {
+                    "body": {
+                        "js": {}
+                    }
+                },
+                {
+                    "body": {
+                        "js": []
+                    }
+                },
+                {
+                    "body": {
+                        "js": {
+                            "data": [
+                                {
+                                    "id": "42",
+                                    "cmd": "ffmpeg http://localhost/ch/42_",
+                                    "name": "Live"
+                                }
+                            ],
+                            "total_items": 1
+                        }
+                    }
+                }
+            ]
+        },
+        "expected": {
+            "catalog": {
+                "entries": [
+                    {
+                        "id": "6f873020767c886eb88f1c6137fb5e87",
+                        "sourceId": "portal 🎬",
+                        "name": "Live",
+                        "url": "ffmpeg http://localhost/ch/42_",
+                        "kind": "LIVE",
+                        "group": "Other",
+                        "logo": "",
+                        "epgId": "42",
+                        "headers": {},
+                        "catchup": null,
+                        "description": "",
+                        "season": null,
+                        "episode": null,
+                        "providerId": "42",
+                        "drm": null,
+                        "mimeType": null,
+                        "playbackUnsupportedReason": null,
+                        "headerOrigins": {},
+                        "nameMessage": null,
+                        "groupMessage": {
+                            "key": "OTHER_GROUP",
+                            "args": []
+                        }
+                    }
+                ],
+                "epgUrls": [],
+                "notes": [],
+                "messages": []
+            },
+            "calls": [
+                {
+                    "path": "/explicit/LOAD.PHP?type=stb&action=handshake&JsHttpRequest=1-xml&token=",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": null
+                },
+                {
+                    "path": "/explicit/LOAD.PHP?type=stb&action=get_profile&JsHttpRequest=1-xml&hd=1",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/explicit/LOAD.PHP?type=itv&action=get_genres&JsHttpRequest=1-xml",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                },
+                {
+                    "path": "/explicit/LOAD.PHP?type=itv&action=get_ordered_list&JsHttpRequest=1-xml&genre=*&p=1&fav=0&sortby=number&hd=0",
+                    "method": "GET",
+                    "body": "",
+                    "cookie": "mac=00:1A:79:01:02:03; stb_lang=en; timezone=UTC",
+                    "agent": "Model: MAG250; Link: Ethernet",
+                    "authorization": "Bearer t"
+                }
+            ]
+        }
+    }
+]

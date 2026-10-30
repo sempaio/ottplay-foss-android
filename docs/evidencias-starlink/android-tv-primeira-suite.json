@@ -1,0 +1,20 @@
+{
+  "run_id": 39746432251,
+  "device": "Android TV API 36",
+  "tests": 12,
+  "failures": 0,
+  "cases": [
+    "play.ott.nativeapp.ui.StarlinkUiInstrumentedTest.publishedPlaylistPresetUsesTheCompleteM3uAddress",
+    "play.ott.nativeapp.ui.StarlinkUiInstrumentedTest.emptyCredentialsCannotSubmit",
+    "play.ott.nativeapp.ui.StarlinkUiInstrumentedTest.publishedPlaylistCanBeSelectedAlongsideXtreamWithoutTypingAUrl",
+    "play.ott.nativeapp.ui.StarlinkUiInstrumentedTest.m81LoginNeedsOnlyUsernameAndPassword",
+    "play.ott.nativeapp.ui.StarlinkStartupInstrumentedTest.installedApplicationStartsAndOpensM81Login",
+    "play.ott.nativeapp.ui.NativeUiInstrumentedTest.sourceEditorRelocalizesUntouchedGeneratedNameButPreservesExplicitRename",
+    "play.ott.nativeapp.ui.NativeUiInstrumentedTest.onboardingDemoSelectionPlaybackBackAndSourceEditor",
+    "play.ott.nativeapp.ui.NativeUiInstrumentedTest.televisionRailSupportsDirectionalFocusAndSelection",
+    "play.ott.nativeapp.ui.NativeUiInstrumentedTest.televisionEntersANewTabAfterThePreviousGridWasScrolled",
+    "play.ott.nativeapp.ui.NativeUiInstrumentedTest.localizedGroupChangeRestoresCatalogAndPreservesProviderGroupFilter",
+    "play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest.hlsPlaylistItemsDecodeWithTheirOwnHeadersAcrossChannelSwitches",
+    "play.ott.nativeapp.playback.NativePlaybackInstrumentedTest.sessionSurvivesControllerReleaseAndRestoresPlaybackUntilExplicitStop"
+  ]
+}

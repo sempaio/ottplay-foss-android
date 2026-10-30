@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Сервер адхіліў імя карыстальніка або пароль (HTTP 401).</string>
+    <string name="starlink_access_denied">Сервер забараніў доступ (HTTP 403). Праверце, ці актыўны ўліковы запіс, ці не скончыўся тэрмін і ці няма блакіроўкі. Гэты адказ сам па сабе не азначае няправільны адрас сервера.</string>
+    <string name="starlink_server_unavailable">Сервер часова недаступны (HTTP 5xx). Паспрабуйце пазней.</string>
+</resources>

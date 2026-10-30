@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Server foydalanuvchi nomi yoki parolni rad etdi (HTTP 401).</string>
+    <string name="starlink_access_denied">Server kirishni rad etdi (HTTP 403). Hisob faol, muddati tugagan yoki bloklanganligini tekshiring. Bu javobning oʻzi server manzili xato ekanligini anglatmaydi.</string>
+    <string name="starlink_server_unavailable">Server vaqtincha mavjud emas (HTTP 5xx). Keyinroq qayta urinib koʻring.</string>
+</resources>

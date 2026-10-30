@@ -1,0 +1,126 @@
+{
+  "workflow_run_url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34746025351",
+  "head_sha": "f18d433cee6248e5d8a443602c415daee5ea3739",
+  "date_utc": "2026-09-13",
+  "groups": [
+    {
+      "group": "host",
+      "tests": 44,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "testcase_classes": {
+        "play.ott.nativeapp.data.EpgHeadersTest": 2,
+        "play.ott.nativeapp.playback.ChannelNavigationPlayerTest": 1,
+        "play.ott.nativeapp.playback.ChannelNavigatorTest": 7,
+        "play.ott.nativeapp.playback.ItemMediaSourceFactoryTest": 1,
+        "play.ott.nativeapp.playback.PlaybackItemsTest": 4,
+        "play.ott.nativeapp.playback.RequestPolicyTest": 4,
+        "play.ott.nativeapp.core.LegacySourceImporterTest": 3,
+        "play.ott.nativeapp.core.PlaylistEpgTest": 10,
+        "play.ott.nativeapp.core.ProviderRepositoryTest": 12
+      },
+      "suites": [
+        {
+          "report": "app/build/test-results/testDebugUnitTest/TEST-play.ott.nativeapp.data.EpgHeadersTest.xml",
+          "tests": 2,
+          "seconds": 0.085
+        },
+        {
+          "report": "app/build/test-results/testDebugUnitTest/TEST-play.ott.nativeapp.playback.ChannelNavigationPlayerTest.xml",
+          "tests": 1,
+          "seconds": 5.416
+        },
+        {
+          "report": "app/build/test-results/testDebugUnitTest/TEST-play.ott.nativeapp.playback.ChannelNavigatorTest.xml",
+          "tests": 7,
+          "seconds": 0.079
+        },
+        {
+          "report": "app/build/test-results/testDebugUnitTest/TEST-play.ott.nativeapp.playback.ItemMediaSourceFactoryTest.xml",
+          "tests": 1,
+          "seconds": 0.203
+        },
+        {
+          "report": "app/build/test-results/testDebugUnitTest/TEST-play.ott.nativeapp.playback.PlaybackItemsTest.xml",
+          "tests": 4,
+          "seconds": 0.201
+        },
+        {
+          "report": "app/build/test-results/testDebugUnitTest/TEST-play.ott.nativeapp.playback.RequestPolicyTest.xml",
+          "tests": 4,
+          "seconds": 0.005
+        },
+        {
+          "report": "core/build/test-results/test/TEST-play.ott.nativeapp.core.LegacySourceImporterTest.xml",
+          "tests": 3,
+          "seconds": 0.178
+        },
+        {
+          "report": "core/build/test-results/test/TEST-play.ott.nativeapp.core.PlaylistEpgTest.xml",
+          "tests": 10,
+          "seconds": 0.292
+        },
+        {
+          "report": "core/build/test-results/test/TEST-play.ott.nativeapp.core.ProviderRepositoryTest.xml",
+          "tests": 12,
+          "seconds": 1.751
+        }
+      ]
+    },
+    {
+      "group": "phone",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "testcase_classes": {
+        "play.ott.nativeapp.data.StorageInstrumentedTest": 7,
+        "play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest": 1,
+        "play.ott.nativeapp.playback.NativePlaybackInstrumentedTest": 1,
+        "play.ott.nativeapp.ui.NativeUiInstrumentedTest": 2
+      },
+      "suites": [
+        {
+          "report": "outputs/androidTest-results/connected/debug/TEST-emulator-5554 - 15-_app-.xml",
+          "tests": 11,
+          "seconds": 44.428
+        }
+      ],
+      "device": {
+        "ro.build.version.sdk": "35",
+        "ro.product.model": "sdk_gphone64_x86_64",
+        "ro.build.characteristics": "emulator",
+        "ro.product.cpu.abi": "x86_64"
+      }
+    },
+    {
+      "group": "tv",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "testcase_classes": {
+        "play.ott.nativeapp.data.StorageInstrumentedTest": 7,
+        "play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest": 1,
+        "play.ott.nativeapp.playback.NativePlaybackInstrumentedTest": 1,
+        "play.ott.nativeapp.ui.NativeUiInstrumentedTest": 2
+      },
+      "suites": [
+        {
+          "report": "outputs/androidTest-results/connected/debug/TEST-emulator-5554 - 16-_app-.xml",
+          "tests": 11,
+          "seconds": 40.493
+        }
+      ],
+      "device": {
+        "ro.build.version.sdk": "36",
+        "ro.product.model": "sdk_google_atv64_x86_64",
+        "ro.build.characteristics": "emulator",
+        "ro.product.cpu.abi": "x86_64"
+      }
+    }
+  ],
+  "total_test_executions": 66,
+  "unique_tests": 55
+}

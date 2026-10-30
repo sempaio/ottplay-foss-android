@@ -1,0 +1,57 @@
+{
+  "type": "real_android_public_health_probe",
+  "credentials_used": false,
+  "observations": [
+    {
+      "ip": "209.177.145.97",
+      "mode": "modern",
+      "error": "SocketTimeoutException",
+      "ms": 7141
+    },
+    {
+      "ip": "209.177.145.97",
+      "mode": "tls12",
+      "error": "SocketTimeoutException",
+      "ms": 6725
+    },
+    {
+      "ip": "209.177.145.192",
+      "mode": "modern",
+      "status": 200,
+      "tls": "TLSv1.3",
+      "ms": 6609
+    },
+    {
+      "ip": "209.177.145.192",
+      "mode": "tls12",
+      "status": 200,
+      "tls": "TLSv1.2",
+      "ms": 4525
+    },
+    {
+      "ip": "2607:f740:f::b31",
+      "mode": "modern",
+      "error": "ConnectException",
+      "ms": 131
+    },
+    {
+      "ip": "2607:f740:f::b31",
+      "mode": "tls12",
+      "error": "ConnectException",
+      "ms": 511
+    },
+    {
+      "ip": "2607:f740:f::67",
+      "mode": "modern",
+      "error": "ConnectException",
+      "ms": 499
+    },
+    {
+      "ip": "2607:f740:f::67",
+      "mode": "tls12",
+      "error": "ConnectException",
+      "ms": 512
+    }
+  ],
+  "note": "Diagnostic completion is not a catalog or playback pass."
+}

@@ -1,0 +1,152 @@
+{
+  "verifiedAtUtc": "2026-09-13T14:44:57.330472+00:00",
+  "run": {
+    "conclusion": "failure",
+    "createdAt": "2026-09-13T14:21:41Z",
+    "databaseId": 34762437710,
+    "event": "workflow_dispatch",
+    "headSha": "1b9fcf80f1446148f9e3b5a5dd9bca4d15d4b6d7",
+    "jobs": [
+      {
+        "completedAt": "2026-09-13T14:31:45Z",
+        "conclusion": "success",
+        "databaseId": 103737513402,
+        "name": "Unit tests, lint and APKs",
+        "startedAt": "2026-09-13T14:21:49Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34762437710/job/103737513402"
+      },
+      {
+        "completedAt": "2026-09-13T14:38:17Z",
+        "conclusion": "failure",
+        "databaseId": 103738784609,
+        "name": "Instrumented tests · androidtv-api36",
+        "startedAt": "2026-09-13T14:31:49Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34762437710/job/103738784609"
+      },
+      {
+        "completedAt": "2026-09-13T14:39:50Z",
+        "conclusion": "failure",
+        "databaseId": 103738784632,
+        "name": "Instrumented tests · phone-api35",
+        "startedAt": "2026-09-13T14:31:48Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34762437710/job/103738784632"
+      }
+    ],
+    "status": "completed",
+    "updatedAt": "2026-09-13T14:39:51Z",
+    "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34762437710"
+  },
+  "junit": {
+    "host": {
+      "tests": 68,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 8.478,
+      "failedCases": []
+    },
+    "phone": {
+      "tests": 16,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 180.73,
+      "failedCases": [
+        {
+          "class": "play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest",
+          "test": "hlsPlaylistItemsDecodeWithTheirOwnHeadersAcrossChannelSwitches",
+          "message": "java.lang.AssertionError: HLS video/position did not advance for hls-test-a"
+        },
+        {
+          "class": "play.ott.nativeapp.ui.NativeUiInstrumentedTest",
+          "test": "televisionEntersANewTabAfterThePreviousGridWasScrolled",
+          "message": "java.lang.AssertionError: Failed to assert the following: (Focused = 'true')"
+        },
+        {
+          "class": "play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest",
+          "test": "coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback",
+          "message": "java.lang.AssertionError: Previous playback service or media notification survived teardown; serviceRunning=true, mediaNotificationIds=[1001]"
+        }
+      ],
+      "device": {
+        "ro.build.version.sdk": "35",
+        "ro.product.cpu.abi": "x86_64",
+        "ro.product.model": "sdk_gphone64_x86_64"
+      }
+    },
+    "tv": {
+      "tests": 16,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 82.698,
+      "failedCases": [
+        {
+          "class": "play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest",
+          "test": "coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback",
+          "message": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms"
+        }
+      ],
+      "device": {
+        "ro.build.version.sdk": "36",
+        "ro.product.cpu.abi": "x86_64",
+        "ro.product.model": "sdk_google_atv64_x86_64"
+      }
+    }
+  },
+  "releaseToolingPython": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "evidence": "Successful host step and completed job log: Ran 10 tests ... OK"
+  },
+  "counts": {
+    "uniqueJvmAndInstrumentedTests": 84,
+    "junitExecutions": 100,
+    "uniqueIncludingPython": 94,
+    "executionsIncludingPython": 110
+  },
+  "supplementalLogcatFindings": [
+    {
+      "device": "phone",
+      "artifact": "android-phone-api35-device-reports",
+      "path": "reports/emulator/logcat.txt",
+      "lines": [
+        82910,
+        82914
+      ],
+      "finding": "RealActivity test first timed out awaiting now-playing-bar at test source line 111; JUnit reports the subsequent teardown failure instead."
+    },
+    {
+      "device": "phone",
+      "artifact": "android-phone-api35-device-reports",
+      "path": "reports/emulator/logcat.txt",
+      "lines": [
+        82985,
+        82988,
+        83120,
+        83121,
+        83354,
+        83373,
+        83375
+      ],
+      "finding": "Playback service and media notification survived test teardown; session 9 remained PLAYING until instrumentation process death."
+    },
+    {
+      "device": "phone",
+      "artifact": "android-phone-api35-device-reports",
+      "path": "reports/emulator/logcat.txt",
+      "lines": [
+        61385,
+        61431,
+        61432,
+        62009
+      ],
+      "finding": "Old session 6 was destroyed, SystemUI removed the still-active notification key containing ID 1001, then SystemUI issued STOP while successor HLS session 7 was buffering. AOSP Android 15 dismissMediaData resolves the current token by key inside its delayed executor task."
+    }
+  ]
+}

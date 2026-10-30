@@ -1,0 +1,90 @@
+name: STARLINK 0.3.2 — instrumentacao isolada QA
+
+on:
+  push:
+    branches: [qa/032-instrumentacao-fixtures-20261030]
+    paths:
+      - '.github/workflows/starlink-032-instrumentacao-fixtures.yml'
+      - 'native/**'
+      - '.github/scripts/starlink-032-instrumented-fixtures.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK and API 35 emulator
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Compile isolated instrumented QA variant
+        working-directory: native
+        run: |
+          ./gradlew --no-daemon --max-workers=1 -I consolidation-qa.init.gradle \
+            :app:assembleParaVoceQa :app:assembleParaVoceQaAndroidTest
+      - name: Run synthetic personalization and playback tests in emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          # AOSP image avoids the Pixel Launcher ANR observed in run 41128921918.
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 3072M
+          heap-size: 512M
+          disable-animations: true
+          script: bash .github/scripts/starlink-032-instrumented-fixtures.sh
+      - name: Verify XML test evidence (at least four tests; none failed or skipped)
+        if: success()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          base = Path("native/app/build/qa-fixtures")
+          files = list(base.rglob("TEST-*.xml"))
+          assert (base / 'for_you').exists() and (base / 'stop_background').exists(), 'Missing one suite'
+          assert files, "No connected Android instrumentation XML reports"
+          values = {"tests":0, "errors":0, "failures":0, "skipped":0}
+          cases = set()
+          for path in files:
+              root = ET.parse(path).getroot()
+              for name in values:
+                  values[name] += int(root.attrib.get(name,0))
+              cases.update(node.attrib.get('name','') for node in root.findall('.//testcase'))
+          print(f"Instrumented QA result: {values}; files={len(files)}")
+          expected = {'choicesSupportMultipleTopicsSubtopicsBackAndConsentOff',
+                      'skippingDoesNotInventPreferences',
+                      'aLoadedTransparentLogoReplacesRatherThanOverlaysPlaceholder',
+                      'disabledBackgroundStopsAtHomeWithoutAutomaticPip'}
+          assert expected.issubset(cases), f'Missing selected test cases: {sorted(expected - cases)}'
+          assert values["tests"] >= 4, "The four selected tests did not all run"
+          assert values["errors"] == 0 and values["failures"] == 0 and values["skipped"] == 0, "Some instrumented tests failed or skipped"
+          PY
+      - name: Upload only sanitized test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: STARLINK-032-INSTRUMENTED-QA-REPORT
+          path: |
+            native/app/build/qa-fixtures/
+            native/app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 14

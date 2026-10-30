@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Ο διακομιστής απέρριψε το όνομα χρήστη ή τον κωδικό (HTTP 401).</string>
+    <string name="starlink_access_denied">Ο διακομιστής αρνήθηκε την πρόσβαση (HTTP 403). Ελέγξτε αν ο λογαριασμός είναι ενεργός, έχει λήξει ή έχει αποκλειστεί. Αυτή η απάντηση από μόνη της δεν σημαίνει λανθασμένη διεύθυνση διακομιστή.</string>
+    <string name="starlink_server_unavailable">Ο διακομιστής δεν είναι προσωρινά διαθέσιμος (HTTP 5xx). Δοκιμάστε ξανά αργότερα.</string>
+</resources>

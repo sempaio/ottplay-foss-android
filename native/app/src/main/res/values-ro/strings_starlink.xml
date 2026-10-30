@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Serverul a respins numele de utilizator sau parola (HTTP 401).</string>
+    <string name="starlink_access_denied">Serverul a refuzat accesul (HTTP 403). Verifică dacă este activ, expirat sau blocat contul. Acest răspuns singur nu indică o adresă greșită a serverului.</string>
+    <string name="starlink_server_unavailable">Serverul este temporar indisponibil (HTTP 5xx). Încearcă din nou mai târziu.</string>
+</resources>
