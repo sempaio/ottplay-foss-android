@@ -23,6 +23,7 @@ private val Context.preferences by preferencesDataStore("player")
     val activeForYouProfileId: String = "default",
     val forYouProfiles: Map<String, ForYouProfile> = emptyMap(),
     val favoritesByProfile: Map<String, Set<String>> = emptyMap(),
+    val resumeByProfile: Map<String, Map<String, Long>> = emptyMap(),
 
 )
 
@@ -64,7 +65,13 @@ class PreferencesStore(context: Context) {
     }
 
     suspend fun saveResumePosition(id: String, positionMs: Long) = update { preferences ->
-        val positions = play.ott.core.DurableSelections.saveResume(preferences.resumePositions, id, positionMs)
-        if (positions === preferences.resumePositions) preferences else preferences.copy(resumePositions = positions)
+        val profile = preferences.activeForYouProfileId
+        if (profile == "default") {
+            val positions = play.ott.core.DurableSelections.saveResume(preferences.resumePositions, id, positionMs)
+            if (positions === preferences.resumePositions) preferences else preferences.copy(resumePositions = positions)
+        } else {
+            val positions = play.ott.core.DurableSelections.saveResume(preferences.resumeByProfile[profile].orEmpty(), id, positionMs)
+            preferences.copy(resumeByProfile = preferences.resumeByProfile + (profile to positions))
+        }
     }
 }
