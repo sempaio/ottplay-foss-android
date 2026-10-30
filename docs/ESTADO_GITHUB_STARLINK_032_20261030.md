@@ -81,3 +81,18 @@ A bateria instrumentada em Android AOSP API 35 [run 41130451807](https://github.
 **Diagnóstico posterior dos testes (30/10/2026):** o logcat/XML do [run 41130451807](https://github.com/sempaio/ottplay-foss-android/actions/runs/41130451807) mostra `customer-login` quando a instrumentação esperava `library-tab-MOVIES`. A fonte sintética `demo://local` foi corretamente ocultada pelas restrições de `StarlinkConfig.visibleSources` em modo cliente. A correção de **QA somente** no [PR #12](https://github.com/sempaio/ottplay-foss-android/pull/12), commit `a77a366`, configura `CUSTOMER_MODE=false` exclusivamente na variante não distribuída `paraVoceQa`. A variante de cliente e a candidata funcional permanecem intocadas. [Novo run 41132084266](https://github.com/sempaio/ottplay-foss-android/actions/runs/41132084266): em execução na última consulta, sem resultado de aprovação presumido.
 
 **Estado final registrado:** experiência de uso aprovada pelo proprietário; CI integrada de build aprovada; três testes instrumentados do Para Você aprovados; um teste instrumentado de player ainda **inconclusivo** devido ao timeout de inicialização e Quality Gate geral com pendências. Não fazer merge, distribuir APK oficial ou alterar produção somente com base nesta aprovação manual. O PR #12 permanece em rascunho para resolver a lacuna de testes.
+
+## 10. Testes instrumentados aprovados após correção da fixture (30/10/2026)
+
+**Resultado comprovado:** [GitHub Actions 41132084266](https://github.com/sempaio/ottplay-foss-android/actions/runs/41132084266), commit `a77a366ceaaaf0fa9c4bb3319d68d74998668c16`, finalizado com **success**. O relatório XML do [artefato 13013787732](https://github.com/sempaio/ottplay-foss-android/actions/runs/41132084266/artifacts/13013787732) foi conferido: **4 testes, 0 failures, 0 errors e 0 skipped**.
+
+| Bateria | Casos validados | Resultado |
+|---|---|---|
+| Para Você: preferências múltiplas, subinteresses, voltar e consentimento negado | `choicesSupportMultipleTopicsSubtopicsBackAndConsentOff` | Aprovado |
+| Para Você: pular assistente sem salvar preferências inventadas | `skippingDoesNotInventPreferences` | Aprovado |
+| Cartão: imagem PNG transparente substitui o placeholder, sem sobreposição | `aLoadedTransparentLogoReplacesRatherThanOverlaysPlaceholder` | Aprovado |
+| Player real com mídia sintética: sair pela tecla Home interrompe a reprodução quando segundo plano está desativado | `disabledBackgroundStopsAtHomeWithoutAutomaticPip` | Aprovado |
+
+**Correção exata:** o teste anterior falhava na tela `customer-login` porque uma fonte `demo://local` não é uma fonte de cliente gerenciada, situação correta em produção. A variante **não distribuível** `paraVoceQa`, gerada exclusivamente para instrumentação, passou a usar `CUSTOMER_MODE=false` no init script de teste. Nenhum APK normal de cliente, fonte, credencial, código de player, produção do painel ou `main` foi alterado por essa correção. A bateria prova o comportamento com dados sintéticos; o usuário já confirmou separadamente o funcionamento em seu aparelho com sua conta autorizada.
+
+**Pendência remanescente:** o Quality Gate geral do repositório apresentou falhas independentes no lint Biome e no dependency-review (dependency graph não disponível/habilitado no repositório), e a promoção da branch principal exige revisão de integração, licenças, assinatura e plano de reversão. **Não confundir sucesso da bateria Android com liberação final irrestrita.**
