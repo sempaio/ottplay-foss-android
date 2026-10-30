@@ -67,4 +67,25 @@ class ForYouEngineTest {
         val profile = ForYouProfile(interests = setOf("acao"), dislikedInterests = setOf("acao"))
         assertTrue(ForYouEngine.recommend(listOf(movie), profile).isEmpty())
     }
+
+    @Test fun subtopicsIncreaseRankOnlyForChosenInterest() {
+        val brazil = entry("1", "Brasileirão", "Futebol")
+        val europe = entry("2", "Premier League", "Futebol")
+        val profile = ForYouProfile(interests = setOf("futebol"), subInterests = setOf("futebol:europeu"))
+        assertEquals(europe, ForYouEngine.recommend(listOf(brazil, europe), profile).first())
+    }
+
+    @Test fun anUnchosenParentCannotRankAnotherTopic() {
+        val europe = entry("1", "Premier League", "Futebol")
+        val documentary = entry("2", "Bichos", "Documentários")
+        val profile = ForYouProfile(interests = setOf("documentarios"), subInterests = setOf("futebol:europeu"))
+        assertEquals(listOf(documentary), ForYouEngine.recommend(listOf(europe, documentary), profile))
+    }
+
+    @Test fun everyAvailableSubtopicBelongsToItsParent() {
+        assertTrue(ForYouEngine.validSubInterests.isNotEmpty())
+        assertTrue(ForYouEngine.subtopics.all { (parent, options) ->
+            parent in ForYouEngine.topics && options.all { (id, _) -> parent + ":" + id in ForYouEngine.validSubInterests }
+        })
+    }
 }
