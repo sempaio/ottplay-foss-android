@@ -1,6 +1,6 @@
 # STARLINK IPTV Android 0.3.2 — estado verificado no GitHub (30/10/2026)
 
-> **Snapshot documental, não aprovação de versão.** Registra o que está publicado no GitHub nesta data, distinguindo CI, testes locais relatados, testes no aparelho e observações históricas. Este documento não altera código do aplicativo ou serviços. Para estado de CI posterior à consulta, abrir os links dos workflows.
+> **Snapshot documental, não aprovação de versão.** A CI de build do commit `ca1e59e4` terminou com sucesso; testes instrumentados e homologação em aparelho real continuam pendentes. Registra o que está publicado no GitHub nesta data, distinguindo CI, testes locais relatados, testes no aparelho e observações históricas. Este documento não altera código do aplicativo ou serviços. Para estado de CI posterior à consulta, abrir os links dos workflows.
 
 ## 1. Versão e referências de verdade
 
@@ -26,7 +26,7 @@ As notas de [CONSOLIDACAO_STARLINK_032_20261030.md](CONSOLIDACAO_STARLINK_032_20
 | QA local anterior à consolidação | 75 testes de core e 145 de app aprovados; lint sem erro, conforme relatório de consolidação; captura do Codex informa build QA aprovado | Relato local, não repetido por esta auditoria. Mudanças do commit final exigem validação própria. |
 | [CI de revisão — run 41102179241](https://github.com/sempaio/ottplay-foss-android/actions/runs/41102179241), commit `7d60cbe4` | **success** | Refere-se ao commit anterior, não à candidata `ca1e59e4`. |
 | [Quality Gate da revisão — run 41102314086](https://github.com/sempaio/ottplay-foss-android/actions/runs/41102314086) | **failure** | Não considerar a revisão integralmente aprovada. |
-| [CI integrada da consolidação — run 41126645448](https://github.com/sempaio/ottplay-foss-android/actions/runs/41126645448), commit `ca1e59e4` | **in_progress na consulta de 30/10/2026**; etapa de testes/build em execução; validação e upload do APK ainda pendentes | Resultado pode mudar depois. Verificar a própria página antes de qualquer anúncio. |
+| [CI integrada da consolidação — run 41126645448](https://github.com/sempaio/ottplay-foss-android/actions/runs/41126645448), commit `ca1e59e4` | **success**, concluído em 30/10/2026 às 20:57:58 UTC; testes de unidade/Gradle, lint, build, verificação de assinatura, inspeção do package e upload do APK concluídos | Sucesso deste workflow é específico ao build automatizado: não inclui a execução dos testes instrumentados em emulador nem a homologação de conta/catálogo reais. |
 | [Workflow Android APK — run 41126645472](https://github.com/sempaio/ottplay-foss-android/actions/runs/41126645472) | **skipped** | Não houve aprovação dessa esteira para o commit. |
 | Testes instrumentados adicionais de personalização, armazenamento e playback | **planejados pelo Codex na captura fornecida**, mas interrompidos por pedido do proprietário antes de prova de conclusão | Não registrar como executados/aprovados. |
 | Autenticação e reprodução reais na nova candidata no telefone do proprietário | **não comprovadas nesta continuação** | Necessário testar no aparelho correto e com a própria conta, sem compartilhar credenciais. |
@@ -51,7 +51,7 @@ Nesta continuação **não** foram feitos deploy, restart, migração SQL, repub
 
 ## 6. Próximas verificações, sem execução automática
 
-1. Conferir o resultado final do run `41126645448`, jobs, artefatos e SHA do APK, sem converter `in_progress` em aprovação presumida.
+1. Validar o APK de teste com SHA-256 `f13bed2be48669908eca9f1648a79f214b6337da37d92047bd9d26b58195ea16`, publicado como [artefato 13011152511](https://github.com/sempaio/ottplay-foss-android/actions/runs/41126645448/artifacts/13011152511) (ZIP, retenção informada pelo GitHub até 29/11/2026), sem confundi-lo com atualização oficial. Verificar instalação e funcionamento real.
 2. Revisar separadamente o Quality Gate, incluindo falhas não relacionadas à compilação específica.
 3. Testar no aparelho real: login, contas/fonte, catálogo, categorias, onboarding/consentimento, dois perfis e histórico isolado, favoritos, busca, Guia TV, filmes, séries/episódios, canais, fullscreen, Voltar, encerramento da sessão e modo segundo plano.
 4. Investigar ANR e timeouts com evidências sanitizadas; tratar EPG do painel em atividade independente.
@@ -62,3 +62,9 @@ Nesta continuação **não** foram feitos deploy, restart, migração SQL, repub
 Documento gerado após **consulta ao GitHub**, usando PRs, commit e workflows indicados acima, somado às evidências e aos limites já escritos no próprio repositório e à captura do usuário. **Não houve acesso ao diretório local do Codex**, aos dados de autenticação ou ao aparelho. A ausência de evidência remota não autoriza afirmar que uma tarefa local tenha sido concluída.
 
 Documentos históricos mantidos para rastreabilidade: `STARLINK_RELATORIO_FINAL.md`, `STARLINK_CATALOGO_032.md`, `STARLINK_REFERENCIA_CODEX.md`, `TIMEOUT_EMULADOR_20261030.md`, `HOMOLOGACAO_PARA_VOCE_M81_20261030.md` e `STARLINK-CONSOLIDACAO.md`. O status mais recente consultado deve ser interpretado por **commit/branch**, não apenas pelo nome da versão.
+
+## 8. Verificação da CI concluída (30/10/2026)
+
+A execução [41126645448](https://github.com/sempaio/ottplay-foss-android/actions/runs/41126645448) foi consultada novamente: job `validation` e todas as etapas indicaram `success`; Gradle terminou com `BUILD SUCCESSFUL in 4m 57s`. O arquivo `STARLINK-032-PARA-VOCE-INTEGRADO.apk` teve package `br.starlink.iptv.paravoce` e assinatura verificados no runner; SHA-256 extraído do log: `f13bed2be48669908eca9f1648a79f214b6337da37d92047bd9d26b58195ea16`. Artefato ZIP `STARLINK-032-PARA-VOCE-INTEGRADO`, ID `13011152511`, tamanho armazenado de 21.874.166 bytes, retenção até 29/11/2026. O hash do ZIP informado pela API é diferente do hash do APK e não deve ser usado para validar o arquivo APK descompactado.
+
+Essa CI executou testes de unidade e lint, mas **não** uma sessão instrumentada no emulador nem testes reais autenticados. A falha do Quality Gate do PR #10 continua separada e não é cancelada por este sucesso. As ações permanecem restritas ao GitHub: nenhum código/produção foi alterado por esta atualização documental.
