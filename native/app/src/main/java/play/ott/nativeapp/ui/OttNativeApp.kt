@@ -390,7 +390,7 @@ fun OttNativeApp(
             }
         }
         if (showGuidePicker) NeonGuidePicker(state.entries, { showGuidePicker = false; onAction(AppAction.OpenEpg(it)) }, { showGuidePicker = false })
-        state.epgEntry?.let { GuideDialog(it, state.programmes, state.isBusy, onAction) }
+        state.epgEntry?.let { GuideDialog(it, state.programmes, state.epgLoading, onAction) }
         state.movieEntry?.let { MovieDialog(it, state.isBusy, it.id in state.favoriteIds, onAction) }
         state.seriesEntry?.let { SeriesDialog(it, state.episodes, state.isBusy, onAction) }
         state.error?.let { message ->
