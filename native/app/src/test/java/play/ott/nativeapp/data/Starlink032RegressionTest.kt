@@ -9,7 +9,8 @@ import play.ott.nativeapp.ui.AppUiState
 /** Regression coverage for the 0.3.2 Para Voce player safety defaults. */
 class Starlink032RegressionTest {
     @Test fun backgroundPlaybackIsOptInForNewInstalls() {
-        assertFalse(UserPreferences().backgroundPlayback)
+        assertFalse(firstRunPreferences().backgroundPlayback)
+        assertTrue(UserPreferences().backgroundPlayback) // legacy serialized backup receipts remain compatible
         assertFalse(AppUiState().backgroundPlayback)
     }
 
