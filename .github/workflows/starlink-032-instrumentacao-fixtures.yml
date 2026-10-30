@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/starlink-032-instrumentacao-fixtures.yml'
       - 'native/**'
+      - '.github/scripts/starlink-032-instrumented-fixtures.sh'
   workflow_dispatch:
 
 permissions:
@@ -43,25 +44,37 @@ jobs:
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 35
-          target: google_apis
+          # AOSP image avoids the Pixel Launcher ANR observed in run 41128921918.
+          target: default
           arch: x86_64
           profile: pixel_7
+          ram-size: 3072M
+          heap-size: 512M
           disable-animations: true
-          script: cd native && ./gradlew --no-daemon --max-workers=1 -I consolidation-qa.init.gradle :app:connectedParaVoceQaAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=play.ott.nativeapp.ui.ForYouConsolidationInstrumentedTest,play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest#disabledBackgroundStopsAtHomeWithoutAutomaticPip'
+          script: bash .github/scripts/starlink-032-instrumented-fixtures.sh
       - name: Verify XML test evidence (at least four tests; none failed or skipped)
         if: success()
         run: |
           python3 - <<'PY'
           from pathlib import Path
           from xml.etree import ElementTree as ET
-          files = list(Path("native/app/build/outputs/androidTest-results/connected").rglob("TEST-*.xml"))
+          base = Path("native/app/build/qa-fixtures")
+          files = list(base.rglob("TEST-*.xml"))
+          assert (base / 'for_you').exists() and (base / 'stop_background').exists(), 'Missing one suite'
           assert files, "No connected Android instrumentation XML reports"
           values = {"tests":0, "errors":0, "failures":0, "skipped":0}
+          cases = set()
           for path in files:
               root = ET.parse(path).getroot()
               for name in values:
                   values[name] += int(root.attrib.get(name,0))
+              cases.update(node.attrib.get('name','') for node in root.findall('.//testcase'))
           print(f"Instrumented QA result: {values}; files={len(files)}")
+          expected = {'choicesSupportMultipleTopicsSubtopicsBackAndConsentOff',
+                      'skippingDoesNotInventPreferences',
+                      'aLoadedTransparentLogoReplacesRatherThanOverlaysPlaceholder',
+                      'disabledBackgroundStopsAtHomeWithoutAutomaticPip'}
+          assert expected.issubset(cases), f'Missing selected test cases: {sorted(expected - cases)}'
           assert values["tests"] >= 4, "The four selected tests did not all run"
           assert values["errors"] == 0 and values["failures"] == 0 and values["skipped"] == 0, "Some instrumented tests failed or skipped"
           PY
@@ -71,7 +84,7 @@ jobs:
         with:
           name: STARLINK-032-INSTRUMENTED-QA-REPORT
           path: |
-            native/app/build/outputs/androidTest-results/connected/
+            native/app/build/qa-fixtures/
             native/app/build/reports/androidTests/connected/
           if-no-files-found: warn
           retention-days: 14
