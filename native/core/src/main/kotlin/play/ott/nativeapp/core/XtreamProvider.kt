@@ -12,6 +12,7 @@ import play.ott.core.XtreamSource
 import kotlinx.serialization.json.*
 import java.util.Base64
 import okhttp3.HttpUrl
+import kotlinx.coroutines.delay
 
 /** HTTP, URL codec and native model adapter for the common Xtream session. */
 internal class XtreamProvider(private val http: ProviderHttp) {
@@ -21,7 +22,18 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         val session = load.session
         while (true) {
             val request = session.request ?: break
-            try { session.accept(parseProviderJson(http.get(addresses.api(request), config.headers).text()).toProviderValue()) }
+            try {
+                val url = addresses.api(request)
+                val payload = try { http.get(url, config.headers) }
+                catch (error: ProviderException) {
+                    // These session requests are read-only GETs, including account admission.
+                    // Retry a transport timeout once; never retry an HTTP denial or TLS error.
+                    if (error.statusCode != null || error.failure != ProviderFailure.TIMEOUT) throw error
+                    delay(500)
+                    http.get(url, config.headers)
+                }
+                session.accept(parseProviderJson(payload.text()).toProviderValue())
+            }
             catch (error: ProviderException) { if (!session.reject(error.statusCode)) throw error }
         }
         val normalized = load.catalog()
