@@ -82,8 +82,10 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
             }.take(18).toList()
         }
     }
-    val favoriteEntries = remember(state.entries, state.favoriteIds) {
-        state.entries.asSequence().filter { it.id in state.favoriteIds }.take(20).toList()
+    val favoriteEntries by produceState<List<MediaEntry>>(emptyList(), state.entries, state.favoriteIds) {
+        value = withContext(Dispatchers.Default) {
+            state.entries.asSequence().filter { it.id in state.favoriteIds }.take(20).toList()
+        }
     }
     val recommendations by produceState<List<MediaEntry>>(
         emptyList(), state.entries, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys
