@@ -103,7 +103,7 @@ object ForYouEngine {
         "acao" to listOf("acao", "action"),
         "romance" to listOf("romance", "romantico"),
         "infantil" to listOf("infantil", "kids", "crianca"),
-        "esportes" to listOf("esporte", "sport", "nba", "ufc"),
+        "esportes" to listOf("esporte", "esportes", "sport", "sports", "nba", "ufc"),
         "natureza" to listOf("natureza", "nature", "animal", "selvagem"),
         "ficcao cientifica" to listOf("ficcao cientifica", "sci fi", "scifi"),
     )
