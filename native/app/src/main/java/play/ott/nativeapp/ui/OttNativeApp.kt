@@ -164,9 +164,9 @@ fun OttNativeApp(
     val groups by produceState<List<String>>(emptyList(), tabEntries) {
         value = withContext(Dispatchers.Default) { tabEntries.map { CatalogDisplayGroup.group(it) }.filter { it.isNotBlank() }.distinct().sorted() }
     }
-    LaunchedEffect(state.entries, group, state.isBusy) {
+    LaunchedEffect(tabEntries, group, state.isBusy) {
         if (!state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
-            val exists = withContext(Dispatchers.Default) { state.entries.any { CatalogDisplayGroup.group(it) == group } }
+            val exists = withContext(Dispatchers.Default) { tabEntries.any { CatalogDisplayGroup.group(it) == group } }
             if (!exists) group = ""
         }
     }
