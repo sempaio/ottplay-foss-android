@@ -68,6 +68,7 @@ open class MainActivity : AppCompatActivity() {
         model.onLocaleChanged()
         setContent {
             val state by model.state.collectAsStateWithLifecycle()
+            LaunchedEffect(state.backgroundPlayback) { updatePip() }
             OttNativeApp(
                 state = state,
                 onAction = { action ->
@@ -139,9 +140,8 @@ open class MainActivity : AppCompatActivity() {
     private val isTelevision: Boolean
         get() = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
 
-    private fun supportsPip(): Boolean =
-        !isTelevision && model.state.value.backgroundPlayback &&
-            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    private fun supportsPip(): Boolean = !isTelevision &&
+        packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     private fun pipParameters(): PictureInPictureParams {
         val size = controller?.videoSize
@@ -154,14 +154,15 @@ open class MainActivity : AppCompatActivity() {
             val rectangle = android.graphics.Rect()
             if (video != null && video.getGlobalVisibleRect(rectangle)) setSourceRectHint(rectangle)
             if (Build.VERSION.SDK_INT >= 31) {
-                setAutoEnterEnabled(controller?.isPlaying == true)
+                setAutoEnterEnabled(controller?.isPlaying == true && model.state.value.backgroundPlayback)
                 setSeamlessResizeEnabled(true)
             }
         }.build()
     }
     private fun updatePip() { if (supportsPip()) setPictureInPictureParams(pipParameters()) }
     private fun enterPip() {
-        if (supportsPip() && controller?.currentMediaItem != null) enterPictureInPictureMode(pipParameters())
+        if (supportsPip() && model.state.value.backgroundPlayback && controller?.currentMediaItem != null)
+            enterPictureInPictureMode(pipParameters())
     }
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
