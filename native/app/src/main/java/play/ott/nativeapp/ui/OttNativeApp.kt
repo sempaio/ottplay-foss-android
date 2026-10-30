@@ -368,8 +368,8 @@ fun OttNativeApp(
         if (showPrivacy) PrivacyPolicyDialog { showPrivacy = false }
         if (state.sources.isNotEmpty() && !state.isBusy && !fullscreen &&
             (showForYouPreferences || !state.forYouProfile.onboardingDone)) {
-            ForYouDialog(state.forYouProfile, onSave = { topics, consent ->
-                onAction(AppAction.SaveForYou(topics, consent))
+            ForYouDialog(state.forYouProfile, onSave = { topics, dislikes, consent ->
+                onAction(AppAction.SaveForYou(topics, dislikes, consent))
                 showForYouPreferences = false
             }, onSkip = {
                 onAction(AppAction.SkipForYou)
