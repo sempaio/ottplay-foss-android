@@ -165,6 +165,8 @@
       "biome.json",
       "package.json",
       "tsconfig.json",
+      "!native/app/src/androidTest/assets/playback/hls/segment*.ts",
+      "!native/docs/site/**",
       "!index.html",
       "!dist/**",
       "!fonts/**",
@@ -240,6 +242,21 @@
   "overrides": [
     {
       "includes": ["contracts/ottplay-wire-v1.json"],
+      "formatter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": [
+        "docs/evidencias/HOMOLOGACAO_PARA_VOCE_20261030.json",
+        "docs/evidencias/PARA_VOCE_STARTUP_20261030.json",
+        "native/app/src/test/resources/android-selections-before-core.json",
+        "native/app/src/test/resources/epg-refresh-before-core.json",
+        "native/core/src/test/resources/guide-before-core.json",
+        "native/core/src/test/resources/native-import-before-core.json",
+        "native/core/src/test/resources/stalker-before-core.json",
+        "native/docs/validation/native-0.2-github-initial-results.json"
+      ],
       "formatter": {
         "enabled": false
       }
