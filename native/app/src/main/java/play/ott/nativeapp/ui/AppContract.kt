@@ -29,7 +29,7 @@ data class AppUiState(
     val loadingMessage: String = "",
     val error: String? = null,
     val notice: String? = null,
-    val backgroundPlayback: Boolean = true,
+    val backgroundPlayback: Boolean = false,
 )
 
 sealed interface AppAction {
