@@ -1,0 +1,84 @@
+name: STARLINK 0.3.2 signed layout candidate (fail closed)
+
+on:
+  push:
+    branches: [release/starlink-032-layout-candidate-20261030]
+    paths:
+      - '.github/workflows/starlink-032-signed-layout-candidate.yml'
+      - 'native/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-layout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android compile and signature tools
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Require configured stable layout signing key (no fallback to old APK)
+        env:
+          STARLINK_SIGNING_KEY_B64: ${{ secrets.STARLINK_LAYOUT_KEYSTORE_B64 }}
+          STARLINK_SIGNING_STORE_PASS: ${{ secrets.STARLINK_LAYOUT_STORE_PASSWORD }}
+          STARLINK_SIGNING_ALIAS: ${{ secrets.STARLINK_LAYOUT_KEY_ALIAS }}
+          STARLINK_SIGNING_KEY_PASS: ${{ secrets.STARLINK_LAYOUT_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$STARLINK_SIGNING_KEY_B64" || -z "$STARLINK_SIGNING_STORE_PASS" || -z "$STARLINK_SIGNING_ALIAS" || -z "$STARLINK_SIGNING_KEY_PASS" ]]; then
+            echo "::error title=Signing not configured::A stable STARLINK layout keystore and all three signing fields are required. This job will NOT republish the pinned old APK or create a debug-signed release."
+            exit 1
+          fi
+          printf '%s' "$STARLINK_SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/layout.jks"
+          chmod 600 "$RUNNER_TEMP/layout.jks"
+      - name: Test and compile current STARLINK layout with stable signing
+        working-directory: native
+        env:
+          STARLINK_LAYOUT_KEYSTORE: ${{ runner.temp }}/layout.jks
+          STARLINK_LAYOUT_STORE_PASSWORD: ${{ secrets.STARLINK_LAYOUT_STORE_PASSWORD }}
+          STARLINK_LAYOUT_KEY_ALIAS: ${{ secrets.STARLINK_LAYOUT_KEY_ALIAS }}
+          STARLINK_LAYOUT_KEY_PASSWORD: ${{ secrets.STARLINK_LAYOUT_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon --max-workers=2 --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout :app:assembleLayout
+      - name: Verify package, signing certificate and SHA256; reject mismatched upgrade key
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          NEW_APK=native/app/build/outputs/apk/layout/app-layout.apk
+          PINNED=dist/STARLINK-IPTV-layout.apk
+          test -s "$NEW_APK"
+          test -s "$PINNED"
+          "$SIGNER" verify "$NEW_APK"
+          "$SIGNER" verify "$PINNED"
+          "$AAPT" dump badging "$NEW_APK" | grep -F "package: name='br.starlink.iptv.layout'"
+          python3 starlink/validate_native_apk.py "$NEW_APK" --package br.starlink.iptv.layout --label 'STARLINK IPTV Prévia'
+          OLD_CERT=$("$SIGNER" verify --print-certs "$PINNED" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
+          NEW_CERT=$("$SIGNER" verify --print-certs "$NEW_APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
+          if [[ -z "$OLD_CERT" || "$OLD_CERT" != "$NEW_CERT" ]]; then
+            echo "::error title=APK update signing mismatch::New APK cannot be an in-place update of the previously signed layout build."
+            exit 1
+          fi
+          mkdir -p release-candidate
+          cp "$NEW_APK" release-candidate/STARLINK-IPTV-032-PARA-VOCE-layout-CANDIDATE.apk
+          sha256sum release-candidate/*.apk | tee release-candidate/SHA256SUMS
+          printf 'Git commit: %s\nAndroid package: %s\nSigning certificate SHA256: %s\nStatus: CANDIDATE; no publication or rollout\n' "$GITHUB_SHA" br.starlink.iptv.layout "$NEW_CERT" > release-candidate/BUILD-RECEIPT.txt
+      - name: Publish signed candidate artifact for manual release review only
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: STARLINK-032-SIGNED-LAYOUT-CANDIDATE
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 30
