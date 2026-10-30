@@ -15,7 +15,7 @@ private val Context.preferences by preferencesDataStore("player")
 @Serializable data class UserPreferences(
     val selectedSourceId: String? = null,
     val favorites: Set<String> = emptySet(),
-    val backgroundPlayback: Boolean = true,
+    val backgroundPlayback: Boolean = false,
     val resumePositions: Map<String, Long> = emptyMap(),
     val audioTrack: TrackPreference = TrackPreference(),
     val subtitleTrack: TrackPreference = TrackPreference(),
