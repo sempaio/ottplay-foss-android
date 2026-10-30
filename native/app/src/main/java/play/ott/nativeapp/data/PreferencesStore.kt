@@ -19,6 +19,11 @@ private val Context.preferences by preferencesDataStore("player")
     val resumePositions: Map<String, Long> = emptyMap(),
     val audioTrack: TrackPreference = TrackPreference(),
     val subtitleTrack: TrackPreference = TrackPreference(),
+    /** The default profile preserves legacy favorites; secondary profiles stay isolated. */
+    val activeForYouProfileId: String = "default",
+    val forYouProfiles: Map<String, ForYouProfile> = emptyMap(),
+    val favoritesByProfile: Map<String, Set<String>> = emptyMap(),
+
 )
 
 /** A track number belongs to one manifest; only language/role/label survive replacement. */
