@@ -4,6 +4,7 @@ import java.text.Normalizer
 import java.util.PriorityQueue
 import kotlinx.serialization.Serializable
 import play.ott.nativeapp.core.MediaEntry
+import play.ott.nativeapp.core.MediaKind
 
 /** Stored locally only: no provider URLs, credentials, or viewing history. */
 @Serializable
@@ -81,7 +82,9 @@ object ForYouEngine {
             if (profile.dislikedInterests.any { matches(it, group) || matches(it, title) }) return@forEachIndexed
             var score = 0
             profile.interests.forEach { topic ->
-                if (matches(topic, group)) score += 12
+                val kindMatches = (topic == "filmes" && entry.kind == MediaKind.MOVIE) ||
+                    (topic == "series" && entry.kind == MediaKind.SERIES)
+                if (matches(topic, group) || kindMatches) score += 12
                 else if (matches(topic, title)) score += 6
             }
             if (key in profile.likedEntries) score += 30
