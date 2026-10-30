@@ -37,6 +37,7 @@ object CatalogDisplayGroup {
     )
     private val diacritics = Regex("\\p{M}+")
     private val nonAlphaNumeric = Regex("[^a-z0-9]+")
+    private val knownAnimation = animation + clearCartoonNetworks
     private val anime = listOf(
         "hunter x hunter", "beyblade", "pokemon", "naruto",
         "dragon ball", "one piece", "demon slayer", "attack on titan",
@@ -52,15 +53,15 @@ object CatalogDisplayGroup {
     private fun startsWithTitle(title: String, name: String): Boolean =
         title == name || title.startsWith("$name ") || title.startsWith("$name:")
 
-    /** Keep meaningful provider categories, including a genuine category "Variedades". */
+    /** Keep meaningful categories; keep an ambiguous "Variedades" unchanged. */
     fun group(entry: MediaEntry): String {
         val original = entry.group.trim()
-        if (normalize(original) !in unspecific) return original
+        if (original.lowercase() !in unspecific) return original
 
         val title = normalize(entry.name)
         return when {
             anime.any { startsWithTitle(title, it) } -> "Animes"
-            (animation + clearCartoonNetworks).any { startsWithTitle(title, it) } -> "Desenhos"
+            knownAnimation.any { startsWithTitle(title, it) } -> "Desenhos"
             football.any { startsWithTitle(title, it) } -> "Futebol"
             sports.any { startsWithTitle(title, it) } -> "Esportes"
             else -> original
