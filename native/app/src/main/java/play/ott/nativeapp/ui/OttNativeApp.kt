@@ -92,6 +92,7 @@ import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.SourceConfig
 import play.ott.nativeapp.i18n.AppLanguages
+import play.ott.nativeapp.data.CatalogDisplayGroup
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -161,17 +162,17 @@ fun OttNativeApp(
     }
     }
     val groups by produceState<List<String>>(emptyList(), tabEntries) {
-        value = withContext(Dispatchers.Default) { tabEntries.map { it.group }.filter { it.isNotBlank() }.distinct().sorted() }
+        value = withContext(Dispatchers.Default) { tabEntries.map { CatalogDisplayGroup.group(it) }.filter { it.isNotBlank() }.distinct().sorted() }
     }
     LaunchedEffect(state.entries, group, state.isBusy) {
         if (!state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
-            val exists = withContext(Dispatchers.Default) { state.entries.any { it.group == group } }
+            val exists = withContext(Dispatchers.Default) { state.entries.any { CatalogDisplayGroup.group(it) == group } }
             if (!exists) group = ""
         }
     }
     val visibleEntries by produceState<List<MediaEntry>>(emptyList(), tabEntries, search, group) {
         if (search.isNotBlank()) delay(250)
-        value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || it.group == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || it.group.contains(search, ignoreCase = true)) }
+        value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || CatalogDisplayGroup.group(it) == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || CatalogDisplayGroup.group(it).contains(search, ignoreCase = true)) }
     }
     }
     val catalogHeaderCount = 1
@@ -500,7 +501,7 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
         }
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(entry.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(entry.group.ifBlank { if (entry.kind == MediaKind.LIVE) stringResource(R.string.library_live_video) else stringResource(R.string.library_video) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(CatalogDisplayGroup.group(entry).ifBlank { if (entry.kind == MediaKind.LIVE) stringResource(R.string.library_live_video) else stringResource(R.string.library_video) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             ActionButton(if (favorite) stringResource(R.string.library_favorite_selected) else stringResource(R.string.library_favorite_add), { onAction(AppAction.ToggleFavorite(entry)) }, Modifier.fillMaxWidth().semantics { contentDescription = favoriteDescription }, compact = true, selected = favorite)
             if (entry.kind == MediaKind.LIVE) ActionButton(stringResource(R.string.library_tv_guide), { onAction(AppAction.OpenEpg(entry)) }, Modifier.fillMaxWidth(), compact = true)
         }
@@ -675,7 +676,7 @@ internal fun FeaturedContent(entry: MediaEntry, onAction: (AppAction) -> Unit) {
             Column(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE080B16), Color.Transparent))).padding(20.dp), verticalArrangement = Arrangement.Center) {
                 Text("DESTAQUE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(entry.group, style = MaterialTheme.typography.bodyMedium)
+                Text(CatalogDisplayGroup.group(entry), style = MaterialTheme.typography.bodyMedium)
                 Text(if (entry.kind == MediaKind.SERIES) "Ver temporadas e episódios" else "Assistir", color = Color.White)
             }
         }
