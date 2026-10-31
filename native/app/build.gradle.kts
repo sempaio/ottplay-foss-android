@@ -78,6 +78,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (signingVariant == "release") signingConfig = signingConfigs.getByName("configured")
         }
+        // Customer-facing first install. Different from the debug-signed Para Voce QA APK
+        // and from the legacy layout preview. Stable signing is supplied only by CI secrets.
+        create("official") {
+            initWith(getByName("release"))
+            buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            matchingFallbacks += "release"
+            resValue("string", "app_name", "STARLINK IPTV")
+        }
         create("preview") {
             initWith(getByName("release"))
             applicationIdSuffix = ".preview"
