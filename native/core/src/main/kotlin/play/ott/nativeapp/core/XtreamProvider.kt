@@ -24,14 +24,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             val request = session.request ?: break
             try {
                 val url = addresses.api(request)
-                val payload = try { http.get(url, config.headers) }
-                catch (error: ProviderException) {
-                    // These session requests are read-only GETs, including account admission.
-                    // Retry a transport timeout once; never retry an HTTP denial or TLS error.
-                    if (error.statusCode != null || error.failure != ProviderFailure.TIMEOUT) throw error
-                    delay(500)
-                    http.getOnAlternateRoute(url, config.headers)
-                }
+                val payload = getWithTimeoutRecovery(url, config.headers)
                 session.accept(parseProviderJson(payload.text()).toProviderValue())
             }
             catch (error: ProviderException) { if (!session.reject(error.statusCode)) throw error }
@@ -49,7 +42,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         val id = series.providerId
         val addresses = addresses(config)
         val request = XtreamCatalogs.seriesRequest(ProviderValue.text(id), "", XtreamFormat.ANDROID)
-        val data = parseProviderJson(http.get(addresses.api(request), config.headers).text()).toProviderValue()
+        val data = parseProviderJson(getWithTimeoutRecovery(addresses.api(request), config.headers).text()).toProviderValue()
         XtreamCatalogs.episodes(data, XtreamFormat.ANDROID, source(config), addresses,
             XtreamSeriesParent(id, series.name, series.logo), { resolveHttp(config.url, it) }, { it },
             { stableId(*it.toTypedArray()) }).entries.map { item(it, config, "UTC") }
@@ -106,8 +99,17 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             .addPathSegment("player_api.php")
             .addQueryParameter("username", config.username).addQueryParameter("password", config.password)
             .apply { if (action.isNotBlank()) addQueryParameter("action", action); if (key.isNotBlank()) addQueryParameter(key, id) }.build().toString()
-        return parseProviderJson(http.get(url, config.headers).text())
+        return parseProviderJson(getWithTimeoutRecovery(url, config.headers).text())
     }
+
+    /** Read-only Xtream metadata only: retry one transport timeout, never media or HTTP/TLS errors. */
+    private suspend fun getWithTimeoutRecovery(url: String, headers: Map<String, String>): HttpPayload =
+        try { http.get(url, headers) }
+        catch (error: ProviderException) {
+            if (error.statusCode != null || error.failure != ProviderFailure.TIMEOUT) throw error
+            delay(500) // Cancellable: leaving the detail/player must not start another request.
+            http.getOnAlternateRoute(url, headers)
+        }
 
     private fun source(config: SourceConfig) = XtreamSource(config.id, config.username, config.password)
     private fun addresses(config: SourceConfig): XtreamAddresses {
