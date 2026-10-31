@@ -2,7 +2,7 @@ name: STARLINK 0.3.2 — instrumentacao isolada QA
 
 on:
   push:
-    branches: [qa/032-instrumentacao-fixtures-20261030]
+    branches: [qa/032-instrumentacao-fixtures-20261030, starlink/032-finalizacao-20261031]
     paths:
       - '.github/workflows/starlink-032-instrumentacao-fixtures.yml'
       - 'native/**'
@@ -52,7 +52,7 @@ jobs:
           heap-size: 512M
           disable-animations: true
           script: bash .github/scripts/starlink-032-instrumented-fixtures.sh
-      - name: Verify XML test evidence (at least four tests; none failed or skipped)
+      - name: Verify XML test evidence (selected suites; none failed or skipped)
         if: success()
         run: |
           python3 - <<'PY'
@@ -60,7 +60,8 @@ jobs:
           from xml.etree import ElementTree as ET
           base = Path("native/app/build/qa-fixtures")
           files = list(base.rglob("TEST-*.xml"))
-          assert (base / 'for_you').exists() and (base / 'stop_background').exists(), 'Missing one suite'
+          expected_suites = {'for_you', 'stop_background', 'catalog_ui', 'customer_ui', 'storage', 'native_player', 'hls_player', 'drm_player'}
+          assert all((base / name).exists() for name in expected_suites), 'Missing selected suite directory'
           assert files, "No connected Android instrumentation XML reports"
           values = {"tests":0, "errors":0, "failures":0, "skipped":0}
           cases = set()

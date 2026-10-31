@@ -37,6 +37,8 @@ class NativePlaybackInstrumentedTest {
         PlaybackTestLifecycle.finishPreviousPlayback()
         val preferences = (context.applicationContext as OttplayApplication).repository.preferences
         val previousPreferences = runBlocking { preferences.data.first() }
+        // This contract intentionally tests opted-in background playback, not the fresh-install default.
+        runBlocking { preferences.update { it.copy(backgroundPlayback = true) } }
         val launch = PlaybackTestLifecycle.launchIntent()
         var activity = instrumentation.startActivitySync(launch)
         var first: MediaController? = null

@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-31",
+  "code_commit": "96fb081058f1fae693fdf9f3c86ed0e10c9a023b",
+  "apk_sha256": "f0521a067c7d67b98787b69c505e273686d6eebe7434888835f960ca7c86e8a9",
+  "native_ci": 41214124848,
+  "instrumented_ci": 41214125068,
+  "instrumented_tests": 28,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "release_type": "debug_prerelease",
+  "production_modified": false,
+  "publication": 290,
+  "publication_rows": 170016,
+  "full_unrestricted_approval": false,
+  "release_url": "https://github.com/sempaio/ottplay-foss-android/releases/tag/starlink-032-paravoce-96fb0810",
+  "apk_url": "https://github.com/sempaio/ottplay-foss-android/releases/download/starlink-032-paravoce-96fb0810/STARLINK-IPTV-Para-Voce-0.3.2-teste.apk?download=1",
+  "public_download_http": 200,
+  "github_asset_digest_matches": true,
+  "is_draft": false,
+  "is_prerelease": true
+}

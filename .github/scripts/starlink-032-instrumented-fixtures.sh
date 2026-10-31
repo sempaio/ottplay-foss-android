@@ -27,6 +27,12 @@ run_suite() {
 # Separate filters prevent the method-specific playback selection from masking
 # or replacing the three personalization tests in Gradle's XML output.
 run_suite for_you play.ott.nativeapp.ui.ForYouConsolidationInstrumentedTest
-run_suite stop_background 'play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest#disabledBackgroundStopsAtHomeWithoutAutomaticPip'
+run_suite stop_background play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest
+run_suite catalog_ui play.ott.nativeapp.ui.NativeUiInstrumentedTest
+run_suite customer_ui play.ott.nativeapp.ui.CustomerUiInstrumentedTest
+run_suite storage play.ott.nativeapp.data.StorageInstrumentedTest
+run_suite native_player play.ott.nativeapp.playback.NativePlaybackInstrumentedTest
+run_suite hls_player play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest
+run_suite drm_player play.ott.nativeapp.playback.ClearKeyPlaybackInstrumentedTest
 
 exit "$status"

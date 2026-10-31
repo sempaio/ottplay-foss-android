@@ -1,5 +1,7 @@
 # STARLINK IPTV Android 0.3.2 — estado verificado no GitHub (30/10/2026)
 
+> Atualização documental de31/10/2026: [estado consolidado local/GitHub](ESTADO_ATUAL_STARLINK_20261031.md). CI nativa e quatro casos remotos API35 aprovados; execução local API37 incompleta; Quality Gate ainda bloqueado. Trabalho local pausado. Evidências históricas abaixo preservadas.
+
 > **Snapshot documental, não aprovação de versão.** A CI de build do commit `ca1e59e4` terminou com sucesso; testes instrumentados e homologação em aparelho real continuam pendentes. Registra o que está publicado no GitHub nesta data, distinguindo CI, testes locais relatados, testes no aparelho e observações históricas. Este documento não altera código do aplicativo ou serviços. Para estado de CI posterior à consulta, abrir os links dos workflows.
 
 ## 1. Versão e referências de verdade
