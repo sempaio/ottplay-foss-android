@@ -1,5 +1,7 @@
 # STARLINK IPTV 0.3.2 — regressão relatada na reprodução de filmes (30/10/2026)
 
+> Atualização documental de31/10/2026: [estado consolidado local/GitHub](ESTADO_ATUAL_STARLINK_20261031.md). CI nativa e quatro casos remotos API35 aprovados; execução local API37 incompleta; Quality Gate ainda bloqueado. Trabalho local pausado. Evidências históricas abaixo preservadas.
+
 > **Atualização do proprietário — 30/10/2026:** depois de tocar um filme com sucesso e **atualizar a lista/catálogo no aplicativo**, o proprietário informou que os demais filmes **aparentemente voltaram a reproduzir** e que as outras funções continuam funcionando. **Situação: falha não reproduzida após atualização da lista, sob observação; nenhuma correção de código aplicada.** O problema não deve permanecer descrito como regressão generalizada confirmada nem ser atribuído ao player. Não é evidência suficiente para afirmar que 100% dos títulos e formatos foram homologados. Se reaparecer, comparar o estado do catálogo antes e depois de atualizar, registrar só o erro sanitizado e evitar mudanças no serviço.
 
 ## Relato do proprietário
