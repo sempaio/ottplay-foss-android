@@ -1,5 +1,7 @@
 # STARLINK Para Você 0.3.2 — entrega de teste, 31/10/2026
 
+[Baixar APK de teste](https://github.com/sempaio/ottplay-foss-android/releases/download/starlink-032-paravoce-96fb0810/STARLINK-IPTV-Para-Voce-0.3.2-teste.apk?download=1) · [Release, hash e instruções](https://github.com/sempaio/ottplay-foss-android/releases/tag/starlink-032-paravoce-96fb0810). Publicação GitHub conferida: prerelease pública, não draft; download anônimo HTTP200; digest do asset igual ao SHA local informado.
+
 ## Artefato e código
 
 - Código validado: `96fb081058f1fae693fdf9f3c86ed0e10c9a023b`.

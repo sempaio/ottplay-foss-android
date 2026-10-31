@@ -12,5 +12,11 @@
   "production_modified": false,
   "publication": 290,
   "publication_rows": 170016,
-  "full_unrestricted_approval": false
+  "full_unrestricted_approval": false,
+  "release_url": "https://github.com/sempaio/ottplay-foss-android/releases/tag/starlink-032-paravoce-96fb0810",
+  "apk_url": "https://github.com/sempaio/ottplay-foss-android/releases/download/starlink-032-paravoce-96fb0810/STARLINK-IPTV-Para-Voce-0.3.2-teste.apk?download=1",
+  "public_download_http": 200,
+  "github_asset_digest_matches": true,
+  "is_draft": false,
+  "is_prerelease": true
 }

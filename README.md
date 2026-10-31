@@ -1,5 +1,7 @@
 # OTT-play FOSS
 
+STARLINK Para Você 0.3.2: [baixar APK de teste](https://github.com/sempaio/ottplay-foss-android/releases/download/starlink-032-paravoce-96fb0810/STARLINK-IPTV-Para-Voce-0.3.2-teste.apk?download=1). Não substitui automaticamente o app oficial.
+
 STARLINK Para Você: [APK de teste, validações e limites da entrega de31/10](docs/ENTREGA_STARLINK_PARA_VOCE_20261031.md).
 
 STARLINK Android: [estado atualizado em31/10/2026](docs/ESTADO_ATUAL_STARLINK_20261031.md), com CI, limitações locais/remotas e pendências de liberação. Nenhuma implantação ou alteração do M81 nesta atualização.
