@@ -1,5 +1,7 @@
 # Estado atual STARLINK IPTV — 31/10/2026
 
+> Retomada autorizada em31/10/2026: consulte a [entrega do APK de teste e os resultados finais](ENTREGA_STARLINK_PARA_VOCE_20261031.md). O checkpoint/estado abaixo é histórico. Não equivale a instalação oficial ou aprovação de todos os provedores.
+
 **Desenvolvimento e testes interrompidos por solicitação do proprietário. Esta atualização é somente documental. Candidata não totalmente homologada. Não substituir o aplicativo oficial.**
 
 ## Código salvo

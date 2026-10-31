@@ -1,0 +1,46 @@
+package play.ott.nativeapp.security
+
+import android.util.Log
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+import org.json.JSONObject
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import play.ott.nativeapp.OttplayApplication
+import play.ott.nativeapp.core.MediaKind
+import play.ott.nativeapp.core.ProviderException
+
+/** Opt-in only; reads the device account in-process without exporting credentials or fetching media. */
+@RunWith(AndroidJUnit4::class)
+class M81VodDiagnosticTest {
+    @Test fun diagnoseAuthenticatedMovieSteps() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("m81VodProbe") == "true")
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as OttplayApplication
+        val repository = app.repository
+        val sources = repository.sources()
+        val selected = repository.preferences.data.first().selectedSourceId
+        val source = sources.firstOrNull { it.id == selected }
+        Log.i("M81VodProbe", JSONObject().put("source_count", sources.size).put("selected_found", source != null).toString())
+        assumeTrue(source != null)
+        repository.loadRecent()
+        val recent = repository.recent.value.filter { it.entry.sourceId == source!!.id && it.entry.kind == MediaKind.MOVIE && it.entry.name == "Patagonia [L]" }
+        Log.i("M81VodProbe", JSONObject().put("matching_recent_entries", recent.size).toString())
+        assumeTrue(recent.size == 1)
+        val entry = recent.single().entry
+        Log.i("M81VodProbe", JSONObject().put("entry_still_in_catalog", repository.cached(source!!.id).entries.any { it.id == entry.id }).toString())
+        suspend fun step(name: String, action: suspend () -> Unit) {
+            val result = JSONObject().put("step", name)
+            try { action(); result.put("success", true) }
+            catch (error: Exception) {
+                result.put("success", false).put("exception", error.javaClass.simpleName)
+                if (error is ProviderException) result.put("status", error.statusCode).put("failure", error.failure.name)
+            }
+            Log.i("M81VodProbe", result.toString())
+        }
+        step("movie_info") { repository.providers.loadMovieInfo(source!!, entry) }
+        step("resolve") { repository.stream(source!!, entry) }
+    }
+}
