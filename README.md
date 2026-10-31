@@ -1,5 +1,7 @@
 # OTT-play FOSS
 
+STARLINK Android: [estado atualizado em31/10/2026](docs/ESTADO_ATUAL_STARLINK_20261031.md), com CI, limitações locais/remotas e pendências de liberação. Nenhuma implantação ou alteração do M81 nesta atualização.
+
 Local files without Internet: see [Local videos and offline playback](docs/offline-media.md).
 
 [![OTT-play FOSS channel browser in a perspective view](docs/images/hero.png)](docs/images/studio-2026-default.png)
