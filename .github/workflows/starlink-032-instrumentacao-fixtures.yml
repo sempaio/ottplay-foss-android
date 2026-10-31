@@ -2,7 +2,7 @@ name: STARLINK 0.3.2 — instrumentacao isolada QA
 
 on:
   push:
-    branches: [qa/032-instrumentacao-fixtures-20261030, starlink/032-finalizacao-20261031]
+    branches: [qa/032-instrumentacao-fixtures-20261030, starlink/032-finalizacao-20261031, fix/starlink-vod-detail-reuse-20261031]
     paths:
       - '.github/workflows/starlink-032-instrumentacao-fixtures.yml'
       - 'native/**'
