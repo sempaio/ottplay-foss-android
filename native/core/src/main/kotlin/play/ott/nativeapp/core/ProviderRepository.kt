@@ -38,7 +38,8 @@ class ProviderRepository(
         }
     }
 
-    suspend fun resolve(config: SourceConfig, entry: MediaEntry): PlaybackStream = withContext(Dispatchers.IO) {
+    /** Reuse VOD details already loaded by the movie dialog; a second metadata GET can stall playback. */
+    suspend fun resolve(config: SourceConfig, entry: MediaEntry, movieDetailsLoaded: Boolean = false): PlaybackStream = withContext(Dispatchers.IO) {
         // A locally imported M3U has a content:// configuration URL; its individual streams
         // are still HTTP(S). NativeRepository owns opening local files, not this HTTP layer.
         if (config.kind != SourceKind.M3U) validate(config)
@@ -47,7 +48,7 @@ class ProviderRepository(
             "FOLDER_REQUIRED" -> throw ProviderException("Choose an episode before playing a series")
         }
         val stream = if (config.kind == SourceKind.STALKER) stalker.resolve(config, entry) else {
-            val resolved = if (config.kind == SourceKind.XTREAM && entry.kind == MediaKind.MOVIE) xtream.vod(config, entry) else entry
+            val resolved = if (config.kind == SourceKind.XTREAM && entry.kind == MediaKind.MOVIE && !movieDetailsLoaded) xtream.vod(config, entry) else entry
             val url = http.checkedUrl(resolved.url).toString()
             PlaybackStream(url, mimeType = inferMimeType(url))
         }
