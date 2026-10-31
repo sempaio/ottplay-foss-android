@@ -255,6 +255,8 @@
         "native/core/src/test/resources/guide-before-core.json",
         "native/core/src/test/resources/native-import-before-core.json",
         "native/core/src/test/resources/stalker-before-core.json",
+        "native/core/src/test/resources/xtream-before-core.json",
+        "native/docs/validation/native-0.2-github-ui-results.json",
         "native/docs/validation/native-0.2-github-initial-results.json"
       ],
       "formatter": {
