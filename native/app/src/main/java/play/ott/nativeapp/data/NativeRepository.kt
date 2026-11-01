@@ -235,10 +235,10 @@ class NativeRepository(
         }
     }
 
-    suspend fun stream(source: SourceConfig, entry: MediaEntry): PlaybackStream =
+    suspend fun stream(source: SourceConfig, entry: MediaEntry, movieDetailsLoaded: Boolean = false): PlaybackStream =
         if (source.url == DEMO_URL) PlaybackStream(
             if (source.kind == SourceKind.M3U && isBundledDemoEntry(entry, source.id)) bundledDemoUrl else entry.url
-        ) else providers.resolve(source, entry)
+        ) else providers.resolve(source, entry, movieDetailsLoaded = movieDetailsLoaded)
 
     suspend fun exportSettings(): String = json.encodeToString(SettingsBackup(
         sources = sources(), preferences = preferences.data.first()

@@ -44,6 +44,35 @@ class StarlinkXtreamTest {
         }
     }
 
+    @Test fun `movie dialog reuses the resolved VOD URL without an extra metadata request`() = runBlocking {
+        MockWebServer().use { s ->
+            s.start()
+            val source = config(s)
+            val url = s.url("/").newBuilder().addPathSegment("movie").addPathSegment(source.username)
+                .addPathSegment(source.password).addPathSegment("42.mkv").build()
+            val detailedEntry = MediaEntry("film", source.id, "Film", url.toString(), MediaKind.MOVIE, providerId = "42")
+            val playback = ProviderRepository().resolve(source, detailedEntry, movieDetailsLoaded = true)
+            assertEquals(url.toString(), playback.url)
+            // Playback resolution must not block on a second get_vod_info call.
+            assertEquals(0, s.requestCount)
+        }
+    }
+
+    @Test fun `direct movie playback still fetches metadata to choose its container`() = runBlocking {
+        MockWebServer().use { s ->
+            s.start()
+            val source = config(s)
+            val url = s.url("/").newBuilder().addPathSegment("movie").addPathSegment(source.username)
+                .addPathSegment(source.password).addPathSegment("42.mp4").build()
+            val entry = MediaEntry("film", source.id, "Film", url.toString(), MediaKind.MOVIE, providerId = "42")
+            s.enqueue(MockResponse().setBody("""{"movie_data":{"container_extension":"mkv"}}"""))
+            val playback = ProviderRepository().resolve(source, entry)
+            assertTrue(playback.url.endsWith("42.mkv"))
+            assertEquals(1, s.requestCount)
+            assertEquals("get_vod_info", s.takeRequest().requestUrl?.queryParameter("action"))
+        }
+    }
+
     @Test fun `short EPG accepts empty schedule and decodes programmes`() = runBlocking {
         MockWebServer().use { s ->
             s.start()
