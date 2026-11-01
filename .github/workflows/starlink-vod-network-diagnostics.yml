@@ -1,0 +1,69 @@
+name: STARLINK 0.3.2 VOD network diagnostics QA
+
+on:
+  push:
+    branches: [diagnostico/vod-network-20261101]
+    paths:
+      - 'native/app/src/main/java/play/ott/nativeapp/playback/PlaybackErrors.kt'
+      - 'native/app/src/test/java/play/ott/nativeapp/playback/PlaybackErrorsDiagnosticsTest.kt'
+      - '.github/workflows/starlink-vod-network-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android-diagnostics:
+    name: Validate redacted Media3 network failure codes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Compile and run Android tests and lint
+        working-directory: native
+        run: ./gradlew --no-daemon --max-workers=2 :core:test :app:testLayoutUnitTest :app:lintLayout
+      - name: Verify all seven safe-network diagnostic test methods
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          paths = list(Path('native/app/build/test-results/testLayoutUnitTest').rglob('TEST-*PlaybackErrorsDiagnosticsTest*.xml'))
+          assert paths, 'No PlaybackErrorsDiagnosticsTest JUnit XML; do not declare QA success'
+          cases = set()
+          totals = {'tests':0,'errors':0,'failures':0,'skipped':0}
+          for path in paths:
+              root = ET.parse(path).getroot()
+              for key in totals:
+                  totals[key] += int(root.get(key, '0'))
+              cases.update(node.get('name') for node in root.findall('.//testcase'))
+          expected = {
+              'dnsFailureUsesStableSafeCodeWithoutExceptionText',
+              'connectFailureHasDedicatedCategory',
+              'noRouteUsesMoreSpecificCategoryThanGenericConnect',
+              'timeoutAndTlsRemainDistinct',
+              'genericNetworkFailureDoesNotGuessCause',
+              'nonNetworkMedia3ErrorsDoNotReceiveNetworkDiagnosis',
+          }
+          assert expected.issubset(cases), f'Missing diagnostic tests: {sorted(expected-cases)}'
+          assert totals['errors']==totals['failures']==totals['skipped']==0, totals
+          print('Sanitized diagnostic tests PASS:', totals)
+          PY
+      - name: Retain only unit-test evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: STARLINK-032-VOD-REDACTED-DIAGNOSTICS-TESTS
+          path: native/app/build/test-results/testLayoutUnitTest/TEST-*PlaybackErrorsDiagnosticsTest*.xml
+          retention-days: 14
+          if-no-files-found: warn
