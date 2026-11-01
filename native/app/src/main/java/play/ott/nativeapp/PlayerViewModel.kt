@@ -442,13 +442,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         if (entry.kind == MediaKind.SERIES) { dispatch(AppAction.OpenSeries(entry)); return }
+        // MovieDialog has already fetched Xtream get_vod_info and passes that exact entry.
+        // Capture this before CloseMovie clears the dialog state on the next UI action.
+        val movieDetailsLoaded = entry.kind == MediaKind.MOVIE && !state.value.isBusy &&
+            state.value.movieEntry?.let { it.id == entry.id && it.sourceId == entry.sourceId } == true
         playJob?.cancel()
         pending = null
         resolvingSourceId = entry.sourceId
         val generation = ++playGeneration
         playJob = operation {
             val source = availableSources().first { it.id == entry.sourceId }
-            val stream = resolved ?: repository.stream(source, entry)
+            val stream = resolved ?: repository.stream(source, entry, movieDetailsLoaded = movieDetailsLoaded)
             val pref = repository.preferences.data.first()
             val resume = if (pref.activeForYouProfileId == "default") pref.resumePositions else pref.resumeByProfile[pref.activeForYouProfileId].orEmpty()
             val position = if (entry.kind == MediaKind.LIVE) 0L else resume[entry.id] ?: 0L
