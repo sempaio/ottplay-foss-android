@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Сървърът отхвърли потребителското име или паролата (HTTP 401).</string>
+    <string name="starlink_access_denied">Сървърът отказа достъп (HTTP 403). Проверете дали акаунтът е активен, изтекъл или блокиран. Този отговор сам по себе си не означава грешен адрес на сървъра.</string>
+    <string name="starlink_server_unavailable">Сървърът временно не е достъпен (HTTP 5xx). Опитайте по-късно.</string>
+</resources>

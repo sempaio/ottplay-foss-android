@@ -1,0 +1,111 @@
+name: k3s runner admission
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-linux:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ottplay-k3s-linux-x64
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check prepared runner image
+        run: python3 scripts/ci-runner-preflight.py base
+      - name: Prepare an isolated writable Android SDK
+        run: python3 scripts/ci-runner-preflight.py prepare-sdk
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+      - name: Install compile SDK and signature tools
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Validate workflow and release contracts without secrets
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Verify the provisioned image isolation and network access
+        run: /opt/ottplay/smoke.sh linux
+
+  smoke-kvm:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ottplay-k3s-kvm-x64
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check prepared runner image
+        run: python3 scripts/ci-runner-preflight.py emulator
+      - name: Prepare an isolated writable Android SDK
+        run: python3 scripts/ci-runner-preflight.py prepare-sdk
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+      - name: Install compile SDK and signature tools
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Validate workflow and release contracts without secrets
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Install and verify accelerated emulator
+        run: |
+          sdkmanager "emulator"
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+      - name: Verify the provisioned image isolation and network access
+        run: /opt/ottplay/smoke.sh kvm
+
+  smoke-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ottplay-k3s-release-x64
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check prepared runner image
+        run: python3 scripts/ci-runner-preflight.py release
+      - name: Prepare an isolated writable Android SDK
+        run: python3 scripts/ci-runner-preflight.py prepare-sdk
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+      - name: Install compile SDK and signature tools
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Validate workflow and release contracts without secrets
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Check publication and signature tools without a signing key
+        run: |
+          gh --version
+          keytool -help
+          jarsigner -help
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" version
+      - name: Verify the provisioned image isolation and network access
+        run: /opt/ottplay/smoke.sh release

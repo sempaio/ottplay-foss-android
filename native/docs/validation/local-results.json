@@ -1,0 +1,125 @@
+{
+  "source_commit": "8eed56f52fe5a90829354a1fe0ff1de625931709",
+  "date_utc": "2026-09-13",
+  "device": "API 35 AOSP arm64 emulator, Pixel 6 profile, Android Emulator 37.1.11",
+  "gradle": "8.14.3",
+  "agp": "8.13.2",
+  "kotlin": "2.3.0",
+  "reports": [
+    {
+      "group": "core",
+      "suite": "play.ott.nativeapp.core.LegacySourceImporterTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.077"
+    },
+    {
+      "group": "core",
+      "suite": "play.ott.nativeapp.core.PlaylistEpgTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.082"
+    },
+    {
+      "group": "core",
+      "suite": "play.ott.nativeapp.core.ProviderRepositoryTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.54"
+    },
+    {
+      "group": "android-unit",
+      "suite": "play.ott.nativeapp.data.EpgHeadersTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.044"
+    },
+    {
+      "group": "android-unit",
+      "suite": "play.ott.nativeapp.playback.ChannelNavigationPlayerTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "9.014"
+    },
+    {
+      "group": "android-unit",
+      "suite": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.067"
+    },
+    {
+      "group": "android-unit",
+      "suite": "play.ott.nativeapp.playback.ItemMediaSourceFactoryTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.163"
+    },
+    {
+      "group": "android-unit",
+      "suite": "play.ott.nativeapp.playback.PlaybackItemsTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.1"
+    },
+    {
+      "group": "android-unit",
+      "suite": "play.ott.nativeapp.playback.RequestPolicyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "0.001"
+    },
+    {
+      "group": "android-api35-arm64",
+      "suite": "play.ott.nativeapp.data.StorageInstrumentedTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": "13.463"
+    }
+  ],
+  "lint": {
+    "errors": 0,
+    "warnings": 26,
+    "hints": 1
+  },
+  "preview_apk": {
+    "path": "app/build/outputs/apk/preview/ottplay-native-0.1.0-preview.apk",
+    "bytes": 4014426,
+    "sha256": "2aa7aa4d6d49811c8e8378023b9eaac3777ae885bbadaf7841bd407d26e2cb9c",
+    "signing": "Local Android SDK debug certificate; preview only",
+    "runtime_smoke": {
+      "install_over_debug": "passed",
+      "encrypted_catalog_after_update": "passed",
+      "decoded_video": "passed",
+      "system_pause_position_ms": 3560,
+      "cold_launch_sample_ms": 1051,
+      "android_runtime_fatal_errors": 0
+    }
+  },
+  "catalog_sample": {
+    "entries": 3000,
+    "write_ms": 450,
+    "read_ms": 382,
+    "notes": "Single debug emulator observation from the first 11-test run; not physical-device performance."
+  }
+}

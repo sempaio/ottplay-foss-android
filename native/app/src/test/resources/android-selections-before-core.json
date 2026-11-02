@@ -1,0 +1,126 @@
+{
+  "method": "Actual SettingsBackupPolicy functions and actual PreferencesStore.saveResumePosition; only DataStore update effect replaced by in-memory fixture. No algorithm copied.",
+  "sources": {
+    "PreferencesStore.kt": "54e02a258b6f9934473771466170191c2d9b0372e2de177f1e9bda27539d2f74",
+    "SettingsBackupPolicy.kt": "9703099892380621d27ff2baaf6685842328be2c9c3698b94a4bf731d525afab"
+  },
+  "rows": [
+    [
+      "defaults validate",
+      "OK",
+      "3e41c459bd9fcc9ce5292763e25991629fd11ce0fca5b2e4b399ed852c384a5f",
+      "[null, true, 0, [], [], 0, [], [], false]"
+    ],
+    [
+      "selected boundary 0",
+      "ERROR",
+      "java.lang.IllegalArgumentException",
+      "Invalid selected source"
+    ],
+    [
+      "selected boundary 1",
+      "ERROR",
+      "java.lang.IllegalArgumentException",
+      "Invalid selected source"
+    ],
+    [
+      "selected boundary 2",
+      "OK",
+      "96e2a0b8557eba7223753fa08673b49863e6fe469a21226e30d7143b63a48bd8",
+      "[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, true, 0, [], [], 0, [], [], false]"
+    ],
+    [
+      "selected boundary 3",
+      "ERROR",
+      "java.lang.IllegalArgumentException",
+      "Invalid selected source"
+    ],
+    [
+      "selected boundary 4",
+      "ERROR",
+      "java.lang.IllegalArgumentException",
+      "Invalid selected source"
+    ],
+    [
+      "selected boundary 5",
+      "OK",
+      "57336be5c781c5b67e7e72e8c2e1f58742d1be171d440286cf45ac227db0c83a",
+      "["
+    ],
+    [
+      ", true, 0, [], [], 0, [], [], false]"
+    ],
+    [
+      "position -1",
+      "ERROR",
+      "java.lang.IllegalArgumentException",
+      "Invalid playback positions"
+    ],
+    [
+      "position 0",
+      "OK",
+      "cd2e79d6c9f6b7d66172fbbb074d1a8405d42cfc51dfe6f333018fa817886930",
+      "[null, true, 0, [], [], 1, [film], [film], false]"
+    ],
+    [
+      "position 9223372036854775807",
+      "OK",
+      "fe0c4e0ced2c8988977660eaa948aaef7fb64d94552c30ca51de6bbf0154a30a",
+      "[null, true, 0, [], [], 1, [film], [film], false]"
+    ],
+    [
+      "position count 500",
+      "OK",
+      "99c5f9c3c82e5e74aab74bfdaaa94badbe4e6e0b7ed415db8e8567918b67ba7f",
+      "[null, true, 0, [], [], 500, [film-0, film-1, film-2], [film-497, film-498, film-499], false]"
+    ],
+    [
+      "position count 501",
+      "ERROR",
+      "java.lang.IllegalArgumentException",
+      "Invalid playback positions"
+    ],
+    [
+      "favorite control character",
+      "ERROR",
+      "java.lang.IllegalArgumentException",
+      "Invalid favorites"
+    ],
+    [
+      "backup union capacity and overwrite order",
+      "OK",
+      "9a58e6dccbb19c6f481855ad5186dc01a7092a657e487b2b9d5055e2f2f44201",
+      "[new, false, 10000, [favorite-1, favorite-2, favorite-3], [favorite-9998, favorite-9999, fresh], 500, [film-2, film-3, film-4], [film-499, film-0, fresh], false]"
+    ],
+    [
+      "unknown selected source retains previous",
+      "OK",
+      "2fdcd47b1f1f856a6fa9b3a75bd619d5c3c575bbba9393af3aff5d0c01dc0173",
+      "[old, true, 10000, [favorite-0, favorite-1, favorite-2], [favorite-9997, favorite-9998, favorite-9999], 500, [film-0, film-1, film-2], [film-497, film-498, film-499], false]"
+    ],
+    [
+      "equal position keeps insertion order",
+      "OK",
+      "2fdcd47b1f1f856a6fa9b3a75bd619d5c3c575bbba9393af3aff5d0c01dc0173",
+      "[old, true, 10000, [favorite-0, favorite-1, favorite-2], [favorite-9997, favorite-9998, favorite-9999], 500, [film-0, film-1, film-2], [film-497, film-498, film-499], true]"
+    ],
+    [
+      "negative clamps before equality",
+      "OK",
+      "2fdcd47b1f1f856a6fa9b3a75bd619d5c3c575bbba9393af3aff5d0c01dc0173",
+      "[old, true, 10000, [favorite-0, favorite-1, favorite-2], [favorite-9997, favorite-9998, favorite-9999], 500, [film-0, film-1, film-2], [film-497, film-498, film-499], true]"
+    ],
+    [
+      "changed position becomes newest",
+      "OK",
+      "ba391087f8584e3a79b78843926641fc5c36384569c8d12b89a5957b314ef5dc",
+      "[old, true, 10000, [favorite-0, favorite-1, favorite-2], [favorite-9997, favorite-9998, favorite-9999], 500, [film-1, film-2, film-3], [film-498, film-499, film-0], false]"
+    ],
+    [
+      "new position evicts first",
+      "OK",
+      "ed3e744f0120b922590f06aab6caafeadaef09a2f0c5a57229988969a454f0db",
+      "[old, true, 10000, [favorite-0, favorite-1, favorite-2], [favorite-9997, favorite-9998, favorite-9999], 500, [film-1, film-2, film-3], [film-498, film-499, new], false]"
+    ]
+  ]
+}

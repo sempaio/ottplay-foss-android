@@ -1,0 +1,210 @@
+{
+  "verifiedAtUtc": "2026-09-13T16:07:09.301098+00:00",
+  "allChecksPassed": true,
+  "checks": {
+    "exactWorkflowCommit": true,
+    "publishedPreviewNotDraft": true,
+    "tagPointsToExpectedCommit": true,
+    "exactlyFourExpectedAssets": true,
+    "sha256SumsMatch": true,
+    "manifestSizesAndChecksumsMatch": true,
+    "githubAssetSizesAndDigestsMatch": true,
+    "apkSignatureVerified": true,
+    "apkExpectedSingleSigner": true,
+    "aabStrictSignatureVerifiedWithPublicCertificateOnly": true,
+    "aabExpectedSingleSigner": true,
+    "aabBundletoolValidate": true,
+    "apkAndAabPreviewApplicationIdAndVersion": true,
+    "apkAndAabNotDebuggable": true,
+    "releaseBuild68UnitTestsPass": true,
+    "releaseLintNoErrors": true,
+    "publishedApkInstalled": true,
+    "publishedApkDecodedFrameObserved": true,
+    "publishedApkSystemPlayAndPause": true
+  },
+  "run": {
+    "conclusion": "success",
+    "createdAt": "2026-09-13T15:53:59Z",
+    "databaseId": 34766968610,
+    "event": "workflow_dispatch",
+    "headSha": "f29a4eb17abb237e5cb58b2fd6a102012a0260fe",
+    "jobs": [
+      {
+        "completedAt": "2026-09-13T16:02:09Z",
+        "conclusion": "success",
+        "databaseId": 103749554729,
+        "name": "Verify and sign preview",
+        "startedAt": "2026-09-13T15:54:02Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34766968610/job/103749554729"
+      },
+      {
+        "completedAt": "2026-09-13T16:02:22Z",
+        "conclusion": "success",
+        "databaseId": 103750612780,
+        "name": "Publish new version",
+        "startedAt": "2026-09-13T16:02:12Z",
+        "status": "completed",
+        "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34766968610/job/103750612780"
+      }
+    ],
+    "status": "completed",
+    "updatedAt": "2026-09-13T16:02:22Z",
+    "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34766968610"
+  },
+  "release": {
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/open-ott-play/ottplay-android/releases/download/v0.2.0-preview.2/ottplay-native-0.2.0-preview.2.aab",
+        "digest": "sha256:4b37aa38e270ad9452fd3f686a7cbad4f61b07758e514aca35d788f2a392eafb",
+        "name": "ottplay-native-0.2.0-preview.2.aab",
+        "size": 8216727
+      },
+      {
+        "browser_download_url": "https://github.com/open-ott-play/ottplay-android/releases/download/v0.2.0-preview.2/ottplay-native-0.2.0-preview.2.apk",
+        "digest": "sha256:4e92e7daee56b38d39ebbf019d916c2273c555c7403bba19d8eb9f6269bccef9",
+        "name": "ottplay-native-0.2.0-preview.2.apk",
+        "size": 4031187
+      },
+      {
+        "browser_download_url": "https://github.com/open-ott-play/ottplay-android/releases/download/v0.2.0-preview.2/release-manifest.json",
+        "digest": "sha256:9cbff326683d3ff79b118b6840db2e1b5620cc82906c216c504981530302b956",
+        "name": "release-manifest.json",
+        "size": 735
+      },
+      {
+        "browser_download_url": "https://github.com/open-ott-play/ottplay-android/releases/download/v0.2.0-preview.2/SHA256SUMS",
+        "digest": "sha256:51609022b2c5c1e560520b057a8ff4c7cfdaf20b578365748d52bc9771e99a84",
+        "name": "SHA256SUMS",
+        "size": 290
+      }
+    ],
+    "draft": false,
+    "html_url": "https://github.com/open-ott-play/ottplay-android/releases/tag/v0.2.0-preview.2",
+    "id": 387952183,
+    "immutable": false,
+    "name": "OTT Play Native 0.2.0-preview.2",
+    "prerelease": true,
+    "published_at": "2026-09-13T16:02:20Z",
+    "tag_name": "v0.2.0-preview.2",
+    "target_commitish": "main"
+  },
+  "tagCommit": "f29a4eb17abb237e5cb58b2fd6a102012a0260fe",
+  "manifest": {
+    "channel": "preview",
+    "versionName": "0.2.0-preview",
+    "versionCode": 2,
+    "baseVersion": "0.2.0",
+    "applicationId": "play.ott.foss.nativeapp.preview",
+    "tag": "v0.2.0-preview.2",
+    "commit": "f29a4eb17abb237e5cb58b2fd6a102012a0260fe",
+    "worktreeDirty": false,
+    "signingCertificateSha256": "2021e3c927fff7c42daf395beacbf0ef738c6d878a827091afb48ddaa32c4dd8",
+    "artifacts": [
+      {
+        "name": "ottplay-native-0.2.0-preview.2.apk",
+        "bytes": 4031187,
+        "sha256": "4e92e7daee56b38d39ebbf019d916c2273c555c7403bba19d8eb9f6269bccef9"
+      },
+      {
+        "name": "ottplay-native-0.2.0-preview.2.aab",
+        "bytes": 8216727,
+        "sha256": "4b37aa38e270ad9452fd3f686a7cbad4f61b07758e514aca35d788f2a392eafb"
+      }
+    ]
+  },
+  "expectedCertificateSha256": "2021e3c927fff7c42daf395beacbf0ef738c6d878a827091afb48ddaa32c4dd8",
+  "apkVerification": {
+    "scheme": "v2",
+    "signers": 1,
+    "minSdk": 26,
+    "targetSdk": 36
+  },
+  "aabVerification": {
+    "jarsignerStrict": true,
+    "trustAnchor": "Expected public certificate extracted from AAB; no private key used",
+    "bundletoolVersion": "1.18.3",
+    "bundletoolSha256": "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29",
+    "bundletoolOfficialRelease": "https://github.com/google/bundletool/releases/tag/1.18.3"
+  },
+  "unitTests": {
+    "tests": 68,
+    "uniqueTests": 68,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 20.019,
+    "failedCases": [],
+    "duplicateCases": []
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 28,
+    "hints": 1
+  },
+  "validatedDeviceMatrix": {
+    "url": "https://github.com/open-ott-play/ottplay-android/actions/runs/34765433919",
+    "headSha": "f29a4eb17abb237e5cb58b2fd6a102012a0260fe",
+    "hostJvmTests": 68,
+    "pythonTests": 10,
+    "phoneApi35Tests": 16,
+    "androidTvApi36Tests": 16,
+    "failuresErrorsSkips": 0
+  },
+  "verificationBoundary": "Published preview APK/AAB independently verified; published APK installed and exercised on a local Android 15 arm64 emulator. Physical devices, commercial provider accounts, Widevine/PlayReady hardware and Google Play production publication remain unverified.",
+  "signingConfiguration": {
+    "channel": "preview",
+    "repository": "open-ott-play/ottplay-android",
+    "explicitOwnerConsent": true,
+    "repositorySecretNames": [
+      "PREVIEW_SIGNING_KEYSTORE_BASE64",
+      "PREVIEW_SIGNING_STORE_PASSWORD",
+      "PREVIEW_SIGNING_KEY_ALIAS",
+      "PREVIEW_SIGNING_KEY_PASSWORD",
+      "PREVIEW_SIGNING_CERT_SHA256"
+    ],
+    "localBackupsOutsideRepository": true,
+    "localBackupFileMode": "0600",
+    "privateMaterialInReport": false
+  },
+  "publishedApkRuntime": {
+    "apkSha256": "4e92e7daee56b38d39ebbf019d916c2273c555c7403bba19d8eb9f6269bccef9",
+    "device": {
+      "avd": "OttplayNativePhone",
+      "api": 35,
+      "abi": "arm64-v8a",
+      "fingerprint": "Android/sdk_phone64_arm64/emu64a:15/AE3A.240806.019/12368160:userdebug/test-keys"
+    },
+    "installation": {
+      "command": "adb -s emulator-5554 install --no-incremental -r <downloaded-published-apk>",
+      "result": "Success"
+    },
+    "launch": {
+      "status": "ok",
+      "state": "COLD",
+      "totalTimeMs": 1082,
+      "waitTimeMs": 1101,
+      "samples": 1,
+      "boundary": "Single emulator sample, not a device performance guarantee"
+    },
+    "ui": {
+      "welcomeObserved": true,
+      "demoAddedThroughVisibleButton": true,
+      "catalogObserved": true,
+      "demoOpenedThroughVisibleItem": true,
+      "decodedFrameVisuallyVerified": true,
+      "screenshot": "docs/screenshots/phone-0.2-preview-player.png",
+      "screenshotSha256": "58a3aee818728500b0690de3808bcf7ac90b88f5fa02b9a4376dbbc1e4cbddf7",
+      "screenshotVideoTimeMs": 1860
+    },
+    "systemMediaControls": {
+      "play": "state=PlaybackState {state=PLAYING(3), position=336, buffered position=8000, speed=1.0, updated=662274, actions=7339995, custom actions=[], active item id=0, error=null}",
+      "pause": "state=PlaybackState {state=PAUSED(2), position=1849, buffered position=8000, speed=0.0, updated=663757, actions=7339997, custom actions=[], active item id=0, error=null}",
+      "pausedPositionMs": 1849,
+      "error": null
+    },
+    "applicationFatalOrPlaybackErrorsObserved": false,
+    "toolingNote": "Optional uiautomator hierarchy dump during playback could not reach idle; it was not used as evidence. Playback was verified through the decoded screenshot and native MediaSession state.",
+    "emulatorStoppedAfterVerification": true
+  }
+}

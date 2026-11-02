@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">השרת דחה את שם המשתמש או הסיסמה (HTTP 401).</string>
+    <string name="starlink_access_denied">השרת דחה את הגישה (HTTP 403). יש לבדוק אם החשבון פעיל, פג תוקף או חסום. תשובה זו לבדה אינה מעידה שכתובת השרת שגויה.</string>
+    <string name="starlink_server_unavailable">השרת אינו זמין זמנית (HTTP 5xx). יש לנסות שוב מאוחר יותר.</string>
+</resources>

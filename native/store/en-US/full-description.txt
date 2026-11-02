@@ -1,0 +1,13 @@
+Play your own IPTV playlists, movies and series with a native Android player built for phones and Android TV remotes.
+
+Add an HTTPS M3U playlist, choose a local playlist file, or connect your existing account on a compatible HTTPS Xtream or Stalker server. Browse groups, search your library, save favorites and load XMLTV programme guides. Catch-up is available when supported by your source.
+
+Playback uses Android Media3. Select available audio tracks and subtitles, adjust playback speed and scaling, and resume movies from a saved position. Phone devices can use picture-in-picture and optional background audio. On Android TV, video pauses when you leave the app.
+
+Try the built-in offline demo without creating an account. It plays a short, original synthetic test video with silent audio.
+
+Your sources and credentials are stored locally with Android Keystore encryption. Settings can be exported and imported; exports contain plaintext source credentials, so keep them private. The Google Play build requires HTTPS for remote media, guides, logos and provider connections. HTTP-only providers are not supported in this build.
+
+The interface follows your Android language preferences, with English as the fallback. Choose from 20 languages in Settings, or use the system default. All interface languages are included for offline use. No advertisements, subscriptions or commercial channel catalog are included. You must supply sources and accounts you are authorized to use. Provider features, formats, codecs and DRM playback depend on your service and Android device; the app does not grant access to protected content.
+
+Published by alvit. Support and privacy: alvit.work@gmail.com

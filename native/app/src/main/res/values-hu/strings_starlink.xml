@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">A kiszolgáló elutasította a felhasználónevet vagy a jelszót (HTTP 401).</string>
+    <string name="starlink_access_denied">A kiszolgáló megtagadta a hozzáférést (HTTP 403). Ellenőrizze, hogy a fiók aktív, lejárt vagy letiltott. Ez a válasz önmagában nem jelent hibás kiszolgálócímét.</string>
+    <string name="starlink_server_unavailable">A kiszolgáló átmenetileg nem érhető el (HTTP 5xx). Próbálja újra később.</string>
+</resources>

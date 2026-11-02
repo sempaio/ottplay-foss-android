@@ -1,0 +1,326 @@
+[
+    {
+        "name": "no URLs preserves old rows",
+        "rows": [
+            [
+                "a",
+                "Old",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [],
+        "sourcePresent": true
+    },
+    {
+        "name": "single successful guide replaces old rows",
+        "rows": [
+            [
+                "a",
+                "Fresh",
+                "1789383600000",
+                "1789387200000",
+                "Description Fresh"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "successful empty guide clears old rows",
+        "rows": [],
+        "otherRows": [],
+        "requests": [
+            "/guide0"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "first HTTP failure stops before later URL and retains old rows",
+        "rows": [
+            [
+                "a",
+                "Old",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0"
+        ],
+        "sourcePresent": true,
+        "error": {
+            "type": "play.ott.nativeapp.core.ProviderException",
+            "message": "Provider returned HTTP 503"
+        }
+    },
+    {
+        "name": "later HTTP failure discards prior successful guide",
+        "rows": [
+            [
+                "a",
+                "Old",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0",
+            "/guide1"
+        ],
+        "sourcePresent": true,
+        "error": {
+            "type": "play.ott.nativeapp.core.ProviderException",
+            "message": "Provider returned HTTP 503"
+        }
+    },
+    {
+        "name": "later malformed XML discards prior successful guide",
+        "rows": [
+            [
+                "a",
+                "Old",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0",
+            "/guide1"
+        ],
+        "sourcePresent": true,
+        "error": {
+            "type": "play.ott.nativeapp.core.ProviderException",
+            "message": "EPG is malformed XML or uses unsupported document declarations"
+        }
+    },
+    {
+        "name": "later source owns duplicate exact interval",
+        "rows": [
+            [
+                "a",
+                "Last",
+                "1789383600000",
+                "1789387200000",
+                "Description Last"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0",
+            "/guide1"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "first duplicate within one guide survives parser dedup",
+        "rows": [
+            [
+                "a",
+                "First",
+                "1789383600000",
+                "1789387200000",
+                "Description First"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "different intervals from sources are merged",
+        "rows": [
+            [
+                "a",
+                "First",
+                "1789383600000",
+                "1789387200000",
+                "Description First"
+            ],
+            [
+                "a",
+                "Later",
+                "1789383600000",
+                "1789390800000",
+                "Description Later"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0",
+            "/guide1"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "channel ID case remains distinct in SQLite primary key",
+        "rows": [
+            [
+                "A",
+                "Upper",
+                "1789383600000",
+                "1789387200000",
+                "Description Upper"
+            ],
+            [
+                "a",
+                "Lower",
+                "1789383600000",
+                "1789387200000",
+                "Description Lower"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/guide0"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "replacement does not affect other source",
+        "rows": [
+            [
+                "a",
+                "Fresh",
+                "1789383600000",
+                "1789387200000",
+                "Description Fresh"
+            ]
+        ],
+        "otherRows": [
+            [
+                "a",
+                "Other",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "requests": [
+            "/guide0"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "source edited before commit silently skips stale write",
+        "rows": [
+            [
+                "a",
+                "Edited state",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/delayed"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "source deleted before commit remains deleted",
+        "rows": [],
+        "otherRows": [],
+        "requests": [
+            "/delayed"
+        ],
+        "sourcePresent": false
+    },
+    {
+        "name": "equal source copy before commit permits replacement",
+        "rows": [
+            [
+                "a",
+                "Fresh",
+                "1789383600000",
+                "1789387200000",
+                "Description Fresh"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/delayed"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "source changed and restored before commit permits replacement",
+        "rows": [
+            [
+                "a",
+                "Fresh",
+                "1789383600000",
+                "1789387200000",
+                "Description Fresh"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [
+            "/delayed"
+        ],
+        "sourcePresent": true
+    },
+    {
+        "name": "database insertion failure rolls back delete and earlier inserts",
+        "rows": [
+            [
+                "a",
+                "Old",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [],
+        "sourcePresent": true,
+        "error": {
+            "type": "android.database.sqlite.SQLiteConstraintException",
+            "message": "fixture reject (code 1811 SQLITE_CONSTRAINT_TRIGGER)"
+        }
+    },
+    {
+        "name": "direct empty replacement clears only selected source",
+        "rows": [],
+        "otherRows": [
+            [
+                "a",
+                "Old",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "requests": [],
+        "sourcePresent": true
+    },
+    {
+        "name": "direct duplicate replacement gives last row ownership",
+        "rows": [
+            [
+                "a",
+                "Last",
+                "10",
+                "20",
+                "Old description"
+            ]
+        ],
+        "otherRows": [],
+        "requests": [],
+        "sourcePresent": true
+    }
+]

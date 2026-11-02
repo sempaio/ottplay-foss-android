@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Սերվերը մերժել է օգտանունը կամ գաղտնաբառը (HTTP 401)։</string>
+    <string name="starlink_access_denied">Սերվերը մերժել է մուտքը (HTTP 403)։ Ստուգեք՝ հաշիվն ակտիվ է, ժամկետանց է, թե արգելափակված։ Այս պատասխանը միայնակ չի նշանակում սերվերի սխալ հասցե։</string>
+    <string name="starlink_server_unavailable">Սերվերը ժամանակավորապես անհասանելի է (HTTP 5xx)։ Փորձեք ավելի ուշ։</string>
+</resources>

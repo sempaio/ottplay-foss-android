@@ -1,0 +1,131 @@
+name: STARLINK IPTV Android APK
+on:
+  push:
+    branches: ['starlink/**']
+    paths: ['native/**', 'starlink/**', '.github/workflows/starlink-android-apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.ref_name == 'starlink/layout-neon' || github.ref_name == 'starlink/celular-catalogo-032'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Test and compile layout
+        working-directory: native
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout :app:compileLayoutAndroidTestKotlin
+      - name: Load stable signing key when configured
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.STARLINK_LAYOUT_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/layout.jks"
+            chmod 600 "$RUNNER_TEMP/layout.jks"
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build signed layout
+        if: steps.signing.outputs.configured == 'true'
+        working-directory: native
+        env:
+          STARLINK_LAYOUT_KEYSTORE: ${{ runner.temp }}/layout.jks
+          STARLINK_LAYOUT_STORE_PASSWORD: ${{ secrets.STARLINK_LAYOUT_STORE_PASSWORD }}
+          STARLINK_LAYOUT_KEY_ALIAS: ${{ secrets.STARLINK_LAYOUT_KEY_ALIAS }}
+          STARLINK_LAYOUT_KEY_PASSWORD: ${{ secrets.STARLINK_LAYOUT_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon :app:assembleLayout :app:assembleLayoutAndroidTest
+          mkdir -p ../device-apks
+          cp app/build/outputs/apk/layout/app-layout.apk ../device-apks/STARLINK-IPTV-layout.apk
+          cp app/build/outputs/apk/androidTest/layout/app-layout-androidTest.apk ../device-apks/STARLINK-IPTV-layout-androidTest.apk
+      - name: Validate pinned signed build when secrets cannot be provisioned
+        if: steps.signing.outputs.configured != 'true'
+        run: |
+          mkdir -p device-apks
+          cp dist/STARLINK-IPTV-layout.apk device-apks/
+          cp starlink/validation/STARLINK-IPTV-layout-androidTest.apk device-apks/
+          python3 starlink/layout_build_receipt.py verify
+      - name: Validate APK
+        run: |
+          mkdir -p dist
+          cp device-apks/STARLINK-IPTV-layout.apk dist/STARLINK-IPTV-layout.apk
+          python3 starlink/validate_native_apk.py dist/STARLINK-IPTV-layout.apk --package br.starlink.iptv.layout --label 'STARLINK IPTV Prévia'
+          sha256sum dist/STARLINK-IPTV-layout.apk > dist/SHA256SUMS-layout
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: STARLINK-device-apks
+          path: device-apks/
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: STARLINK-IPTV-layout-APK
+          path: |
+            dist/STARLINK-IPTV-layout.apk
+            dist/SHA256SUMS-layout
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: STARLINK-test-reports
+          path: |
+            native/core/build/reports/tests/
+            native/app/build/reports/
+  device:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: phone
+            api: 35
+            target: google_apis
+            profile: pixel_7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: STARLINK-device-apks
+          path: device-apks
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          disable-animations: true
+          script: bash starlink/run_device_tests.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: STARLINK-device-${{ matrix.device }}
+          path: |
+            device-reports/

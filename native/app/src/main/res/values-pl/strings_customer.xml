@@ -1,0 +1,18 @@
+<resources>
+    <string name="customer_login_title">Welcome</string>
+    <string name="customer_username">Username</string>
+    <string name="customer_password">Password</string>
+    <string name="customer_sign_in">Sign in</string>
+    <string name="customer_signing_in">Signing in…</string>
+    <string name="customer_help">Need help?</string>
+    <string name="customer_missing_credentials">Enter your username and password.</string>
+    <string name="customer_error_title">Please try again</string>
+    <string name="customer_generic_error">We could not continue. Please try again.</string>
+    <string name="customer_connection_error">Unable to connect. Check your internet connection and try again.</string>
+    <string name="customer_timeout_error">The connection took too long. Please try again.</string>
+    <string name="customer_access_error">Your access is unavailable. Please contact support.</string>
+    <string name="customer_auth_error">Check your username and password and try again.</string>
+    <string name="customer_service_error">Temporarily unavailable. Please try again shortly.</string>
+    <string name="customer_account">My account</string>
+    <string name="customer_logout">Sign out</string>
+</resources>

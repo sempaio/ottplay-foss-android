@@ -1,0 +1,452 @@
+{
+  "schema": 1,
+  "jarSha256": "81afdc3f247750597b2fb214c20b6ed80ebdaf5da6ebc9ca9186be75eecb247b",
+  "cases": [
+    {
+      "input": {},
+      "result": {
+        "sources": [],
+        "notes": [
+          "No supported M3U, Xtream or Stalker source settings were found in the file."
+        ],
+        "messages": [
+          {
+            "key": "LEGACY_NO_SOURCES",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "version": 1,
+        "settings": {},
+        "favoritesArray": []
+      },
+      "result": {
+        "sources": [],
+        "notes": [
+          "The FOSS settings-v1 backup contains preferences and old channel IDs, but no provider addresses or credentials. Add a source or import the original M3U file.",
+          "Old favorite and blocked channel IDs are incompatible with the new catalogue. Select those channels again after importing sources."
+        ],
+        "messages": [
+          {
+            "key": "LEGACY_BACKUP_WITHOUT_SOURCES",
+            "args": []
+          },
+          {
+            "key": "LEGACY_FAVORITES_SKIPPED",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "M3Us": [
+          {
+            "www": "https://example.test/a"
+          },
+          {
+            "www": "https://example.test/a"
+          }
+        ]
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "99b02b6675b7e64664315dfa3048062a",
+            "name": "Imported playlist 1",
+            "kind": "M3U",
+            "url": "https://example.test/a",
+            "username": "",
+            "password": "",
+            "mac": "",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 0.0,
+            "nameMessage": {
+              "key": "IMPORTED_PLAYLIST",
+              "args": [
+                "1"
+              ]
+            },
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [],
+        "messages": []
+      }
+    },
+    {
+      "input": {
+        "storage": {
+          "xtream_data": {
+            "server": "https://example.test",
+            "username": "u",
+            "password": "p"
+          }
+        }
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "b01c06810490785fed877511f0705a44",
+            "name": "Imported Xtream",
+            "kind": "XTREAM",
+            "url": "https://example.test/",
+            "username": "u",
+            "password": "p",
+            "mac": "",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 0.0,
+            "nameMessage": {
+              "key": "IMPORTED_XTREAM",
+              "args": []
+            },
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [],
+        "messages": []
+      }
+    },
+    {
+      "input": {
+        "localStorage": "{\"m3uArr\": \"{\\\"M3Us\\\": [{\\\"www\\\": \\\"https://example.test/a\\\", \\\"rechours\\\": \\\"87600\\\", \\\"name\\\": \\\"  \\\"}, {\\\"www\\\": \\\"/local\\\", \\\"medUrl\\\": \\\"https://library\\\"}]}\"}"
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "99b02b6675b7e64664315dfa3048062a",
+            "name": "Imported playlist 1",
+            "kind": "M3U",
+            "url": "https://example.test/a",
+            "username": "",
+            "password": "",
+            "mac": "",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 3650.0,
+            "nameMessage": {
+              "key": "IMPORTED_PLAYLIST",
+              "args": [
+                "1"
+              ]
+            },
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [
+          "Playlist 2: local file or unsupported address. Import the original M3U file separately.",
+          "Playlist 2: the separate legacy media library was not imported as M3U."
+        ],
+        "messages": [
+          {
+            "key": "LEGACY_PLAYLIST_UNSUPPORTED",
+            "args": [
+              "2"
+            ]
+          },
+          {
+            "key": "LEGACY_LIBRARY_SKIPPED",
+            "args": [
+              "2"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "m3uArr": {
+          "M3Us": [
+            null,
+            1,
+            {
+              "www": "ftp://a"
+            },
+            {
+              "www": "https://a",
+              "rechours": "NaN"
+            }
+          ]
+        }
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "f82c28bd35933ad010098f01ffc1e74e",
+            "name": "Imported playlist 2",
+            "kind": "M3U",
+            "url": "https://a/",
+            "username": "",
+            "password": "",
+            "mac": "",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 0.0,
+            "nameMessage": {
+              "key": "IMPORTED_PLAYLIST",
+              "args": [
+                "2"
+              ]
+            },
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [
+          "Playlist 1: local file or unsupported address. Import the original M3U file separately."
+        ],
+        "messages": [
+          {
+            "key": "LEGACY_PLAYLIST_UNSUPPORTED",
+            "args": [
+              "1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "stalker_data": {
+          "portal": "https://portal.test/API",
+          "mac": "00:1A:79:01:02:03"
+        }
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "8a1934be35b991dc687820d30e080131",
+            "name": "Imported Stalker",
+            "kind": "STALKER",
+            "url": "https://portal.test/API/stalker_portal/api/",
+            "username": "",
+            "password": "",
+            "mac": "00:1A:79:01:02:03",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 0.0,
+            "nameMessage": {
+              "key": "IMPORTED_STALKER",
+              "args": []
+            },
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [],
+        "messages": []
+      }
+    },
+    {
+      "input": {
+        "stalker_data": {
+          "portal": "https://portal.test/api/",
+          "mac": "00:1a:79:01:02:03"
+        }
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "1376eb5a3d98218fc602161d7a8dbca1",
+            "name": "Imported Stalker",
+            "kind": "STALKER",
+            "url": "https://portal.test/api/",
+            "username": "",
+            "password": "",
+            "mac": "00:1a:79:01:02:03",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 0.0,
+            "nameMessage": {
+              "key": "IMPORTED_STALKER",
+              "args": []
+            },
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [],
+        "messages": []
+      }
+    },
+    {
+      "input": {
+        "stalker_data": {
+          "portal": "https://portal.test",
+          "mac": "invalid"
+        }
+      },
+      "result": {
+        "sources": [],
+        "notes": [
+          "Legacy Stalker settings have an invalid portal address or MAC identifier.",
+          "No supported M3U, Xtream or Stalker source settings were found in the file."
+        ],
+        "messages": [
+          {
+            "key": "LEGACY_STALKER_INVALID",
+            "args": []
+          },
+          {
+            "key": "LEGACY_NO_SOURCES",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "xtream_data": {
+          "server": "https://x",
+          "username": " ",
+          "password": "p"
+        }
+      },
+      "result": {
+        "sources": [],
+        "notes": [
+          "Legacy Xtream settings have missing credentials or an invalid server address.",
+          "No supported M3U, Xtream or Stalker source settings were found in the file."
+        ],
+        "messages": [
+          {
+            "key": "LEGACY_XTREAM_INVALID",
+            "args": []
+          },
+          {
+            "key": "LEGACY_NO_SOURCES",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "m3uArr": "broken"
+      },
+      "result": {
+        "sources": [],
+        "notes": [
+          "No supported M3U, Xtream or Stalker source settings were found in the file."
+        ],
+        "messages": [
+          {
+            "key": "LEGACY_NO_SOURCES",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "values": {
+          "m3uArr": {
+            "M3Us": [
+              {
+                "www": "https://a",
+                "rechours": "-1"
+              },
+              {
+                "www": "https://b",
+                "rechours": "87601"
+              }
+            ]
+          }
+        }
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "f82c28bd35933ad010098f01ffc1e74e",
+            "name": "Imported playlist 1",
+            "kind": "M3U",
+            "url": "https://a/",
+            "username": "",
+            "password": "",
+            "mac": "",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 0.0,
+            "nameMessage": {
+              "key": "IMPORTED_PLAYLIST",
+              "args": [
+                "1"
+              ]
+            },
+            "nameIsUserDefined": false
+          },
+          {
+            "id": "41febe5ca49116e667a91667ff8c2896",
+            "name": "Imported playlist 2",
+            "kind": "M3U",
+            "url": "https://b/",
+            "username": "",
+            "password": "",
+            "mac": "",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 0.0,
+            "nameMessage": {
+              "key": "IMPORTED_PLAYLIST",
+              "args": [
+                "2"
+              ]
+            },
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [],
+        "messages": []
+      }
+    },
+    {
+      "input": {
+        "m3uArr": {
+          "M3Us": [
+            {
+              "www": "https://a",
+              "rechours": 24,
+              "name": 42
+            }
+          ]
+        }
+      },
+      "result": {
+        "sources": [
+          {
+            "id": "f82c28bd35933ad010098f01ffc1e74e",
+            "name": "42",
+            "kind": "M3U",
+            "url": "https://a/",
+            "username": "",
+            "password": "",
+            "mac": "",
+            "epgUrl": "",
+            "headers": {},
+            "catchupDaysFallback": 1.0,
+            "nameMessage": null,
+            "nameIsUserDefined": false
+          }
+        ],
+        "notes": [],
+        "messages": []
+      }
+    },
+    {
+      "input": [],
+      "error": {
+        "name": "play.ott.nativeapp.core.ProviderException",
+        "message": "Legacy settings must be a JSON object"
+      }
+    },
+    {
+      "input": null,
+      "error": {
+        "name": "play.ott.nativeapp.core.ProviderException",
+        "message": "Legacy settings must be a JSON object"
+      }
+    }
+  ]
+}

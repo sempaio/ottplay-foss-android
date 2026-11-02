@@ -1,0 +1,278 @@
+[
+    {
+        "xml": "<tv><programme channel=\"b\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "b",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"a\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "a",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"01\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "01",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"2\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "2",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"__proto__\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "__proto__",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\" \" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"é\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "é",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"🎬\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "🎬",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101\" stop=\"202601010000\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101\" stop=\"\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"2026010100\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"2026010100\" stop=\"202601010000\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"2026010100\" stop=\"\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"202601010000\" stop=\"202601010000\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"202601010000\" stop=\"\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101000000 Z\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101000000 Z\" stop=\"202601010000\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101000000 Z\" stop=\"\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101000000 +0530\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "Title",
+                "startMillis": 1767205800000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101000000 +0530\" stop=\"202601010000\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "Title",
+                "startMillis": 1767205800000,
+                "endMillis": 1767225600000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260101000000 +0530\" stop=\"\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"bad\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"bad\" stop=\"202601010000\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"bad\" stop=\"\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260230\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260230\" stop=\"202601010000\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"20260230\" stop=\"\"><title>Title</title><desc>Text</desc></programme></tv>",
+        "expected": []
+    },
+    {
+        "xml": "<tv><programme channel=\"b\" start=\"202601010100\" stop=\"202601010200\"><title>First</title><desc>Text</desc></programme><programme channel=\"a\" start=\"202601010000\" stop=\"202601010100\"><title>Title</title><desc>Text</desc></programme><programme channel=\"b\" start=\"202601010100\" stop=\"202601010200\"><title>Duplicate</title><desc>Text</desc></programme><programme channel=\"a\" start=\"202512312300\" stop=\"202601010000\"><title>Older</title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "a",
+                "title": "Older",
+                "startMillis": 1767222000000,
+                "endMillis": 1767225600000,
+                "description": "Text"
+            },
+            {
+                "channelId": "a",
+                "title": "Title",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            },
+            {
+                "channelId": "b",
+                "title": "First",
+                "startMillis": 1767229200000,
+                "endMillis": 1767232800000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"202601010000\" stop=\"202601010100\"><title> </title><desc>Text</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "Untitled programme",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "Text"
+            }
+        ]
+    },
+    {
+        "xml": "<tv><programme channel=\"1\" start=\"202601010000\" stop=\"202601010100\"><title>One</title><title>Two</title><desc>A &amp; B</desc></programme></tv>",
+        "expected": [
+            {
+                "channelId": "1",
+                "title": "One",
+                "startMillis": 1767225600000,
+                "endMillis": 1767229200000,
+                "description": "A & B"
+            }
+        ]
+    },
+    {
+        "xml": "<!DOCTYPE tv SYSTEM \"https://invalid.test/tv.dtd\"><tv/>",
+        "expected": {
+            "error": "EPG is malformed XML or uses unsupported document declarations"
+        }
+    }
+]

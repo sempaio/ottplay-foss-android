@@ -1,0 +1,29 @@
+{
+  "source_base": "0f476cd4be845d35a45afdb231c7084358b39712",
+  "apk_file": "STARLINK-032-PARA-VOCE-INTEGRADO.apk",
+  "sha256": "ca629612ea1225a5b04d1c371f067acb4945ea75d57b0940b24d689c5fcc5300",
+  "bytes": 23037308,
+  "package": "br.starlink.iptv.paravoce",
+  "version": "0.3.2-para-voce-test",
+  "signing": "Android Debug; SHA256 f21afa39be5634c30200438c33b5ce2ae5bae8e170612e66e26001a53ef601cf",
+  "tests": {
+    "core": {
+      "tests": 69,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "app": {
+      "tests": 140,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 20,
+    "hints": 1
+  },
+  "production_delivery_changed": false
+}

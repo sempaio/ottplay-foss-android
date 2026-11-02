@@ -1,0 +1,43 @@
+{
+  "device": "OttplayNativePhone API35 arm64 emulator",
+  "appSourceCommit": "cc3022ebfd6b920bff112cbcf756bd25533bddbb",
+  "worktreeBaseCommit": "55c13da2a8e0a6de76fe0dd0470a7d0d1f5715e8",
+  "testSourceSha256": {
+    "app/src/androidTest/java/play/ott/nativeapp/ui/UiWindowReadiness.kt": "c8ab205efef069f21f1d3cbc324f88d043f281acaf8958a8c9bf050c1c775d67",
+    "app/src/androidTest/java/play/ott/nativeapp/ui/RealActivityPlaybackInstrumentedTest.kt": "62a144ffe4cc63b26d2b232c680a2d5537935b49d8e1f477e090cbeadcf42281"
+  },
+  "result": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "cases": [
+    {
+      "name": "coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback",
+      "classname": "play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest",
+      "time": "24.995"
+    },
+    {
+      "name": "onboardingDemoSelectionPlaybackBackAndSourceEditor",
+      "classname": "play.ott.nativeapp.ui.NativeUiInstrumentedTest",
+      "time": "11.179"
+    },
+    {
+      "name": "televisionRailSupportsDirectionalFocusAndSelection",
+      "classname": "play.ott.nativeapp.ui.NativeUiInstrumentedTest",
+      "time": "4.215"
+    },
+    {
+      "name": "televisionEntersANewTabAfterThePreviousGridWasScrolled",
+      "classname": "play.ott.nativeapp.ui.NativeUiInstrumentedTest",
+      "time": "4.036"
+    }
+  ],
+  "immersiveTutorial": {
+    "settingBefore": "null",
+    "settingAfter": "confirmed",
+    "acknowledgement": "OttUiWindowReadiness: Acknowledged Android first-fullscreen tutorial",
+    "localLogTime": "2026-09-13 08:20:17.513 PDT"
+  }
+}

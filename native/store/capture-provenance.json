@@ -1,0 +1,85 @@
+{
+  "captured_on": "2026-09-13",
+  "versionName": "0.2.1",
+  "versionCode": 3,
+  "applicationId": "play.ott.foss.nativeapp",
+  "buildType": "release",
+  "source_base_commit": "9bd64d44c4f02c299f02aeb65c84b361bac92c31",
+  "source_state": "Google Play readiness working tree; see the commit containing this manifest",
+  "test_apk_sha256": "7f10d9b71e885b91033ef3174ac23bbd5870f0dfc7f989e5afa76a5b530cbed4",
+  "aab_sha256": "c2058424aac1eb7825ab8aee5739d2ea3e75b1dce67646b1e082690b7f0b1cfa",
+  "signing": "APK uses Android SDK debug certificate for isolated device checks; AAB is unsigned. Neither artifact is a Play upload.",
+  "devices": {
+    "phone": {
+      "api": 35,
+      "abi": "arm64-v8a",
+      "systemImage": "default",
+      "resolution": "1080x1920",
+      "pageSize": 4096
+    },
+    "tv": {
+      "api": 36,
+      "abi": "arm64-v8a",
+      "systemImage": "android-tv",
+      "resolution": "1920x1080",
+      "pageSize": 4096
+    }
+  },
+  "screenshots": [
+    {
+      "path": "store/screenshots/phone/01-welcome.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "3b07d892476d2fc571e2b157208f60bb0672664317900bdbf6ff61c276eed401"
+    },
+    {
+      "path": "store/screenshots/phone/02-privacy.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "dac3bf6ebd374dcd5fef4635e7a276c9f55f1bb7f6c878108f51e47433f6368f"
+    },
+    {
+      "path": "store/screenshots/phone/03-library.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "66057febfc9307e89c61e915f54cad0049a7c66389348cf0132d81f441c8c734"
+    },
+    {
+      "path": "store/screenshots/phone/04-player.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "8dc47c9bd9690dee770f68cef8e976903e03255ea9918dd4a88c989318b5722a"
+    },
+    {
+      "path": "store/screenshots/phone/05-pip.png",
+      "width": 1080,
+      "height": 1920,
+      "sha256": "5bfe47f2aead6d7211e27bf201fd5ab3cd955e14389a49428868af114ce9f6bb"
+    },
+    {
+      "path": "store/screenshots/tv/01-welcome.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "64dcaa2d0e45cd770b000bfec156c5ed4d1e6d2b58a3956e79f2038a0342cce7"
+    },
+    {
+      "path": "store/screenshots/tv/02-library.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "a87f183c3f77de1d9c8a344ce720233470a0aa617f0ddc3bc2d61728772515c8"
+    },
+    {
+      "path": "store/screenshots/tv/03-player.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "c9c470c0d8fd0e216690ee1bf3f16b1c33124c8402b230de6bdce63b77c90d65"
+    }
+  ],
+  "image_processing": "Only opaque alpha removal and PNG RGB encoding; all decoded RGB bytes compared equal to raw adb captures. No resizing, cropping or retouching.",
+  "video": {
+    "path": "docs/site/review/phone-media-playback.mp4",
+    "sha256": "80025d8253a6abc6e9e4a1e8b076275b321c40334005babaa866753e5c4a0fbf",
+    "durationSeconds": 18.279933,
+    "processing": "Lossless H.264 stream remux with faststart; no video frames modified; screenrecord metadata streams removed."
+  }
+}

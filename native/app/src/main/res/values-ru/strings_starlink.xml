@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Сервер отклонил имя пользователя или пароль (HTTP 401).</string>
+    <string name="starlink_access_denied">Сервер отказал в доступе (HTTP 403). Проверьте, активна ли учётная запись, не истёк ли срок и нет ли блокировки. Этот ответ сам по себе не означает неверный адрес сервера.</string>
+    <string name="starlink_server_unavailable">Сервер временно недоступен (HTTP 5xx). Повторите попытку позже.</string>
+</resources>

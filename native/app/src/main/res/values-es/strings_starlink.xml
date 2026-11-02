@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">El servidor rechazó el usuario o la contraseña (HTTP 401).</string>
+    <string name="starlink_access_denied">El servidor denegó el acceso (HTTP 403). Comprueba si la cuenta está activa, vencida o bloqueada. Esta respuesta por sí sola no significa que la dirección del servidor sea incorrecta.</string>
+    <string name="starlink_server_unavailable">El servidor no está disponible temporalmente (HTTP 5xx). Inténtalo más tarde.</string>
+</resources>

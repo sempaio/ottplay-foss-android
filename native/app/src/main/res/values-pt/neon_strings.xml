@@ -1,0 +1,16 @@
+<resources>
+    <string name="neon_home">Início</string>
+    <string name="neon_welcome">Bem-vindo(a)</string>
+    <string name="neon_continue">Continue assistindo</string>
+    <string name="neon_featured_movies">Filmes em destaque</string>
+    <string name="neon_featured_series">Séries em destaque</string>
+    <string name="neon_see_all">Ver todos</string>
+    <string name="neon_support">Ajuda e suporte</string>
+    <string name="neon_resume">Continuar</string>
+    <string name="neon_remaining">%1$d minutos restantes</string>
+    <string name="neon_updates">Verificar atualização</string>
+    <string name="neon_no_update">Nenhuma atualização disponível</string>
+    <string name="neon_update_available">Atualização disponível</string>
+    <string name="neon_update_install">Baixar e instalar</string>
+    <string name="neon_update_failed">Não foi possível verificar a atualização. Tente novamente.</string>
+</resources>

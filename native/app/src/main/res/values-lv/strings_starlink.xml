@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Serveris noraidīja lietotājvārdu vai paroli (HTTP 401).</string>
+    <string name="starlink_access_denied">Serveris liedza piekļuvi (HTTP 403). Pārbaudiet, vai konts ir aktīvs, nav beidzies tā termiņš vai tas nav bloķēts. Šī atbilde pati par sevi nenozīmē nepareizu servera adresi.</string>
+    <string name="starlink_server_unavailable">Serveris īslaicīgi nav pieejams (HTTP 5xx). Mēģiniet vēlāk.</string>
+</resources>

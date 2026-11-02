@@ -1,0 +1,13 @@
+{
+  "tests": 18,
+  "failures": 0,
+  "classes": [
+    "CustomerUiInstrumentedTest",
+    "HlsPlaybackInstrumentedTest",
+    "NativePlaybackInstrumentedTest",
+    "NativeUiInstrumentedTest",
+    "NeonLayoutInstrumentedTest",
+    "StarlinkStartupInstrumentedTest",
+    "StarlinkUiInstrumentedTest"
+  ]
+}

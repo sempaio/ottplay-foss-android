@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Sunucu kullanıcı adını veya parolayı reddetti (HTTP 401).</string>
+    <string name="starlink_access_denied">Sunucu erişimi reddetti (HTTP 403). Hesabın etkin, süresi dolmuş veya engellenmiş olup olmadığını kontrol edin. Bu yanıt tek başına sunucu adresinin yanlış olduğu anlamına gelmez.</string>
+    <string name="starlink_server_unavailable">Sunucu geçici olarak kullanılamıyor (HTTP 5xx). Daha sonra tekrar deneyin.</string>
+</resources>

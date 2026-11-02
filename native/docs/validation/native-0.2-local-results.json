@@ -1,0 +1,399 @@
+{
+  "version": "0.2.0",
+  "recordedAt": "2026-09-13T14:50:51.479290+00:00",
+  "status": "passed",
+  "suites": {
+    "core": {
+      "tests": 34,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "missing category endpoint keeps streams with a note while optional auth and server failures remain fatal"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "Stalker paginates channels uses bearer MAC and resolves the original command"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "cancelling catalogue load cancels and releases the underlying HTTP call"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "source redirects resolve relative media from final location and strip custom secrets cross origin"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "Stalker retries expired bearer once and rejects repeating pagination"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "oversized response is rejected before reading its body"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "locally imported playlist resolves its absolute stream without treating content URI as HTTP"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "Xtream requests live VOD and series APIs with encoded credentials and resolves episodes"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "false FOSS RPC handshake cannot be reported as successful authentication"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "legacy combined Xtream response loads live and reports explicitly unsupported optional sections"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "FOSS JSON RPC endpoint preserves that dialect and synthesizes its documented stream path"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ProviderRepositoryTest",
+          "name": "Xtream authentication failure does not masquerade as an empty catalogue"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "same name on different TV channels is not a collision"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "M3U quoted commas folded metadata options and relative URLs stay with the entry"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "flussonic preserves stream token and Xtream archive respects server timezone"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "XMLTV gzip handles offsets entities duplicate programmes and invalid dates"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "HLS manifest is a single playable stream rather than a list of video segments"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "unknown DRM metadata is reported without importing keys or pretending catchup is available"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "M3U skips malformed metadata and unsupported schemes without dropping the next channel"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "archive templates honor duration clipping retention and channel identity"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "XMLTV rejects external and internal entity declarations"
+        },
+        {
+          "class": "play.ott.nativeapp.core.PlaylistEpgTest",
+          "name": "KODI and EXHTTP stream headers parse and reject newline injection"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ArchiveMigrationTest",
+          "name": "archive accepts guide identity normalization and display-name fallback used by database"
+        },
+        {
+          "class": "play.ott.nativeapp.core.ArchiveMigrationTest",
+          "name": "legacy archive hours are fallback only and explicit playlist disable wins"
+        },
+        {
+          "class": "play.ott.nativeapp.core.LegacySourceImporterTest",
+          "name": "string encoded storage keys migrate sources while preserving FOSS portal dialect"
+        },
+        {
+          "class": "play.ott.nativeapp.core.LegacySourceImporterTest",
+          "name": "direct M3U object and wrapped storage objects are accepted without fetching their URLs"
+        },
+        {
+          "class": "play.ott.nativeapp.core.LegacySourceImporterTest",
+          "name": "ordinary settings backup correctly reports that it does not contain source credentials"
+        },
+        {
+          "class": "play.ott.nativeapp.core.KodiDrmTest",
+          "name": "invalid or repeated directives cannot silently downgrade a protected entry"
+        },
+        {
+          "class": "play.ott.nativeapp.core.KodiDrmTest",
+          "name": "split legacy URL is joined only when the URL field is empty"
+        },
+        {
+          "class": "play.ott.nativeapp.core.KodiDrmTest",
+          "name": "legacy catchup days are a fallback only and explicit none wins"
+        },
+        {
+          "class": "play.ott.nativeapp.core.KodiDrmTest",
+          "name": "Kodi raw license POST preserves isolated stream and license credentials and resets per entry"
+        },
+        {
+          "class": "play.ott.nativeapp.core.KodiDrmTest",
+          "name": "documented modern simple and JSON DRM contracts survive encrypted catalog serialization"
+        },
+        {
+          "class": "play.ott.nativeapp.core.KodiDrmTest",
+          "name": "unsupported DRM stays visibly blocked and never imports raw key or transform secrets"
+        },
+        {
+          "class": "play.ott.nativeapp.core.KodiDrmTest",
+          "name": "header policy snapshots input and rejects oversized or malformed input without secrets"
+        }
+      ]
+    },
+    "app": {
+      "tests": 34,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "class": "play.ott.nativeapp.data.EpgHeadersTest",
+          "name": "advertisedExternalGuideReceivesNoCredentials"
+        },
+        {
+          "class": "play.ott.nativeapp.data.EpgHeadersTest",
+          "name": "sameOriginGuideRetainsSourceHeaders"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ResumePositionTest",
+          "name": "completed film starts over and valid long form offset is retained"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ResumePositionTest",
+          "name": "short clip resumes in its last five seconds until nearly complete"
+        },
+        {
+          "class": "play.ott.nativeapp.data.SettingsBackupPolicyTest",
+          "name": "missing file source cannot replace selected source and imported positions take precedence within capacity"
+        },
+        {
+          "class": "play.ott.nativeapp.data.SettingsBackupPolicyTest",
+          "name": "restore merges favorites and resume offsets while honoring imported source and background choice"
+        },
+        {
+          "class": "play.ott.nativeapp.data.SettingsBackupPolicyTest",
+          "name": "malformed preferences fail before storage mutation"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+          "name": "pause or stop invalidates a late noncooperative provider response"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+          "name": "direct item replacement cannot be overwritten by an old next request"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+          "name": "pausing while catalog loads does not permanently disable channel navigation"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+          "name": "previous wraps within live channels and skips VOD entries"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+          "name": "failed switch keeps current playback and retry starts from current channel"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+          "name": "late catalog for old item cannot replace new source queue"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigatorTest",
+          "name": "rapid next presses resolve B then C and only newest C may play"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ScopedDrmCallbackTest",
+          "name": "PlayReady uses native SOAP defaults and explicit content type overrides without duplicate casing"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ScopedDrmCallbackTest",
+          "name": "license POST uses raw challenge and item scoped headers while provisioning receives none"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ScopedDrmCallbackTest",
+          "name": "same origin 307 preserves challenge but another origin never receives credentials"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ScopedDrmCallbackTest",
+          "name": "error and redirect response bodies are bounded before the HTTP data source buffers them"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "native container checks accept MIME hints on extensionless protected streams"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "HTTP credentials are source scoped and are absent from public metadata"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "unsupported native container and Android TV boundaries fail before obtaining licenses"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "live playback defaults to live edge while VOD retains requested offset"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "DRM and extensionless DASH survive controller serialization without publishing credentials"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "explicit stop cancels play intent and clears media but pause does not"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "unsupported and incomplete DRM cannot downgrade to an unprotected request"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.PlaybackItemsTest",
+          "name": "requests missing local configuration after IPC are rebuilt with detached headers"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ChannelNavigationPlayerTest",
+          "name": "next is advertised through player events and reaches resolver with single decoder item"
+        },
+        {
+          "class": "play.ott.nativeapp.data.ResumePositionWriterTest",
+          "name": "paused position retries failed writes and remains coherent after an imported offset"
+        },
+        {
+          "class": "play.ott.nativeapp.data.ResumePositionWriterTest",
+          "name": "a slow checkpoint from the old service cannot overwrite a new service seek"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.RequestPolicyTest",
+          "name": "each item has a detached immutable header snapshot"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.RequestPolicyTest",
+          "name": "header injection duplicate names and framing overrides are rejected without values"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.RequestPolicyTest",
+          "name": "controller access does not trust a package name and keeps notification transport"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.RequestPolicyTest",
+          "name": "stream validation permits signed URLs and rejects missing host or foreign schemes"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ItemMediaSourceFactoryTest",
+          "name": "preparing another item cannot replace headers used by an older source"
+        }
+      ]
+    },
+    "phoneApi35Arm64": {
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "androidSaxParsesPlainAndGzipXmltvButRejectsEveryDoctype"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "rejectedImportValidatesEverySourceBeforeChangingAnyCredentialsOrCache"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "largeCatalogUsesBoundedEncryptedBlocksAndAtomicReplacement"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "catalogAndEpgAreIsolatedBySourceAndExplicitGuideIdTakesPrecedence"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "mixedBackupRestoresNetworkSourcesPreferencesAndResumeWhileReportingMissingFileGrant"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "editingSourceInvalidatesItsCachedCredentialsAndKeepsOtherSource"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "invalidResumeOffsetCannotReplaceSourceOrInvalidateCatalog"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "validImportMergesSourcesAndInvalidatesOnlyTheChangedCatalog"
+        },
+        {
+          "class": "play.ott.nativeapp.data.StorageInstrumentedTest",
+          "name": "androidKeystoreRoundTripUsesFreshNonceAndRejectsTamperingWithoutDataLoss"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.ClearKeyPlaybackInstrumentedTest",
+          "name": "encryptedDashDecodesThroughNativeClearKeyWithIsolatedLicenseHeaders"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.HlsPlaybackInstrumentedTest",
+          "name": "hlsPlaylistItemsDecodeWithTheirOwnHeadersAcrossChannelSwitches"
+        },
+        {
+          "class": "play.ott.nativeapp.playback.NativePlaybackInstrumentedTest",
+          "name": "decoderContinuesAfterControllerReleaseAndReconnectsUntilExplicitStop"
+        },
+        {
+          "class": "play.ott.nativeapp.ui.NativeUiInstrumentedTest",
+          "name": "onboardingDemoSelectionPlaybackBackAndSourceEditor"
+        },
+        {
+          "class": "play.ott.nativeapp.ui.NativeUiInstrumentedTest",
+          "name": "televisionRailSupportsDirectionalFocusAndSelection"
+        },
+        {
+          "class": "play.ott.nativeapp.ui.NativeUiInstrumentedTest",
+          "name": "televisionEntersANewTabAfterThePreviousGridWasScrolled"
+        },
+        {
+          "class": "play.ott.nativeapp.ui.RealActivityPlaybackInstrumentedTest",
+          "name": "coldLaunchSelectsWithRemoteAndNativeControlsChangeActualPlayback"
+        }
+      ]
+    }
+  },
+  "releaseTooling": {
+    "tests": 10,
+    "failures": 0,
+    "command": "python3 -m unittest discover -s scripts/tests -p 'test_*.py'"
+  },
+  "boundaries": [
+    "Local API35 arm64 Android emulator",
+    "No physical device or paid provider acceptance",
+    "ClearKey test uses project-owned synthetic CENC video and local license server",
+    "Signed preview provisioning and GitHub secret upload require explicit approval"
+  ],
+  "optimizedLocalApk": {
+    "path": "app/build/outputs/apk/local-test/ottplay-native-0.2.0-local-test.apk",
+    "bytes": 4047250,
+    "sha256": "f6bafc598b8ee4666700ca34d3a59d8301dcd96d15f56f7946d7abd8307fa141",
+    "signing": "existing Android SDK debug certificate; local test only",
+    "installation": "adb install -r on emulator-5554: success",
+    "runtime": "Installed corrected R8 APK; actual bundled demo frame decoded and playback advanced; system pause acknowledged at 2794 ms with error=null.",
+    "coldStartSampleMs": 799,
+    "sourceCommit": "cc3022ebfd6b920bff112cbcf756bd25533bddbb"
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 27,
+    "hints": 1
+  },
+  "build": {
+    "command": "./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintDebug :app:connectedDebugAndroidTest :app:assembleRelease :app:bundleRelease",
+    "result": "BUILD SUCCESSFUL",
+    "durationSeconds": 226
+  },
+  "sourceCommit": "cc3022ebfd6b920bff112cbcf756bd25533bddbb"
+}

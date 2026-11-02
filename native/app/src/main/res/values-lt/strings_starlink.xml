@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_login_denied">Serveris atmetė naudotojo vardą arba slaptažodį (HTTP 401).</string>
+    <string name="starlink_access_denied">Serveris neleido prieigos (HTTP 403). Patikrinkite, ar paskyra aktyvi, nepasibaigusi ir neužblokuota. Vien šis atsakymas nereiškia, kad serverio adresas neteisingas.</string>
+    <string name="starlink_server_unavailable">Serveris laikinai nepasiekiamas (HTTP 5xx). Bandykite vėliau.</string>
+</resources>

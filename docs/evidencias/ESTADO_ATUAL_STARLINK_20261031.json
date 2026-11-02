@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-31",
+  "status": "paused_by_owner",
+  "branch": "starlink/032-consolidacao-local-20261030",
+  "code_commit": "ca1e59e475bccf4867bba5fe18c817d133bf4384",
+  "native_ci": {
+    "run": 41126645448,
+    "conclusion": "success",
+    "artifact_id": 13011152511
+  },
+  "local_tests": {
+    "core": 75,
+    "app": 145,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "instrumentation": {
+    "status": "incomplete_not_approved",
+    "partial_error_entries": 15,
+    "observed_error": "NoSuchMethodException: android.hardware.input.InputManager.getInstance",
+    "final_summary_present": false
+  },
+  "production_modified": false,
+  "official_app_replaced": false,
+  "fully_approved": false,
+  "remote_head": "388209fc9cb5f31a2c912920df61398e2d50d231",
+  "documentation_branch": "docs/estado-starlink-pausado-20261031",
+  "remote_instrumentation": {
+    "run": 41132084266,
+    "sha": "a77a366ceaaaf0fa9c4bb3319d68d74998668c16",
+    "conclusion": "success",
+    "documented_cases_passed": 4,
+    "environment": "AOSP API35; synthetic fixtures"
+  },
+  "quality_gate": {
+    "run": 41134633334,
+    "conclusion": "failure",
+    "failed_jobs": ["Lint", "dependency-review"]
+  }
+}
