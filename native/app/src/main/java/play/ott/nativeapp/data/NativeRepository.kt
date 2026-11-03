@@ -172,12 +172,35 @@ class NativeRepository(
         }
     }
 
-    /** Skip the full-catalog SQLite replacement when browsing Starlink on demand. */
+    /** Local encrypted cache restores categories and selected streams before networking. */
+    internal suspend fun cachedXtreamCategories(source: SourceConfig): XtreamCached<List<XtreamGroup>>? =
+        withContext(Dispatchers.IO) { db.cachedXtreamGroups(source.id) }
+
+    internal suspend fun cachedXtreamCategory(source: SourceConfig, group: XtreamGroup): XtreamCached<Catalog>? =
+        withContext(Dispatchers.IO) { db.cachedXtreamGroup(source.id, group) }
+
     suspend fun xtreamCategories(source: SourceConfig): List<XtreamGroup> =
         providers.xtreamCategories(source)
 
     suspend fun xtreamCategory(source: SourceConfig, group: XtreamGroup): Catalog =
         providers.xtreamCategory(source, group)
+
+    /** Persist only after the UI has received the network response. */
+    suspend fun saveXtreamCategories(source: SourceConfig, groups: List<XtreamGroup>) =
+        withContext(Dispatchers.IO) {
+            refreshMutex.withLock { sourceMutex.withLock {
+                if (vault.read().firstOrNull { it.id == source.id } == source)
+                    db.storeXtreamGroups(source.id, groups)
+            }}
+        }
+
+    suspend fun saveXtreamCategory(source: SourceConfig, group: XtreamGroup, catalog: Catalog) =
+        withContext(Dispatchers.IO) {
+            refreshMutex.withLock { sourceMutex.withLock {
+                if (vault.read().firstOrNull { it.id == source.id } == source)
+                    db.storeXtreamGroup(source.id, group, catalog)
+            }}
+        }
 
     suspend fun refresh(source: SourceConfig): Catalog = withContext(Dispatchers.IO) {
         refreshMutex.withLock {

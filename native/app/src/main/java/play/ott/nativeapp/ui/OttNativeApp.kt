@@ -338,7 +338,7 @@ fun OttNativeApp(
                                                     FilterChip(selected = group == remote.name, onClick = {
                                                         group = remote.name
                                                         onAction(AppAction.OpenXtreamGroup(remote.kind, remote.id))
-                                                    }, label = { Text(remote.name) }, modifier = Modifier.testTag("library-group-" + remote.name))
+                                                    }, label = { Text(xtreamGroupLabel(remote)) }, modifier = Modifier.testTag("library-group-" + remote.name))
                                                 }
                                             }
                                         }

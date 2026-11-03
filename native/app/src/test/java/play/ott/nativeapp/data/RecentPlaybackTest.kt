@@ -67,7 +67,7 @@ class RecentPlaybackTest {
         val vault: SourceVault = ReflectionHelpers.getField(db, "vault")
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = CatalogDatabase(context, vault)
-        assertEquals(3, db.writableDatabase.version)
+        assertEquals(4, db.writableDatabase.version)
         assertEquals(1000L, db.recent().single().positionMs)
         assertTrue(db.recent("secondary").isEmpty())
     }
@@ -81,7 +81,7 @@ class RecentPlaybackTest {
         // Retain the same vault instance/key, as AndroidKeyStore does across restarts.
         val vault: SourceVault = ReflectionHelpers.getField(db, "vault")
         db = CatalogDatabase(context, vault)
-        assertEquals(3, db.writableDatabase.version)
+        assertEquals(4, db.writableDatabase.version)
         assertEquals(episode, db.read(episode.sourceId).entries.single())
         assertTrue(db.recent().isEmpty())
     }
