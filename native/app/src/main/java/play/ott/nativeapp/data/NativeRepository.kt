@@ -172,6 +172,13 @@ class NativeRepository(
         }
     }
 
+    /** Skip the full-catalog SQLite replacement when browsing Starlink on demand. */
+    suspend fun xtreamCategories(source: SourceConfig): List<XtreamGroup> =
+        providers.xtreamCategories(source)
+
+    suspend fun xtreamCategory(source: SourceConfig, group: XtreamGroup): Catalog =
+        providers.xtreamCategory(source, group)
+
     suspend fun refresh(source: SourceConfig): Catalog = withContext(Dispatchers.IO) {
         refreshMutex.withLock {
             val catalog = when {

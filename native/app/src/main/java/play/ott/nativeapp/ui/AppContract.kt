@@ -12,6 +12,7 @@ data class AppUiState(
     val sources: List<SourceConfig> = emptyList(),
     val selectedSourceId: String? = null,
     val entries: List<MediaEntry> = emptyList(),
+    val xtreamGroups: List<play.ott.nativeapp.core.XtreamGroup> = emptyList(),
     val updateAvailable: Boolean = false,
     val checkingUpdate: Boolean = false,
     val recent: List<play.ott.nativeapp.data.RecentPlayback> = emptyList(),
@@ -35,6 +36,7 @@ data class AppUiState(
 
 sealed interface AppAction {
     data class SelectSource(val sourceId: String) : AppAction
+    data class OpenXtreamGroup(val kind: play.ott.nativeapp.core.MediaKind, val categoryId: String) : AppAction
     data class SaveSource(val source: SourceConfig) : AppAction
     data class DeleteSource(val sourceId: String) : AppAction
     data object Logout : AppAction

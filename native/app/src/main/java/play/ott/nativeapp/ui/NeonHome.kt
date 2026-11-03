@@ -121,6 +121,18 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         }
+        if (state.xtreamGroups.isNotEmpty()) item(key = "xtream-category-shortcuts") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Categorias", style = MaterialTheme.typography.titleLarge)
+                Text("Escolha uma categoria para buscar os canais e filmes somente quando precisar.",
+                    style = MaterialTheme.typography.bodySmall)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(state.xtreamGroups.take(24), key = { it.kind.name + ":" + it.id }) { category ->
+                        ActionButton(category.name, { onBrowse(category.kind, category.name) }, compact = true)
+                    }
+                }
+            }
+        }
         if (quickChannelSearch.isNotBlank()) item(key = "quick-channels") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Canais encontrados", style = MaterialTheme.typography.titleMedium)
