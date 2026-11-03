@@ -38,6 +38,19 @@ class ProviderRepository(
         }
     }
 
+    /** Metadata-first navigation for the operator-owned STARLINK account. */
+    suspend fun xtreamCategories(config: SourceConfig): List<XtreamGroup> = withContext(Dispatchers.IO) {
+        validate(config)
+        require(config.kind == SourceKind.XTREAM)
+        xtream.categories(config)
+    }
+
+    suspend fun xtreamCategory(config: SourceConfig, group: XtreamGroup): Catalog = withContext(Dispatchers.IO) {
+        validate(config)
+        require(config.kind == SourceKind.XTREAM)
+        xtream.category(config, group)
+    }
+
     /** Reuse VOD details already loaded by the movie dialog; a second metadata GET can stall playback. */
     suspend fun resolve(config: SourceConfig, entry: MediaEntry, movieDetailsLoaded: Boolean = false): PlaybackStream = withContext(Dispatchers.IO) {
         // A locally imported M3U has a content:// configuration URL; its individual streams

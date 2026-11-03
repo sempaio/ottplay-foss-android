@@ -83,6 +83,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var controller: MediaController? = null
     private var saveInFlight = false
     private var loadJob: Job? = null
+    private var groupJob: Job? = null
+    private var groupSequence = 0L
+    // Only visited categories are kept, bounded in memory; never prefetch all.
+    private val visitedGroups = LinkedHashMap<String, List<MediaEntry>>()
     private var detailJob: Job? = null
     private var playJob: Job? = null
     private var recoveryJob: Job? = null
@@ -254,10 +258,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
                 repository.save(action.source)
-                if (StarlinkConfig.isStarlinkAccount(action.source) &&
-                    availableSources().none { it.id == StarlinkConfig.PLAYLIST_SOURCE_ID }) {
-                    repository.save(StarlinkConfig.playlistSource())
-                }
+                // Do not add a redundant full M3U source for our Xtream account.
+                // Existing installed sources are not deleted during this transition.
                 val sources = availableSources()
                 updateState { it.copy(sources = sources, sourceSaveRevision = it.sourceSaveRevision + 1) }
                 load(action.source.id, true)
@@ -274,6 +276,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (id != null) load(id, false)
             }
             AppAction.Refresh -> state.value.selectedSourceId?.let { load(it, true) }
+            is AppAction.OpenXtreamGroup -> openXtreamGroup(action.kind, action.categoryId)
             is AppAction.ToggleFavorite -> operation {
                 repository.preferences.update { previous ->
                     val id = previous.activeForYouProfileId
@@ -397,18 +400,61 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun openXtreamGroup(kind: MediaKind, categoryId: String) {
+        val id = state.value.selectedSourceId ?: return
+        val group = state.value.xtreamGroups.firstOrNull { it.kind == kind && it.id == categoryId } ?: return
+        val key = id + ":" + group.kind + ":" + group.id
+        groupJob?.cancel()
+        val sequence = ++groupSequence
+        if (visitedGroups.containsKey(key)) {
+            // Visited groups remain available without another network request.
+            updateState { it.copy(entries = visitedGroups.values.flatten(), isBusy = false) }
+            return
+        }
+        val generation = loadGeneration
+        errorText = null
+        updateState { it.copy(isBusy = true, loadingMessage = message(R.string.message_loading_catalog), error = null) }
+        groupJob = viewModelScope.launch {
+            try {
+                val source = availableSources().firstOrNull { it.id == id } ?: return@launch
+                val catalog = repository.xtreamCategory(source, group)
+                ensureActive()
+                if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
+                visitedGroups[key] = catalog.entries
+                while (visitedGroups.size > 8) visitedGroups.remove(visitedGroups.keys.first())
+                updateState { it.copy(entries = visitedGroups.values.flatten(), isBusy = false) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { showError(e) }
+            finally {
+                if (sequence == groupSequence && generation == loadGeneration && state.value.selectedSourceId == id)
+                    updateState { it.copy(isBusy = false) }
+            }
+        }
+    }
+
     private fun load(id: String, refresh: Boolean) {
         loadingResource = R.string.message_loading_catalog
         errorText = null
         loadJob?.cancel()
+        groupJob?.cancel()
+        groupSequence++
+        visitedGroups.clear()
         val generation = ++loadGeneration
         detailJob?.cancel()
-        updateState { it.copy(selectedSourceId = id, entries = emptyList(), epgEntry = null,
+        updateState { it.copy(selectedSourceId = id, entries = emptyList(), xtreamGroups = emptyList(), epgEntry = null,
             movieEntry = null, seriesEntry = null, isBusy = true, loadingMessage = message(loadingResource), error = null) }
         loadJob = viewModelScope.launch {
             try {
                 repository.preferences.update { it.copy(selectedSourceId = id) }
                 val source = availableSources().first { it.id == id }
+                if (StarlinkConfig.isStarlinkAccount(source)) {
+                    // Initial startup requests category metadata only: no full catalog or M3U.
+                    val groups = repository.xtreamCategories(source)
+                    ensureActive()
+                    if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
+                    updateState { it.copy(xtreamGroups = groups, entries = emptyList(), isBusy = false) }
+                    return@launch
+                }
                 val cached = try { repository.cached(id) } catch (e: Exception) {
                     if (e is CancellationException || !refresh) throw e
                     Catalog(emptyList())

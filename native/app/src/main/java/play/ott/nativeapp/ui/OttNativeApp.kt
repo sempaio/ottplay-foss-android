@@ -148,6 +148,15 @@ fun OttNativeApp(
     var initializedSource by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val selectedSource = state.sources.firstOrNull { it.id == state.selectedSourceId }
+    val lazyXtream = selectedSource?.let(play.ott.nativeapp.StarlinkConfig::isStarlinkAccount) == true
+    val remoteKind = when (tab) {
+        LibraryTab.LIVE -> MediaKind.LIVE
+        LibraryTab.MOVIES -> MediaKind.MOVIE
+        LibraryTab.SERIES -> MediaKind.SERIES
+        else -> null
+    }
+    val remoteGroups = if (lazyXtream && remoteKind != null)
+        state.xtreamGroups.filter { it.kind == remoteKind } else emptyList()
     val tabEntries by produceState<List<MediaEntry>>(emptyList(), state.entries, state.favoriteIds, tab) {
         value = withContext(Dispatchers.Default) {
         state.entries.filter { entry ->
@@ -161,18 +170,19 @@ fun OttNativeApp(
         }
     }
     }
-    val groups by produceState<List<String>>(emptyList(), tabEntries) {
+    val loadedGroups by produceState<List<String>>(emptyList(), tabEntries) {
         value = withContext(Dispatchers.Default) { tabEntries.map { CatalogDisplayGroup.group(it) }.filter { it.isNotBlank() }.distinct().sorted() }
     }
-    LaunchedEffect(tabEntries, group, state.isBusy) {
-        if (!state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
+    val groups = if (lazyXtream && remoteKind != null) remoteGroups.map { it.name } else loadedGroups
+    LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream) {
+        if (!lazyXtream && !state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
             val exists = withContext(Dispatchers.Default) { tabEntries.any { CatalogDisplayGroup.group(it) == group } }
             if (!exists) group = ""
         }
     }
     val visibleEntries by produceState<List<MediaEntry>>(emptyList(), tabEntries, search, group) {
         if (search.isNotBlank()) delay(250)
-        value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || CatalogDisplayGroup.group(it) == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || CatalogDisplayGroup.group(it).contains(search, ignoreCase = true)) }
+        value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || (if (lazyXtream) it.group.trim() else CatalogDisplayGroup.group(it)) == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || CatalogDisplayGroup.group(it).contains(search, ignoreCase = true)) }
     }
     }
     val catalogHeaderCount = 1
@@ -281,6 +291,10 @@ fun OttNativeApp(
                                         NeonHome(state, onAction, welcomeFocus, Modifier.weight(1f), customerMode = customerMode, onBrowse = { kind, category ->
                                             tab = when (kind) { MediaKind.LIVE -> LibraryTab.LIVE; MediaKind.SERIES -> LibraryTab.SERIES; else -> LibraryTab.MOVIES }
                                             group = category; search = ""
+                                            if (lazyXtream && category.isNotBlank()) {
+                                                state.xtreamGroups.firstOrNull { it.kind == kind && it.name == category }
+                                                    ?.let { onAction(AppAction.OpenXtreamGroup(kind, it.id)) }
+                                            }
                                         }, onPreferences = { showForYouPreferences = true },
                                             onFavorites = { tab = LibraryTab.FAVORITES; group = ""; search = "" },
                                             onGuide = { showGuidePicker = true })
@@ -316,9 +330,21 @@ fun OttNativeApp(
                                     )
                                     if (groups.isNotEmpty()) {
                                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            item { FilterChip(selected = group.isBlank(), onClick = { group = "" }, label = { Text(stringResource(R.string.library_all_groups)) }) }
-                                            items(groups) { name -> FilterChip(selected = group == name, onClick = { group = name }, label = { Text(name) }, modifier = Modifier.testTag("library-group-$name")) }
+                                            if (!lazyXtream || remoteKind == null) {
+                                                item { FilterChip(selected = group.isBlank(), onClick = { group = "" }, label = { Text(stringResource(R.string.library_all_groups)) }) }
+                                                items(groups) { name -> FilterChip(selected = group == name, onClick = { group = name }, label = { Text(name) }, modifier = Modifier.testTag("library-group-$name")) }
+                                            } else {
+                                                items(remoteGroups, key = { it.kind.name + ":" + it.id }) { remote ->
+                                                    FilterChip(selected = group == remote.name, onClick = {
+                                                        group = remote.name
+                                                        onAction(AppAction.OpenXtreamGroup(remote.kind, remote.id))
+                                                    }, label = { Text(remote.name) }, modifier = Modifier.testTag("library-group-" + remote.name))
+                                                }
+                                            }
                                         }
+                                    }
+                                    if (lazyXtream && remoteKind != null && group.isBlank()) {
+                                        Text("Selecione uma categoria para carregar os conteúdos.", style = MaterialTheme.typography.bodyMedium)
                                     }
                                     if (state.isBusy) {
                                         LinearProgressIndicator(Modifier.fillMaxWidth())

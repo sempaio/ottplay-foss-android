@@ -38,6 +38,67 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         Catalog(entries, listOf(epg), messages.map { it.english() }, messages)
     }
 
+    /** Fetch only the three compact category lists; no complete streams request. */
+    suspend fun categories(config: SourceConfig): List<XtreamGroup> = translateFailure {
+        authenticate(config)
+        val types = listOf(
+            MediaKind.LIVE to "get_live_categories",
+            MediaKind.MOVIE to "get_vod_categories",
+            MediaKind.SERIES to "get_series_categories",
+        )
+        types.flatMap { (kind, action) ->
+            val rows = api(config, action, "", "") as? JsonArray
+                ?: throw ProviderException("Xtream category response has an unexpected format")
+            if (rows.size > 10000) throw ProviderException("Xtream category response is too large")
+            rows.objects().mapNotNull { row ->
+                val id = row.string("category_id").trim()
+                if (id.isBlank()) null else XtreamGroup(
+                    id, row.string("category_name").ifBlank { "Sem categoria" }, kind,
+                )
+            }
+        }.distinctBy { it.kind to it.id }
+    }
+
+    /** One selected group per request; never pull the entire catalog on startup. */
+    suspend fun category(config: SourceConfig, group: XtreamGroup): Catalog = translateFailure {
+        val action = when (group.kind) {
+            MediaKind.LIVE -> "get_live_streams"
+            MediaKind.MOVIE -> "get_vod_streams"
+            MediaKind.SERIES -> "get_series"
+            else -> throw ProviderException("Unsupported Xtream category kind")
+        }
+        if (group.id.isBlank()) throw ProviderException("Missing Xtream category identifier")
+        val rows = api(config, action, "category_id", group.id) as? JsonArray
+            ?: throw ProviderException("Xtream streams response has an unexpected format")
+        if (rows.size > 100000) throw ProviderException("Xtream category exceeds the safety limit")
+        val routes = addresses(config)
+        val entries = rows.objects().mapNotNull { row ->
+            val providerId = row.string(if (group.kind == MediaKind.SERIES) "series_id" else "stream_id")
+            if (providerId.isBlank() || !providerId.all(Char::isDigit)) return@mapNotNull null
+            val name = row.string("name").ifBlank { "Conteudo $providerId" }
+            val extension = row.string("container_extension").lowercase().takeIf {
+                it.matches(Regex("[a-z0-9]{1,10}"))
+            } ?: if (group.kind == MediaKind.MOVIE) "mp4" else "ts"
+            val pathKind = when (group.kind) {
+                MediaKind.LIVE -> "live"
+                MediaKind.MOVIE -> "movie"
+                else -> "series"
+            }
+            val url = if (group.kind == MediaKind.SERIES) "" else routes.stream(pathKind, providerId, extension)
+            MediaEntry(
+                id = stableId(config.id, "xtream", pathKind, providerId),
+                sourceId = config.id, name = name, url = url,
+                kind = group.kind, group = group.name,
+                logo = row.string(if (group.kind == MediaKind.SERIES) "cover" else "stream_icon")
+                    .takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
+                epgId = row.string("epg_channel_id"),
+                providerId = providerId, headers = config.headers,
+                headerOrigins = headerOrigins(config.headers, config.url),
+            )
+        }
+        Catalog(entries, listOf(config.epgUrl.ifBlank { routes.epg() }))
+    }
+
     suspend fun episodes(config: SourceConfig, series: MediaEntry): List<MediaEntry> = translateFailure {
         val id = series.providerId
         val addresses = addresses(config)

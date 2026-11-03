@@ -65,6 +65,10 @@ data class MediaEntry(
 
 typealias Channel = MediaEntry
 
+/** Metadata only: the application requests a category's streams when it opens. */
+@Serializable
+data class XtreamGroup(val id: String, val name: String, val kind: MediaKind)
+
 @Serializable
 data class Catalog(
     val entries: List<MediaEntry>,
