@@ -350,16 +350,22 @@ fun OttNativeApp(
                                         LinearProgressIndicator(Modifier.fillMaxWidth())
                                         if (state.loadingMessage.isNotBlank()) Text(state.loadingMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(pluralStringResource(R.plurals.library_entry_count, visibleEntries.size, visibleEntries.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        if (isTv) Text(stringResource(R.string.library_remote_hint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (!(lazyXtream && remoteKind != null && group.isBlank())) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(pluralStringResource(R.plurals.library_entry_count, visibleEntries.size, visibleEntries.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            if (isTv) Text(stringResource(R.string.library_remote_hint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                     }
                                             }
                                         }
                                         if (visibleEntries.isEmpty()) {
-                                            item(key = "catalog-empty", span = { GridItemSpan(maxLineSpan) }) {
-                                                EmptyLibrary(tab, search.isNotEmpty() || group.isNotEmpty(), state.isBusy,
-                                                    { search = ""; group = "" }, { onAction(AppAction.Refresh) }, Modifier.fillMaxWidth().heightIn(min = 180.dp))
+                                            // Categories-only is the expected initial state for Xtream on demand.
+                                            // Do not call it an empty library or suggest refreshing the whole catalog.
+                                            if (!(lazyXtream && remoteKind != null && group.isBlank())) {
+                                                item(key = "catalog-empty", span = { GridItemSpan(maxLineSpan) }) {
+                                                    EmptyLibrary(tab, search.isNotEmpty() || group.isNotEmpty(), state.isBusy,
+                                                        { search = ""; group = "" }, { onAction(AppAction.Refresh) }, Modifier.fillMaxWidth().heightIn(min = 180.dp))
+                                                }
                                             }
                                         } else {
                                             items(visibleEntries, key = { it.id }) { entry ->
