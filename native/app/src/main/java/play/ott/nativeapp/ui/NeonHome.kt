@@ -128,7 +128,7 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                     style = MaterialTheme.typography.bodySmall)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(state.xtreamGroups.take(24), key = { it.kind.name + ":" + it.id }) { category ->
-                        ActionButton(category.name, { onBrowse(category.kind, category.name) }, compact = true)
+                        ActionButton(xtreamGroupLabel(category), { onBrowse(category.kind, category.name) }, compact = true)
                     }
                 }
             }

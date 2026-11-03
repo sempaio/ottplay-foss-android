@@ -400,6 +400,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun visitedXtreamEntries(): List<MediaEntry> {
+        // Limit cumulative memory, but never silently truncate an opened category.
+        while (visitedGroups.size > 8 ||
+            (visitedGroups.size > 1 && visitedGroups.values.sumOf { it.size } > 20_000)) {
+            visitedGroups.remove(visitedGroups.keys.first())
+        }
+        return visitedGroups.values.flatten()
+    }
+
     private fun openXtreamGroup(kind: MediaKind, categoryId: String) {
         val id = state.value.selectedSourceId ?: return
         val group = state.value.xtreamGroups.firstOrNull { it.kind == kind && it.id == categoryId } ?: return
@@ -408,7 +417,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val sequence = ++groupSequence
         if (visitedGroups.containsKey(key)) {
             // Visited groups remain available without another network request.
-            updateState { it.copy(entries = visitedGroups.values.flatten(), isBusy = false) }
+            updateState { it.copy(entries = visitedXtreamEntries(), isBusy = false) }
             return
         }
         val generation = loadGeneration
@@ -417,12 +426,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         groupJob = viewModelScope.launch {
             try {
                 val source = availableSources().firstOrNull { it.id == id } ?: return@launch
+                val cached = try { repository.cachedXtreamCategory(source, group) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { null }
+                if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
+                if (cached != null) {
+                    visitedGroups[key] = cached.value.entries
+                    updateState { it.copy(entries = visitedXtreamEntries(), isBusy = false) }
+                    if (cached.ageMillis < 30 * 60_000L) return@launch
+                }
                 val catalog = repository.xtreamCategory(source, group)
                 ensureActive()
                 if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
                 visitedGroups[key] = catalog.entries
-                while (visitedGroups.size > 8) visitedGroups.remove(visitedGroups.keys.first())
-                updateState { it.copy(entries = visitedGroups.values.flatten(), isBusy = false) }
+                updateState { it.copy(entries = visitedXtreamEntries(), isBusy = false) }
+                // Never delay first display while writing encrypted SQLite blocks.
+                try { repository.saveXtreamCategory(source, group, catalog) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { /* Optional disk cache; network data is already visible. */ }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { showError(e) }
             finally {
@@ -448,11 +469,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 repository.preferences.update { it.copy(selectedSourceId = id) }
                 val source = availableSources().first { it.id == id }
                 if (StarlinkConfig.isStarlinkAccount(source)) {
-                    // Initial startup requests category metadata only: no full catalog or M3U.
+                    val cached = try { repository.cachedXtreamCategories(source) }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { null }
+                    if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
+                    if (cached != null && cached.value.isNotEmpty()) {
+                        updateState { it.copy(xtreamGroups = cached.value, entries = emptyList(), isBusy = false) }
+                        if (!refresh && cached.ageMillis < 30 * 60_000L) return@launch
+                    }
                     val groups = repository.xtreamCategories(source)
                     ensureActive()
                     if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
                     updateState { it.copy(xtreamGroups = groups, entries = emptyList(), isBusy = false) }
+                    try { repository.saveXtreamCategories(source, groups) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { /* Do not hide categories if local persistence failed. */ }
                     return@launch
                 }
                 val cached = try { repository.cached(id) } catch (e: Exception) {

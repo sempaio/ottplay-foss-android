@@ -2,6 +2,7 @@ package play.ott.nativeapp.data
 
 import android.content.ContentValues
 import android.content.Context
+import java.io.ByteArrayOutputStream
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import androidx.core.database.sqlite.transaction
@@ -13,14 +14,18 @@ import play.ott.nativeapp.core.CoreMessageKey
 import play.ott.nativeapp.core.Catalog
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.Programme
+import play.ott.nativeapp.core.XtreamGroup
 import play.ott.nativeapp.core.needsHeaderOriginRefresh
+
+/** Age decides when stale-while-revalidate is needed. */
+internal data class XtreamCached<T>(val value: T, val ageMillis: Long)
 
 @Serializable
 private data class CatalogMetadata(val format: Int = 2, val epgUrls: List<String> = emptyList(), val notes: List<String> = emptyList(), val messages: List<CoreMessage> = emptyList())
 
 /** Transactional EPG index and encrypted catalog blocks. All calls run on Dispatchers.IO. */
 class CatalogDatabase(context: Context, private val vault: SourceVault) :
-    SQLiteOpenHelper(context, "catalog.db", null, 3) {
+    SQLiteOpenHelper(context, "catalog.db", null, 4) {
     private val json = Json { ignoreUnknownKeys = true }
     init { setWriteAheadLoggingEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
@@ -30,10 +35,17 @@ class CatalogDatabase(context: Context, private val vault: SourceVault) :
         createRecent(db)
         createProfileRecent(db)
         db.execSQL("CREATE TABLE catalogs(source_id TEXT PRIMARY KEY,payload BLOB NOT NULL,updated_ms INTEGER NOT NULL)")
+        createXtreamCache(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createRecent(db)
         if (oldVersion < 3) createProfileRecent(db)
+        if (oldVersion < 4) createXtreamCache(db)
+    }
+
+    private fun createXtreamCache(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS xtream_cache_meta(source_id TEXT NOT NULL, cache_key TEXT NOT NULL, updated_ms INTEGER NOT NULL, PRIMARY KEY(source_id,cache_key))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS xtream_cache_chunks(source_id TEXT NOT NULL, cache_key TEXT NOT NULL, ordinal INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(source_id,cache_key,ordinal))")
     }
 
     private fun createRecent(db: SQLiteDatabase) {
@@ -139,6 +151,96 @@ class CatalogDatabase(context: Context, private val vault: SourceVault) :
         } finally { db.endTransaction() }
     }
 
+    /** Encrypted metadata and selected categories, not a second complete playlist. */
+    private fun readXtreamCache(sourceId: String, key: String): XtreamCached<String>? {
+        val db = readableDatabase
+        db.beginTransactionNonExclusive()
+        try {
+            val updated = db.rawQuery(
+                "SELECT updated_ms FROM xtream_cache_meta WHERE source_id=? AND cache_key=?",
+                arrayOf(sourceId, key)
+            ).use { if (it.moveToFirst()) it.getLong(0) else return null }
+            val output = ByteArrayOutputStream()
+            val blockCount = db.rawQuery(
+                "SELECT payload FROM xtream_cache_chunks WHERE source_id=? AND cache_key=? ORDER BY ordinal",
+                arrayOf(sourceId, key)
+            ).use { cursor ->
+                var count = 0
+                while (cursor.moveToNext()) {
+                    val block = vault.decrypt(cursor.getBlob(0))
+                    if (output.size() + block.size > XtreamCacheCodec.MAX_PAYLOAD_BYTES) return null
+                    output.write(block)
+                    count++
+                }
+                count
+            }
+            if (blockCount == 0) return null
+            return XtreamCached(output.toString(Charsets.UTF_8.name()),
+                (System.currentTimeMillis() - updated).coerceAtLeast(0))
+        } finally { db.endTransaction() }
+    }
+
+    private fun writeXtreamCache(sourceId: String, key: String, value: String) {
+        val bytes = value.encodeToByteArray()
+        if (bytes.size > XtreamCacheCodec.MAX_PAYLOAD_BYTES) return
+        val chunks = XtreamCacheCodec.chunks(bytes)
+        val db = writableDatabase
+        db.transaction {
+            delete("xtream_cache_meta", "source_id=? AND cache_key=?", arrayOf(sourceId, key))
+            delete("xtream_cache_chunks", "source_id=? AND cache_key=?", arrayOf(sourceId, key))
+            insertOrThrow("xtream_cache_meta", null, ContentValues().apply {
+                put("source_id", sourceId)
+                put("cache_key", key)
+                put("updated_ms", System.currentTimeMillis())
+            })
+            compileStatement("INSERT INTO xtream_cache_chunks(source_id,cache_key,ordinal,payload) VALUES(?,?,?,?)").use { stmt ->
+                chunks.forEachIndexed { index, chunk ->
+                    stmt.clearBindings()
+                    stmt.bindString(1, sourceId)
+                    stmt.bindString(2, key)
+                    stmt.bindLong(3, index.toLong())
+                    stmt.bindBlob(4, vault.encrypt(chunk))
+                    stmt.executeInsert()
+                }
+            }
+            // Store at most eight selected groups per source, plus category metadata.
+            val keys = rawQuery(
+                "SELECT cache_key FROM xtream_cache_meta WHERE source_id=? AND cache_key!='categories' ORDER BY updated_ms DESC,rowid DESC",
+                arrayOf(sourceId)
+            ).use { cursor -> buildList {
+                while (cursor.moveToNext()) add(cursor.getString(0))
+            }}
+            keys.drop(8).forEach { stale ->
+                delete("xtream_cache_meta", "source_id=? AND cache_key=?", arrayOf(sourceId, stale))
+                delete("xtream_cache_chunks", "source_id=? AND cache_key=?", arrayOf(sourceId, stale))
+            }
+        }
+    }
+
+    private fun keyForGroup(group: XtreamGroup): String =
+        "group/" + group.kind.name + "/" + group.id
+
+    internal fun cachedXtreamGroups(sourceId: String): XtreamCached<List<XtreamGroup>>? =
+        readXtreamCache(sourceId, "categories")?.let { item ->
+            XtreamCached(json.decodeFromString<List<XtreamGroup>>(item.value), item.ageMillis)
+        }
+
+    fun storeXtreamGroups(sourceId: String, groups: List<XtreamGroup>) {
+        writeXtreamCache(sourceId, "categories", json.encodeToString(groups))
+    }
+
+    internal fun cachedXtreamGroup(sourceId: String, group: XtreamGroup): XtreamCached<Catalog>? =
+        readXtreamCache(sourceId, keyForGroup(group))?.let { item ->
+            val catalog = json.decodeFromString<Catalog>(item.value)
+            if (catalog.entries.any { it.kind != group.kind || it.sourceId != sourceId }) return null
+            XtreamCached(catalog, item.ageMillis)
+        }
+
+    fun storeXtreamGroup(sourceId: String, group: XtreamGroup, catalog: Catalog) {
+        if (catalog.entries.any { it.kind != group.kind || it.sourceId != sourceId }) return
+        writeXtreamCache(sourceId, keyForGroup(group), json.encodeToString(catalog))
+    }
+
     fun replaceEpg(sourceId: String, programmes: List<Programme>) {
         val db = writableDatabase
         db.transaction {
@@ -169,7 +271,7 @@ class CatalogDatabase(context: Context, private val vault: SourceVault) :
     fun delete(sourceId: String) {
         val db = writableDatabase
         db.transaction {
-            listOf("entries", "epg", "catalogs", "recent", "profile_recent").forEach { db.delete(it, "source_id=?", arrayOf(sourceId)) }
+            listOf("entries", "epg", "catalogs", "recent", "profile_recent", "xtream_cache_meta", "xtream_cache_chunks").forEach { db.delete(it, "source_id=?", arrayOf(sourceId)) }
         }
     }
 }
