@@ -45,30 +45,25 @@ internal fun NeonEmblem(modifier: Modifier = Modifier) {
     coil.compose.AsyncImage(R.drawable.starlink_logo, contentDescription = "STARLINK IPTV", modifier = modifier, contentScale = ContentScale.Fit)
 }
 
-private data class HomeRail(val title: String, val kind: MediaKind, val category: String, val entries: List<MediaEntry>)
-
 @Composable
 internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialFocus: FocusRequester, modifier: Modifier = Modifier, customerMode: Boolean = false, onBrowse: (MediaKind, String) -> Unit, onPreferences: () -> Unit = {},
-    onFavorites: () -> Unit = {}, onGuide: () -> Unit = {}) {
+    onFavorites: () -> Unit = {}, onGuide: () -> Unit = {},
+    onQualitySelect: (List<MediaEntry>) -> Unit = {}) {
     val live = stringResource(R.string.library_heading_live)
-    val movies = stringResource(R.string.neon_featured_movies)
-    val series = stringResource(R.string.neon_featured_series)
-    val rails by produceState<List<HomeRail>>(emptyList(), state.entries, live, movies, series) {
+    val shortcuts by produceState<List<Pair<MediaKind, String>>>(emptyList(), state.entries) {
+        value = withContext(Dispatchers.Default) { HomeCategoryShortcuts.fromEntries(state.entries) }
+    }
+    var selectedKind by rememberSaveable(state.selectedSourceId) { mutableStateOf(MediaKind.MOVIE.name) }
+    var selectedGroup by rememberSaveable(state.selectedSourceId) { mutableStateOf("") }
+    val activeCategory = shortcuts.firstOrNull { it.first.name == selectedKind && it.second == selectedGroup }
+        ?: shortcuts.firstOrNull()
+    val categoryCards by produceState<List<LiveQualityCard>>(emptyList(), state.entries, activeCategory) {
         value = withContext(Dispatchers.Default) {
-            val grouped = state.entries.groupBy { it.kind }
-            buildList {
-                listOf(MediaKind.LIVE to live, MediaKind.MOVIE to movies, MediaKind.SERIES to series).forEach { (kind, label) ->
-                    val entries = grouped[kind].orEmpty()
-                    if (entries.isNotEmpty()) add(HomeRail(label, kind, "", entries.take(20)))
-                }
-                // Bound the home preview; complete categories remain available in the virtual grid.
-                state.entries.groupBy { it.kind to CatalogDisplayGroup.group(it) }.entries.asSequence().filter { it.key.second.isNotBlank() }.take(12).forEach { (key, entries) ->
-                    add(HomeRail(key.second, key.first, key.second, entries.take(20)))
-                }
-            }
+            val entries = HomeCategoryShortcuts.preview(state.entries, activeCategory)
+            if (activeCategory?.first == MediaKind.LIVE) liveQualityCards(entries).take(20)
+            else entries.take(20).map { LiveQualityCard(it, it.name, listOf(it)) }
         }
     }
-    val hero = rails.firstOrNull { it.kind != MediaKind.LIVE }?.entries?.firstOrNull() ?: rails.firstOrNull()?.entries?.firstOrNull()
     val sourceIds = remember(state.sources) { state.sources.map { it.id }.toSet() }
     val recent = remember(state.recent, sourceIds) { state.recent.filter { it.entry.sourceId in sourceIds && it.positionMs > 0 }.take(20) }
     var quickChannelSearch by rememberSaveable { mutableStateOf("") }
@@ -132,6 +127,64 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 }
             }
         }
+        // A single category selector replaces the repeated summary and per-group rails.
+        if (shortcuts.isNotEmpty()) item(key = "home-single-categories") {
+            Column(
+                Modifier.fillMaxWidth().testTag("home-single-categories"),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Categorias", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(shortcuts, key = { it.first.name + ":" + it.second }) { category ->
+                        val kindLabel = when (category.first) {
+                            MediaKind.MOVIE -> "Filmes"
+                            MediaKind.LIVE -> "TV"
+                            MediaKind.SERIES -> "Séries"
+                            else -> "Outros"
+                        }
+                        FilterChip(
+                            selected = activeCategory == category,
+                            onClick = {
+                                selectedKind = category.first.name
+                                selectedGroup = category.second
+                            },
+                            label = { Text(category.second + " · " + kindLabel, maxLines = 1) },
+                            modifier = Modifier.testTag("home-category-" + category.first.name + ":" + category.second),
+                        )
+                    }
+                }
+                activeCategory?.let { selected ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(selected.second, Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                        ActionButton(stringResource(R.string.neon_see_all),
+                            { onBrowse(selected.first, selected.second) }, compact = true)
+                    }
+                    if (categoryCards.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(categoryCards, key = { it.entry.sourceId + ":" + it.entry.id }) { card ->
+                                PosterCard(
+                                    card.entry,
+                                    {
+                                        if (card.options.size > 1) onQualitySelect(card.options)
+                                        else onAction(when (card.entry.kind) {
+                                            MediaKind.SERIES -> AppAction.OpenSeries(card.entry)
+                                            MediaKind.MOVIE -> AppAction.OpenMovie(card.entry)
+                                            else -> AppAction.Play(card.entry)
+                                        })
+                                    },
+                                    Modifier.width(if (card.entry.kind == MediaKind.LIVE) 220.dp else 152.dp),
+                                    landscape = card.entry.kind == MediaKind.LIVE,
+                                    displayName = card.displayName,
+                                    variantsCount = card.options.size,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (favoriteEntries.isNotEmpty()) item(key = "favorites-home") {
             Column(Modifier.testTag("home-favorites-rail"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -156,7 +209,6 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 ActionButton(stringResource(R.string.neon_update_install), { onAction(AppAction.InstallUpdate) }, enabled = !state.checkingUpdate)
             } }
         }
-        hero?.let { item(key = "hero") { FeaturedContent(it, onAction) } }
         if (recent.isNotEmpty()) item(key = "recent") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(stringResource(R.string.neon_continue), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -209,24 +261,18 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
             }
         }
 
-        items(rails, key = { "${it.kind}:${it.category}:${it.title}" }) { rail ->
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(rail.title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    ActionButton(stringResource(R.string.neon_see_all), { onBrowse(rail.kind, rail.category) }, compact = true)
-                }
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(rail.entries, key = { it.id }) { entry ->
-                        PosterCard(entry, { onAction(when (entry.kind) { MediaKind.SERIES -> AppAction.OpenSeries(entry); MediaKind.MOVIE -> AppAction.OpenMovie(entry); else -> AppAction.Play(entry) }) }, Modifier.width(if (entry.kind == MediaKind.LIVE) 220.dp else 152.dp), entry.kind == MediaKind.LIVE)
-                    }
-                }
-            }
-        }
     }
 }
 
 @Composable
-internal fun PosterCard(entry: MediaEntry, onClick: () -> Unit, modifier: Modifier = Modifier, landscape: Boolean = false) {
+internal fun PosterCard(
+    entry: MediaEntry,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    landscape: Boolean = false,
+    displayName: String? = null,
+    variantsCount: Int = 1,
+) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(14.dp)
     Card(onClick = onClick, modifier = modifier.onFocusChanged { focused = it.hasFocus }
@@ -240,7 +286,11 @@ internal fun PosterCard(entry: MediaEntry, onClick: () -> Unit, modifier: Modifi
             if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null, Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit, onSuccess = { artworkReady = true }, onError = { artworkReady = false })
         }
-        Text(entry.name, Modifier.padding(10.dp), maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+        Text(
+            (displayName ?: entry.name) + if (variantsCount > 1) " · $variantsCount qualidades" else "",
+            Modifier.padding(10.dp), maxLines = 2, minLines = 2,
+            overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall,
+        )
     }
 }
 

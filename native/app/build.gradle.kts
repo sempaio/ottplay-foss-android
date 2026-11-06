@@ -72,6 +72,16 @@ android {
             matchingFallbacks += "debug"
             resValue("string", "app_name", "STARLINK Para Você Teste")
         }
+        // Isolated QA install: never downgrade the QA5 encrypted local database.
+        create("stableQa") {
+            initWith(getByName("debug"))
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            applicationIdSuffix = ".stableqa"
+            versionNameSuffix = "-estavel-qa"
+            matchingFallbacks += "debug"
+            resValue("string", "app_name", "STARLINK Estável QA")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
