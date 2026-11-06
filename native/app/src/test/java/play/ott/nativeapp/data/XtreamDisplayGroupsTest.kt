@@ -7,6 +7,26 @@ import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.XtreamGroup
 
 class XtreamDisplayGroupsTest {
+    @Test fun openNetworkBrandsAndSportsAppearUnderSingleLiveGroup() {
+        val src = listOf(
+            group("a", "TV Brasileira"), group("b", "CANAIS: GLOBO"),
+            group("c", "CANAIS: SBT"), group("d", "CANAIS: BAND"),
+            group("e", "CANAIS: RECORD"), group("f", "CANAIS: ESPN"),
+            group("g", "Canais | Premiere"), group("h", "Esportes"),
+            group("i", "CANAIS: HBO"), group("j", "Canais | Telecine"),
+            group("k", "Canais | Filmes"),
+            group("m", "Canais | Globo News")
+        )
+        val groups = XtreamDisplayGroups.merge(src)
+        assertEquals(listOf("a", "b", "c", "d", "e"),
+            groups.first { it.label == "Abertos" }.sources.map { it.id })
+        assertEquals(listOf("f", "g", "h"),
+            groups.first { it.label == "Esportes" }.sources.map { it.id })
+        assertEquals(listOf("i", "j", "k"),
+            groups.first { it.label == "Filmes" }.sources.map { it.id })
+        assertEquals(listOf("m"), groups.first { it.label == "Notícias" }.sources.map { it.id })
+    }
+
     private fun group(id: String, name: String, kind: MediaKind = MediaKind.LIVE) =
         XtreamGroup(id, name, kind)
 
@@ -24,7 +44,7 @@ class XtreamDisplayGroupsTest {
         assertEquals(listOf("4", "5"), output[1].sources.map { it.id })
     }
 
-    @Test fun neverMergeAcrossMediaKindsOrUnrelatedChannelBrands() {
+    @Test fun mergeLiveMovieNetworksWithoutChangingMoviesOrSeries() {
         val sources = listOf(
             group("1", "CANAIS: HBO ✨"),
             group("2", "Canais | Filmes"),
@@ -32,8 +52,9 @@ class XtreamDisplayGroupsTest {
             group("4", "Infantis", MediaKind.MOVIE)
         )
         val output = XtreamDisplayGroups.merge(sources)
-        assertEquals(4, output.size)
-        assertTrue(output.any { it.label == "HBO" })
+        assertEquals(3, output.size)
+        assertEquals(listOf("1", "2"), output.first { it.label == "Filmes" }.sources.map { it.id })
+        assertTrue(output.any { it.kind == MediaKind.MOVIE && it.label == "Infantis" })
     }
 
     @Test fun duplicateNameCaseDiacriticsAndPunctuationDontHideIds() {

@@ -41,6 +41,7 @@ import play.ott.nativeapp.data.CatalogDisplayGroup
 import play.ott.nativeapp.data.ShowcasePlanner
 import play.ott.nativeapp.data.ShowcaseRow
 import play.ott.nativeapp.data.XtreamDisplayGroups
+import play.ott.nativeapp.data.SmartLiveCatalog
 
 /** Original geometric mark, used until the supplied brand master is available as a file. */
 @Composable
@@ -62,24 +63,34 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 .map { it.group.trim() }.filter { it.isNotBlank() }.toSet()
         }
     }
-    val rails by produceState<List<HomeRail>>(emptyList(), state.entries, live, movies, series, liveProviderGroups) {
+    val rails by produceState<List<HomeRail>>(emptyList(), state.entries, state.xtreamGroups, live, movies, series, liveProviderGroups) {
         value = withContext(Dispatchers.Default) {
             val grouped = state.entries.groupBy { it.kind }
             buildList {
                 listOf(MediaKind.LIVE to live, MediaKind.MOVIE to movies, MediaKind.SERIES to series).forEach { (kind, label) ->
                     val entries = grouped[kind].orEmpty()
-                    if (entries.isNotEmpty()) add(HomeRail(label, kind, "", entries.take(20)))
+                    if (entries.isNotEmpty()) {
+                        val ordered = if (kind == MediaKind.LIVE) SmartLiveCatalog.prominentFirst(entries) else entries
+                        add(HomeRail(label, kind, "", ordered.take(20)))
+                    }
                 }
                 // Bound the home preview; complete categories remain available in the virtual grid.
+                val liveLabels = XtreamDisplayGroups.merge(state.xtreamGroups)
+                    .filter { it.kind == MediaKind.LIVE }.map { it.label }.toSet()
                 val groupedByCategory: Map<Pair<MediaKind, String>, List<MediaEntry>> =
                     state.entries.groupBy { entry: MediaEntry ->
-                        entry.kind to CatalogDisplayGroup.resolve(entry, liveProviderGroups)
+                        val display = if (entry.kind == MediaKind.LIVE)
+                            SmartLiveCatalog.category(entry, liveLabels)
+                        else entry.group.trim()
+                        entry.kind to display
                     }
                 groupedByCategory.entries.asSequence()
                     .filter { it.key.second.isNotBlank() }
                     .take(12)
                     .forEach { (key, categoryEntries) ->
-                        add(HomeRail(key.second, key.first, key.second, categoryEntries.take(20)))
+                        val ordered = if (key.first == MediaKind.LIVE)
+                            SmartLiveCatalog.prominentFirst(categoryEntries) else categoryEntries
+                        add(HomeRail(key.second, key.first, key.second, ordered.take(20)))
                     }
             }
         }
@@ -99,6 +110,10 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
             ShowcasePlanner.categories(state.entries, showcaseKind, state.xtreamGroups)
         }
     }
+    val showcaseLabels = remember(state.xtreamGroups) {
+        XtreamDisplayGroups.merge(state.xtreamGroups)
+            .filter { it.kind == MediaKind.LIVE }.map { it.label }.toSet()
+    }
     val showcaseRows by produceState<List<ShowcaseRow>>(
         emptyList(), state.entries, state.xtreamGroups, showcaseKind, showcaseCategory, showcaseBatch
     ) {
@@ -107,7 +122,8 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 state.entries, showcaseKind, showcaseCategory, showcaseBatch,
                 maxRows = 6, batchSize = 12,
                 preferSourceGroup = state.xtreamGroups.any { it.kind == showcaseKind },
-                consolidateSourceGroups = state.xtreamGroups.any { it.kind == showcaseKind }
+                consolidateSourceGroups = state.xtreamGroups.any { it.kind == showcaseKind },
+                availableLiveLabels = showcaseLabels
             )
         }
     }
@@ -118,7 +134,7 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
             else state.entries.asSequence().filter {
                 it.kind == MediaKind.LIVE &&
                     (it.name.contains(quickChannelSearch, ignoreCase = true) ||
-                        CatalogDisplayGroup.resolve(it, liveProviderGroups).contains(quickChannelSearch, ignoreCase = true))
+                        SmartLiveCatalog.category(it, showcaseLabels).contains(quickChannelSearch, ignoreCase = true))
             }.take(18).toList()
         }
     }

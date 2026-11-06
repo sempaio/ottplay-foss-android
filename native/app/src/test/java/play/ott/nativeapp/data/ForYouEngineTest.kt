@@ -82,6 +82,52 @@ class ForYouEngineTest {
         assertEquals(listOf(documentary), ForYouEngine.recommend(listOf(europe, documentary), profile))
     }
 
+    @Test fun questionsDependOnSelectedSubjectsNotOnMovieOrSeriesTab() {
+        val animeOnly = ForYouEngine.followUps(setOf("animes"))
+        assertEquals(listOf("animes"), animeOnly.map { it.first })
+        val animeOptions = animeOnly.single().second.map { it.first }.toSet()
+        assertTrue("criancas" in animeOptions)
+        assertTrue("jovens" in animeOptions)
+        assertTrue("adultos" in animeOptions)
+        assertTrue("classicos" in animeOptions)
+        assertTrue("lancamentos" in animeOptions)
+
+        val cartoonOnly = ForYouEngine.followUps(setOf("desenhos")).single().second.map { it.first }.toSet()
+        assertTrue("filmes-animados" in cartoonOnly)
+        assertTrue("antigos" in cartoonOnly)
+        assertTrue("recentes" in cartoonOnly)
+        assertTrue(ForYouEngine.followUps(emptySet()).isEmpty())
+    }
+
+    @Test fun oldCartoonsAndAnimatedMoviesCanBeLikedAtTheSameTime() {
+        val old = entry("1", "Desenhos Clássicos", "Desenhos", MediaKind.LIVE)
+        val film = entry("2", "Filme de Animação", "Animação", MediaKind.MOVIE)
+        val profile = ForYouProfile(interests = setOf("desenhos"),
+            subInterests = setOf("desenhos:antigos", "desenhos:filmes-animados"))
+        val picked = ForYouEngine.recommend(listOf(old, film), profile)
+        assertTrue(old in picked)
+        assertTrue(film in picked)
+    }
+
+    @Test fun historicalDocumentariesAndSurvivalGetDifferentFollowUpQuestions() {
+        val questions = ForYouEngine.followUps(setOf("documentarios")).single().second.map { it.first }
+        assertTrue("historia" in questions)
+        assertTrue("sobrevivencia" in questions)
+        assertTrue("investigacao" in questions)
+    }
+
+    @Test fun brazilianMoviesAndSeriesAreSeparateOptionalInterests() {
+        val movies = entry("1", "Filme Nacional", "Filmes Nacionais", MediaKind.MOVIE)
+        val series = entry("2", "Série Nacional", "Séries Brasileiras", MediaKind.SERIES)
+        val foreign = entry("3", "Série Internacional", "Séries Netflix", MediaKind.SERIES)
+        val movieProfile = ForYouProfile(interests = setOf("filmes brasileiros"))
+        val seriesProfile = ForYouProfile(interests = setOf("series brasileiras"))
+        assertEquals(listOf(movies), ForYouEngine.recommend(listOf(movies, series, foreign), movieProfile))
+        assertEquals(listOf(series), ForYouEngine.recommend(listOf(movies, series, foreign), seriesProfile))
+        val selected = ForYouEngine.followUps(setOf("series brasileiras", "filmes brasileiros"))
+        assertEquals(2, selected.size)
+    }
+
     @Test fun everyAvailableSubtopicBelongsToItsParent() {
         assertTrue(ForYouEngine.validSubInterests.isNotEmpty())
         assertTrue(ForYouEngine.subtopics.all { (parent, options) ->

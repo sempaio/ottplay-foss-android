@@ -94,6 +94,7 @@ import play.ott.nativeapp.core.SourceConfig
 import play.ott.nativeapp.i18n.AppLanguages
 import play.ott.nativeapp.data.CatalogDisplayGroup
 import play.ott.nativeapp.data.XtreamDisplayGroups
+import play.ott.nativeapp.data.SmartLiveCatalog
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -181,16 +182,29 @@ fun OttNativeApp(
                 .map { it.group.trim() }.filter { it.isNotEmpty() }.toSet()
         }
     }
-    val loadedGroups by produceState<List<String>>(emptyList(), tabEntries, liveProviderGroups) {
+    val availableLiveLabels = remember(state.xtreamGroups, liveProviderGroups) {
+        val names = if (state.xtreamGroups.isNotEmpty())
+            XtreamDisplayGroups.merge(state.xtreamGroups).filter { it.kind == MediaKind.LIVE }.map { it.label }
+        else liveProviderGroups.map { XtreamDisplayGroups.label(it, MediaKind.LIVE) }
+        names.toSet()
+    }
+    val loadedGroups by produceState<List<String>>(
+        emptyList(), tabEntries, availableLiveLabels, tab
+    ) {
         value = withContext(Dispatchers.Default) {
-            tabEntries.map { CatalogDisplayGroup.group(it, liveProviderGroups) }
-                .filter { it.isNotBlank() }.distinct().sorted()
+            tabEntries.map { entry ->
+                if (entry.kind == MediaKind.LIVE) SmartLiveCatalog.category(entry, availableLiveLabels)
+                else entry.group.trim()
+            }.filter { it.isNotBlank() }.distinct().sorted()
         }
     }
     val groups = if (lazyXtream && remoteKind != null) remoteDisplayGroups.map { it.label } else loadedGroups
-    LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream, liveProviderGroups) {
+    LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream, availableLiveLabels) {
         if (!lazyXtream && !state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
-            val exists = withContext(Dispatchers.Default) { tabEntries.any { CatalogDisplayGroup.group(it, liveProviderGroups) == group } }
+            val exists = withContext(Dispatchers.Default) { tabEntries.any { entry ->
+                (if (entry.kind == MediaKind.LIVE) SmartLiveCatalog.category(entry, availableLiveLabels)
+                else entry.group.trim()) == group
+            } }
             if (!exists) group = ""
         }
     }
@@ -198,19 +212,31 @@ fun OttNativeApp(
         if (search.isNotBlank()) delay(250)
         value = withContext(Dispatchers.Default) {
             tabEntries.filter { entry ->
-                val effectiveGroup = CatalogDisplayGroup.group(entry, liveProviderGroups)
-                val filterGroup = if (lazyXtream) XtreamDisplayGroups.label(entry.group, entry.kind) else effectiveGroup
-                (group.isBlank() || filterGroup == group) &&
+                val effectiveGroup = if (entry.kind == MediaKind.LIVE)
+                    SmartLiveCatalog.category(entry, availableLiveLabels) else entry.group.trim()
+                (group.isBlank() || effectiveGroup == group) &&
                     (search.isBlank() || entry.name.contains(search, ignoreCase = true) ||
                         effectiveGroup.contains(search, ignoreCase = true))
             }
         }
     }
-    // Fold only the live channel cards, never the original media entries.
-    val displayCards by produceState<List<LiveQualityCard>>(emptyList(), visibleEntries, tab, lazyXtream) {
+    var liveNetwork by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(tab, group) { liveNetwork = "" }
+    val liveNetworks = remember(visibleEntries, tab, group) {
+        if (tab == LibraryTab.LIVE && group == "Abertos") SmartLiveCatalog.networks(visibleEntries)
+        else emptyList()
+    }
+    // Fold only LIVE quality variants, never original streams or movie/series records.
+    val displayCards by produceState<List<LiveQualityCard>>(
+        emptyList(), visibleEntries, tab, liveNetwork, availableLiveLabels
+    ) {
         value = withContext(Dispatchers.Default) {
-            if (tab == LibraryTab.LIVE) liveQualityCards(visibleEntries) { entry ->
-                if (lazyXtream) XtreamDisplayGroups.label(entry.group, entry.kind) else entry.group
+            if (tab == LibraryTab.LIVE) {
+                val byNetwork = if (liveNetwork.isBlank()) visibleEntries
+                    else visibleEntries.filter { SmartLiveCatalog.network(it) == liveNetwork }
+                liveQualityCards(SmartLiveCatalog.prominentFirst(byNetwork)) { entry ->
+                    SmartLiveCatalog.category(entry, availableLiveLabels)
+                }
             } else visibleEntries.map { LiveQualityCard(it, it.name, listOf(it)) }
         }
     }
@@ -371,6 +397,21 @@ fun OttNativeApp(
                                                         onAction(AppAction.OpenXtreamGroups(remote.kind, remote.sources.map { source -> source.id }))
                                                     }, label = { Text(remote.label) }, modifier = Modifier.testTag("library-group-" + remote.label))
                                                 }
+                                            }
+                                        }
+                                    }
+                                    if (liveNetworks.isNotEmpty()) {
+                                        Text("Emissoras", style = MaterialTheme.typography.titleMedium)
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            item(key = "network-all") {
+                                                FilterChip(selected = liveNetwork.isBlank(), onClick = { liveNetwork = "" },
+                                                    label = { Text("Todas") }, modifier = Modifier.testTag("live-network-all"))
+                                            }
+                                            items(liveNetworks, key = { it }) { network ->
+                                                FilterChip(selected = liveNetwork == network,
+                                                    onClick = { liveNetwork = network },
+                                                    label = { Text(network) },
+                                                    modifier = Modifier.testTag("live-network-" + network))
                                             }
                                         }
                                     }

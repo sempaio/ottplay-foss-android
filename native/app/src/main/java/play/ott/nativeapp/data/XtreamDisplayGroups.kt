@@ -34,7 +34,15 @@ object XtreamDisplayGroups {
             .replace(Regex("^24h "), "")
         if (kind == MediaKind.LIVE) {
             when (trimmed) {
-                "abertos", "canais abertos", "tv brasileira", "brasileira", "tv aberta", "abertas" -> return "Abertos"
+                "abertos", "canais abertos", "tv brasileira", "brasileira", "tv aberta", "abertas",
+                "globo", "sbt", "band", "record", "redetv", "rede tv" -> return "Abertos"
+                "globonews", "globo news", "bandnews", "band news", "record news",
+                "sbt news", "cnn", "jp news", "noticias", "noticia" -> return "Notícias"
+                "sportv", "espn", "premiere", "onefootball", "tnt sports",
+                "futebol", "combate", "band sports", "bandsports",
+                "esportivos", "esporte", "esportes" -> return "Esportes"
+                "hbo", "telecine", "prime video", "paramount", "paramount +",
+                "cine sky", "cinema", "filmes", "filme" -> return "Filmes"
                 "infantil", "infantis", "kids", "criancas" -> return "Infantis"
                 "noticia", "noticias" -> return "Notícias"
                 "religioso", "religiosos", "gospel", "evangelicos" -> return "Religiosos"

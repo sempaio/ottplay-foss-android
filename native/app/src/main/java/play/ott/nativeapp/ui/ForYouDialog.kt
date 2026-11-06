@@ -50,14 +50,23 @@ internal fun ForYouDialog(
     var subtopics by remember(profile.id) { mutableStateOf(profile.subInterests) }
     var dislikes by remember(profile.id) { mutableStateOf(profile.dislikedInterests) }
     var learning by remember(profile.id) { mutableStateOf(profile.allowViewingSignals) }
-    val primary = listOf("futebol", "gospel", "desenhos", "filmes", "series", "documentarios", "animes", "novelas")
-    val secondary = ForYouEngine.topics.filterNot { it in primary }
+    val primary = listOf(
+        "gospel", "desenhos", "animes", "documentarios", "filmes brasileiros",
+        "series brasileiras", "futebol", "esportes", "suspense", "terror",
+        "aventura", "ficcao cientifica", "romance", "drama", "comedia",
+        "classicos", "lancamentos", "natureza", "acao"
+    )
+    val secondary = ForYouEngine.topics.filterNot { it in primary || it in setOf("filmes", "series") }
     val labels = mapOf(
         "futebol" to "Futebol", "gospel" to "Gospel", "desenhos" to "Desenhos", "filmes" to "Filmes",
         "series" to "Séries", "documentarios" to "Documentários", "animes" to "Animes", "novelas" to "Novelas",
         "comedia" to "Comédia", "acao" to "Ação", "romance" to "Romance",
         "infantil" to "Infantil", "esportes" to "Esportes", "natureza" to "Natureza",
-        "ficcao cientifica" to "Ficção científica"
+        "ficcao cientifica" to "Ficção científica",
+        "suspense" to "Suspense", "terror" to "Terror", "aventura" to "Aventura",
+        "drama" to "Drama", "historia" to "História", "classicos" to "Clássicos e nostalgia",
+        "lancamentos" to "Lançamentos", "filmes brasileiros" to "Filmes brasileiros",
+        "series brasileiras" to "Séries brasileiras"
     )
     val emojis = mapOf(
         "futebol" to "⚽", "gospel" to "🎵", "desenhos" to "🎨", "filmes" to "🎬",
@@ -81,9 +90,9 @@ internal fun ForYouDialog(
                 )
                 Text(
                     when (page) {
-                        0 -> "O que você mais gosta de assistir?"
-                        1 -> "O que você prefere dentro de cada assunto?"
-                        else -> "Deixe a experiência do seu jeito"
+                        0 -> "Quais assuntos você gosta?"
+                        1 -> "Conte um pouco mais sobre seus gostos"
+                        else -> "O que você prefere ver menos?"
                     },
                     color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold
                 )
@@ -110,15 +119,14 @@ internal fun ForYouDialog(
                             }
                         }
                         1 -> {
-                            val selected = primary.filter { it in topics && ForYouEngine.subtopics[it].orEmpty().isNotEmpty() }
+                            val selected = ForYouEngine.followUps(topics)
                             if (selected.isEmpty()) {
                                 Text("Você pode continuar sem escolher assuntos específicos.",
                                     color = Color(0xFFBDC1C9), style = MaterialTheme.typography.bodyLarge)
                             } else {
-                                selected.forEach { parent ->
+                                selected.forEach { (parent, choices) ->
                                     Text(labels[parent] ?: parent, color = Color.White,
                                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    val choices = ForYouEngine.subtopics[parent].orEmpty()
                                     PreferenceGrid(
                                         choices.map { parent + ":" + it.first },
                                         choices.associate { (id, label) -> (parent + ":" + id) to label },
@@ -131,14 +139,15 @@ internal fun ForYouDialog(
                             }
                         }
                         else -> {
-                            Text("Outros gêneros", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                            Text("Mais assuntos de seu interesse", color = Color.White,
+                                style = MaterialTheme.typography.titleMedium)
                             PreferenceGrid(secondary, labels, emojis, topics, "genre") { topic ->
                                 if (topic in topics) topics -= topic else { topics += topic; dislikes -= topic }
                             }
                             Text("Quero ver menos de", color = Color.White, style = MaterialTheme.typography.titleMedium)
                             Text("Essas escolhas não escondem os conteúdos do catálogo.",
                                 color = Color(0xFFADB0B8), style = MaterialTheme.typography.bodySmall)
-                            PreferenceGrid(primary, labels, emojis, dislikes, "less") { topic ->
+                            PreferenceGrid(primary + secondary, labels, emojis, dislikes, "less") { topic ->
                                 if (topic in dislikes) dislikes -= topic
                                 else {
                                     dislikes += topic

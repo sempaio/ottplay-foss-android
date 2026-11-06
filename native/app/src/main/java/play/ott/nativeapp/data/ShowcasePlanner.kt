@@ -31,10 +31,12 @@ object ShowcasePlanner {
         if (remoteCategories.isNotEmpty()) return remoteCategories
         val counts = HashMap<String, Int>()
         val liveGroups = entries.asSequence().filter { it.kind == MediaKind.LIVE }
-            .map { it.group.trim() }.filter { it.isNotEmpty() }.toSet()
+            .map { XtreamDisplayGroups.label(it.group, MediaKind.LIVE) }
+            .filter { it.isNotEmpty() }.toSet()
         entries.forEach { entry ->
             if (entry.kind == kind) {
-                val group = CatalogDisplayGroup.group(entry, liveGroups)
+                val group = if (kind == MediaKind.LIVE)
+                    SmartLiveCatalog.category(entry, liveGroups) else entry.group.trim()
                 if (group.isNotBlank()) counts[group] = (counts[group] ?: 0) + 1
             }
         }
@@ -53,20 +55,26 @@ object ShowcasePlanner {
         batchSize: Int = 12,
         preferSourceGroup: Boolean = false,
         consolidateSourceGroups: Boolean = false,
+        availableLiveLabels: Set<String> = emptySet(),
     ): List<ShowcaseRow> {
         if (maxRows <= 0 || batchSize <= 0) return emptyList()
         val grouped = LinkedHashMap<String, MutableList<MediaEntry>>()
         val liveGroups = entries.asSequence().filter { it.kind == MediaKind.LIVE }
             .map { it.group.trim() }.filter { it.isNotEmpty() }.toSet()
+        val validLiveLabels = if (availableLiveLabels.isNotEmpty()) availableLiveLabels
+            else liveGroups.map { XtreamDisplayGroups.label(it, MediaKind.LIVE) }.toSet()
         entries.forEach { entry ->
             if (entry.kind == kind) {
                 // A remote category ID refers to its ORIGINAL provider group, even when
                 // the presentation classifier assigns another existing genre.
                 val group = when {
+                    preferSourceGroup && consolidateSourceGroups && kind == MediaKind.LIVE ->
+                        SmartLiveCatalog.category(entry, validLiveLabels)
                     preferSourceGroup && consolidateSourceGroups ->
                         XtreamDisplayGroups.label(entry.group, entry.kind)
                     preferSourceGroup -> entry.group.trim()
-                    else -> CatalogDisplayGroup.group(entry, liveGroups)
+                    else -> if (entry.kind == MediaKind.LIVE)
+                        SmartLiveCatalog.category(entry, validLiveLabels) else entry.group.trim()
                 }
                 if (group.isNotBlank() && (selectedCategory.isBlank() || selectedCategory == group)) {
                     grouped.getOrPut(group) { ArrayList() }.add(entry)
