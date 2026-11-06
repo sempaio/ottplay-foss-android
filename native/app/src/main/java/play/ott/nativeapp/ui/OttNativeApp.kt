@@ -161,19 +161,34 @@ fun OttNativeApp(
         }
     }
     }
-    val groups by produceState<List<String>>(emptyList(), tabEntries) {
-        value = withContext(Dispatchers.Default) { tabEntries.map { CatalogDisplayGroup.group(it) }.filter { it.isNotBlank() }.distinct().sorted() }
+    val liveProviderGroups by produceState<Set<String>>(emptySet(), state.entries) {
+        value = withContext(Dispatchers.Default) {
+            state.entries.asSequence().filter { it.kind == MediaKind.LIVE }
+                .map { it.group.trim() }.filter { it.isNotEmpty() }.toSet()
+        }
     }
-    LaunchedEffect(tabEntries, group, state.isBusy) {
+    val groups by produceState<List<String>>(emptyList(), tabEntries, liveProviderGroups) {
+        value = withContext(Dispatchers.Default) {
+            tabEntries.map { CatalogDisplayGroup.group(it, liveProviderGroups) }
+                .filter { it.isNotBlank() }.distinct().sorted()
+        }
+    }
+    LaunchedEffect(tabEntries, group, state.isBusy, liveProviderGroups) {
         if (!state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
-            val exists = withContext(Dispatchers.Default) { tabEntries.any { CatalogDisplayGroup.group(it) == group } }
+            val exists = withContext(Dispatchers.Default) { tabEntries.any { CatalogDisplayGroup.group(it, liveProviderGroups) == group } }
             if (!exists) group = ""
         }
     }
-    val visibleEntries by produceState<List<MediaEntry>>(emptyList(), tabEntries, search, group) {
+    val visibleEntries by produceState<List<MediaEntry>>(emptyList(), tabEntries, search, group, liveProviderGroups) {
         if (search.isNotBlank()) delay(250)
-        value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || CatalogDisplayGroup.group(it) == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || CatalogDisplayGroup.group(it).contains(search, ignoreCase = true)) }
-    }
+        value = withContext(Dispatchers.Default) {
+            tabEntries.filter { entry ->
+                val effectiveGroup = CatalogDisplayGroup.group(entry, liveProviderGroups)
+                (group.isBlank() || effectiveGroup == group) &&
+                    (search.isBlank() || entry.name.contains(search, ignoreCase = true) ||
+                        effectiveGroup.contains(search, ignoreCase = true))
+            }
+        }
     }
     val catalogHeaderCount = 1
     val railFocus = remember { FocusRequester() }
