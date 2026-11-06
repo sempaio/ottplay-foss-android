@@ -37,6 +37,7 @@ data class AppUiState(
 sealed interface AppAction {
     data class SelectSource(val sourceId: String) : AppAction
     data class OpenXtreamGroup(val kind: play.ott.nativeapp.core.MediaKind, val categoryId: String) : AppAction
+    data class OpenXtreamGroups(val kind: play.ott.nativeapp.core.MediaKind, val categoryIds: List<String>) : AppAction
     data class SaveSource(val source: SourceConfig) : AppAction
     data class DeleteSource(val sourceId: String) : AppAction
     data object Logout : AppAction

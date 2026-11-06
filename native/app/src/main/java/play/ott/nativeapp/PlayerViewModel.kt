@@ -276,7 +276,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (id != null) load(id, false)
             }
             AppAction.Refresh -> state.value.selectedSourceId?.let { load(it, true) }
-            is AppAction.OpenXtreamGroup -> openXtreamGroup(action.kind, action.categoryId)
+            is AppAction.OpenXtreamGroup -> openXtreamGroups(action.kind, listOf(action.categoryId))
+            is AppAction.OpenXtreamGroups -> openXtreamGroups(action.kind, action.categoryIds)
             is AppAction.ToggleFavorite -> operation {
                 repository.preferences.update { previous ->
                     val id = previous.activeForYouProfileId
@@ -406,44 +407,69 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             (visitedGroups.size > 1 && visitedGroups.values.sumOf { it.size } > 20_000)) {
             visitedGroups.remove(visitedGroups.keys.first())
         }
-        return visitedGroups.values.flatten()
+        // The same stream may be listed under two provider categories.
+        // Never emit duplicate Compose card keys or delete the original stream IDs.
+        return visitedGroups.values.flatten().distinctBy { it.sourceId to it.id }
     }
 
-    private fun openXtreamGroup(kind: MediaKind, categoryId: String) {
+    private fun openXtreamGroups(kind: MediaKind, categoryIds: List<String>) {
         val id = state.value.selectedSourceId ?: return
-        val group = state.value.xtreamGroups.firstOrNull { it.kind == kind && it.id == categoryId } ?: return
-        val key = id + ":" + group.kind + ":" + group.id
+        val groups = categoryIds.distinct().mapNotNull { categoryId ->
+            state.value.xtreamGroups.firstOrNull { it.kind == kind && it.id == categoryId }
+        }
+        if (groups.isEmpty()) return
         groupJob?.cancel()
         val sequence = ++groupSequence
-        if (visitedGroups.containsKey(key)) {
-            // Visited groups remain available without another network request.
-            updateState { it.copy(entries = visitedXtreamEntries(), isBusy = false) }
-            return
-        }
         val generation = loadGeneration
         errorText = null
         updateState { it.copy(isBusy = true, loadingMessage = message(R.string.message_loading_catalog), error = null) }
         groupJob = viewModelScope.launch {
+            val pendingWrites = ArrayList<Pair<play.ott.nativeapp.core.XtreamGroup, Catalog>>()
+            var firstFailure: Exception? = null
+            var shown = false
             try {
                 val source = availableSources().firstOrNull { it.id == id } ?: return@launch
-                val cached = try { repository.cachedXtreamCategory(source, group) }
-                    catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { null }
-                if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
-                if (cached != null) {
-                    visitedGroups[key] = cached.value.entries
-                    updateState { it.copy(entries = visitedXtreamEntries(), isBusy = false) }
-                    if (cached.ageMillis < 30 * 60_000L) return@launch
+                // Read only the original category IDs behind the visible chip.
+                // Fetch sequentially to avoid flooding the server with duplicate requests.
+                for (group in groups) {
+                    ensureActive()
+                    if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
+                    val key = id + ":" + group.kind + ":" + group.id
+                    if (visitedGroups.containsKey(key)) {
+                        shown = true
+                        updateState { it.copy(entries = visitedXtreamEntries()) }
+                        continue
+                    }
+                    val cached = try { repository.cachedXtreamCategory(source, group) }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { null }
+                    if (cached != null) {
+                        visitedGroups[key] = cached.value.entries
+                        shown = true
+                        updateState { it.copy(entries = visitedXtreamEntries()) }
+                        if (cached.ageMillis < 30 * 60_000L) continue
+                    }
+                    val catalog = try { repository.xtreamCategory(source, group) }
+                        catch (e: CancellationException) { throw e }
+                        catch (e: Exception) {
+                            if (firstFailure == null) firstFailure = e
+                            continue
+                        }
+                    ensureActive()
+                    if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
+                    visitedGroups[key] = catalog.entries
+                    shown = true
+                    updateState { it.copy(entries = visitedXtreamEntries()) }
+                    pendingWrites += group to catalog
                 }
-                val catalog = repository.xtreamCategory(source, group)
-                ensureActive()
-                if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
-                visitedGroups[key] = catalog.entries
-                updateState { it.copy(entries = visitedXtreamEntries(), isBusy = false) }
-                // Never delay first display while writing encrypted SQLite blocks.
-                try { repository.saveXtreamCategory(source, group, catalog) }
-                catch (e: CancellationException) { throw e }
-                catch (_: Exception) { /* Optional disk cache; network data is already visible. */ }
+                if (!shown) firstFailure?.let { showError(it) }
+                // Finish loading before saving encrypted cached blocks.
+                updateState { it.copy(isBusy = false) }
+                for ((group, catalog) in pendingWrites) {
+                    try { repository.saveXtreamCategory(source, group, catalog) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { /* Cache is optional; streams are already visible. */ }
+                }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { showError(e) }
             finally {

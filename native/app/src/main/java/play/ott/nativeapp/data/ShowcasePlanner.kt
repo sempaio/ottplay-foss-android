@@ -26,10 +26,8 @@ object ShowcasePlanner {
     ): List<String> {
         // Xtream-on-demand has category metadata before the first stream is downloaded.
         // Never require a full movie/channel catalog just to populate the home selectors.
-        val remoteCategories = remoteGroups.asSequence()
-            .filter { it.kind == kind }
-            .map { it.name.trim() }.filter { it.isNotBlank() }
-            .distinct().toList()
+        val remoteCategories = XtreamDisplayGroups.merge(remoteGroups)
+            .filter { it.kind == kind }.map { it.label }
         if (remoteCategories.isNotEmpty()) return remoteCategories
         val counts = HashMap<String, Int>()
         val liveGroups = entries.asSequence().filter { it.kind == MediaKind.LIVE }
@@ -54,6 +52,7 @@ object ShowcasePlanner {
         maxRows: Int = 6,
         batchSize: Int = 12,
         preferSourceGroup: Boolean = false,
+        consolidateSourceGroups: Boolean = false,
     ): List<ShowcaseRow> {
         if (maxRows <= 0 || batchSize <= 0) return emptyList()
         val grouped = LinkedHashMap<String, MutableList<MediaEntry>>()
@@ -63,8 +62,12 @@ object ShowcasePlanner {
             if (entry.kind == kind) {
                 // A remote category ID refers to its ORIGINAL provider group, even when
                 // the presentation classifier assigns another existing genre.
-                val group = if (preferSourceGroup) entry.group.trim()
-                    else CatalogDisplayGroup.group(entry, liveGroups)
+                val group = when {
+                    preferSourceGroup && consolidateSourceGroups ->
+                        XtreamDisplayGroups.label(entry.group, entry.kind)
+                    preferSourceGroup -> entry.group.trim()
+                    else -> CatalogDisplayGroup.group(entry, liveGroups)
+                }
                 if (group.isNotBlank() && (selectedCategory.isBlank() || selectedCategory == group)) {
                     grouped.getOrPut(group) { ArrayList() }.add(entry)
                 }

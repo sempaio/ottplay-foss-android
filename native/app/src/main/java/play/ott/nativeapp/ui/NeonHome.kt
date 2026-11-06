@@ -40,6 +40,7 @@ import play.ott.nativeapp.data.ForYouEngine
 import play.ott.nativeapp.data.CatalogDisplayGroup
 import play.ott.nativeapp.data.ShowcasePlanner
 import play.ott.nativeapp.data.ShowcaseRow
+import play.ott.nativeapp.data.XtreamDisplayGroups
 
 /** Original geometric mark, used until the supplied brand master is available as a file. */
 @Composable
@@ -105,7 +106,8 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
             ShowcasePlanner.rows(
                 state.entries, showcaseKind, showcaseCategory, showcaseBatch,
                 maxRows = 6, batchSize = 12,
-                preferSourceGroup = state.xtreamGroups.any { it.kind == showcaseKind }
+                preferSourceGroup = state.xtreamGroups.any { it.kind == showcaseKind },
+                consolidateSourceGroups = state.xtreamGroups.any { it.kind == showcaseKind }
             )
         }
     }
@@ -164,8 +166,9 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 Text("Escolha uma categoria para buscar os canais e filmes somente quando precisar.",
                     style = MaterialTheme.typography.bodySmall)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(state.xtreamGroups.take(24), key = { it.kind.name + ":" + it.id }) { category ->
-                        ActionButton(xtreamGroupLabel(category), { onBrowse(category.kind, category.name) }, compact = true)
+                    items(XtreamDisplayGroups.merge(state.xtreamGroups).take(24),
+                        key = { it.kind.name + ":" + it.label }) { category ->
+                        ActionButton(category.label, { onBrowse(category.kind, category.label) }, compact = true)
                     }
                 }
             }
@@ -232,9 +235,9 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                                 onClick = {
                                     showcaseCategory = category
                                     showcaseBatch = 0
-                                    state.xtreamGroups.firstOrNull {
-                                        it.kind == showcaseKind && it.name.trim() == category
-                                    }?.let { onAction(AppAction.OpenXtreamGroup(it.kind, it.id)) }
+                                    XtreamDisplayGroups.merge(state.xtreamGroups)
+                                        .firstOrNull { it.kind == showcaseKind && it.label == category }
+                                        ?.let { onAction(AppAction.OpenXtreamGroups(it.kind, it.sources.map { source -> source.id })) }
                                 },
                                 label = { Text(category, maxLines = 1) },
                                 modifier = Modifier.testTag("showcase-category-$category")
@@ -253,9 +256,9 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                                     (current + 1).coerceAtLeast(0) % showcaseCategories.size
                                 ]
                                 showcaseBatch = 0
-                                state.xtreamGroups.firstOrNull {
-                                    it.kind == showcaseKind && it.name.trim() == showcaseCategory
-                                }?.let { onAction(AppAction.OpenXtreamGroup(it.kind, it.id)) }
+                                XtreamDisplayGroups.merge(state.xtreamGroups)
+                                    .firstOrNull { it.kind == showcaseKind && it.label == showcaseCategory }
+                                    ?.let { onAction(AppAction.OpenXtreamGroups(it.kind, it.sources.map { source -> source.id })) }
                             },
                             Modifier.weight(1f).testTag("showcase-next-category"),
                             compact = true

@@ -7,6 +7,21 @@ import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 
 class LiveQualityGroupsTest {
+    @Test fun equivalentXtreamCategoriesJoinOnlyQualityVariantsOfSameChannel() {
+        val input = listOf(
+            entry("Globo RJ SD", "Canais abertos"),
+            entry("Globo RJ FHD", "CANAIS: ABERTOS ✨"),
+            entry("Globo SP HD", "TV Brasileira"),
+        )
+        val cards = liveQualityCards(input) { media ->
+            play.ott.nativeapp.data.XtreamDisplayGroups.label(media.group, media.kind)
+        }
+        assertEquals(2, cards.size)
+        val rj = cards.first { it.displayName == "Globo RJ" }
+        assertEquals(2, rj.options.size)
+        assertEquals(input.take(2).map { it.id }.toSet(), rj.options.map { it.id }.toSet())
+    }
+
     private fun entry(name: String, group: String = "Esportes", kind: MediaKind = MediaKind.LIVE, source: String = "starlink") =
         MediaEntry(id = "${source}:${group}:${name}", sourceId = source, name = name, group = group, kind = kind)
 

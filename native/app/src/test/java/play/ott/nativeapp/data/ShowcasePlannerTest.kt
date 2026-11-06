@@ -9,6 +9,22 @@ import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.XtreamGroup
 
 class ShowcasePlannerTest {
+    @Test fun unifiedXtreamCategoryShowsEveryOriginalSubgroupWithoutChangingEntries() {
+        val input = listOf(
+            entry(1, MediaKind.LIVE, "Canais abertos"),
+            entry(2, MediaKind.LIVE, "TV Brasileira"),
+            entry(3, MediaKind.LIVE, "CANAIS: ABERTOS ✨"),
+            entry(4, MediaKind.LIVE, "Canais | Infantis")
+        )
+        val rows = ShowcasePlanner.rows(
+            input, MediaKind.LIVE, selectedCategory = "Abertos",
+            preferSourceGroup = true, consolidateSourceGroups = true
+        )
+        assertEquals(1, rows.size)
+        assertEquals(listOf("1", "2", "3"), rows.single().items.map { it.id })
+        assertEquals(4, input.size)
+    }
+
     @Test fun xtreamCategoriesAppearBeforeAnyMoviesAreDownloaded() {
         val groups = listOf(
             XtreamGroup(id = "8", name = "Aventura", kind = MediaKind.MOVIE),

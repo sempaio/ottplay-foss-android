@@ -93,6 +93,7 @@ import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.SourceConfig
 import play.ott.nativeapp.i18n.AppLanguages
 import play.ott.nativeapp.data.CatalogDisplayGroup
+import play.ott.nativeapp.data.XtreamDisplayGroups
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -156,8 +157,11 @@ fun OttNativeApp(
         LibraryTab.SERIES -> MediaKind.SERIES
         else -> null
     }
-    val remoteGroups = if (lazyXtream && remoteKind != null)
-        state.xtreamGroups.filter { it.kind == remoteKind } else emptyList()
+    val remoteDisplayGroups = remember(state.xtreamGroups, remoteKind, lazyXtream) {
+        if (lazyXtream && remoteKind != null)
+            XtreamDisplayGroups.merge(state.xtreamGroups).filter { it.kind == remoteKind }
+        else emptyList()
+    }
     val tabEntries by produceState<List<MediaEntry>>(emptyList(), state.entries, state.favoriteIds, tab) {
         value = withContext(Dispatchers.Default) {
         state.entries.filter { entry ->
@@ -183,7 +187,7 @@ fun OttNativeApp(
                 .filter { it.isNotBlank() }.distinct().sorted()
         }
     }
-    val groups = if (lazyXtream && remoteKind != null) remoteGroups.map { it.name } else loadedGroups
+    val groups = if (lazyXtream && remoteKind != null) remoteDisplayGroups.map { it.label } else loadedGroups
     LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream, liveProviderGroups) {
         if (!lazyXtream && !state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
             val exists = withContext(Dispatchers.Default) { tabEntries.any { CatalogDisplayGroup.group(it, liveProviderGroups) == group } }
@@ -195,7 +199,7 @@ fun OttNativeApp(
         value = withContext(Dispatchers.Default) {
             tabEntries.filter { entry ->
                 val effectiveGroup = CatalogDisplayGroup.group(entry, liveProviderGroups)
-                val filterGroup = if (lazyXtream) entry.group.trim() else effectiveGroup
+                val filterGroup = if (lazyXtream) XtreamDisplayGroups.label(entry.group, entry.kind) else effectiveGroup
                 (group.isBlank() || filterGroup == group) &&
                     (search.isBlank() || entry.name.contains(search, ignoreCase = true) ||
                         effectiveGroup.contains(search, ignoreCase = true))
@@ -203,10 +207,11 @@ fun OttNativeApp(
         }
     }
     // Fold only the live channel cards, never the original media entries.
-    val displayCards by produceState<List<LiveQualityCard>>(emptyList(), visibleEntries, tab) {
+    val displayCards by produceState<List<LiveQualityCard>>(emptyList(), visibleEntries, tab, lazyXtream) {
         value = withContext(Dispatchers.Default) {
-            if (tab == LibraryTab.LIVE) liveQualityCards(visibleEntries)
-            else visibleEntries.map { LiveQualityCard(it, it.name, listOf(it)) }
+            if (tab == LibraryTab.LIVE) liveQualityCards(visibleEntries) { entry ->
+                if (lazyXtream) XtreamDisplayGroups.label(entry.group, entry.kind) else entry.group
+            } else visibleEntries.map { LiveQualityCard(it, it.name, listOf(it)) }
         }
     }
     LaunchedEffect(tab, group, state.selectedSourceId) { qualityOptions = emptyList() }
@@ -317,8 +322,9 @@ fun OttNativeApp(
                                             tab = when (kind) { MediaKind.LIVE -> LibraryTab.LIVE; MediaKind.SERIES -> LibraryTab.SERIES; else -> LibraryTab.MOVIES }
                                             group = category; search = ""
                                             if (lazyXtream && category.isNotBlank()) {
-                                                state.xtreamGroups.firstOrNull { it.kind == kind && it.name == category }
-                                                    ?.let { onAction(AppAction.OpenXtreamGroup(kind, it.id)) }
+                                                XtreamDisplayGroups.merge(state.xtreamGroups)
+                                                    .firstOrNull { it.kind == kind && it.label == category }
+                                                    ?.let { onAction(AppAction.OpenXtreamGroups(kind, it.sources.map { source -> source.id })) }
                                             }
                                         }, onPreferences = { showForYouPreferences = true },
                                             onFavorites = { tab = LibraryTab.FAVORITES; group = ""; search = "" },
@@ -359,11 +365,11 @@ fun OttNativeApp(
                                                 item { FilterChip(selected = group.isBlank(), onClick = { group = "" }, label = { Text(stringResource(R.string.library_all_groups)) }) }
                                                 items(groups) { name -> FilterChip(selected = group == name, onClick = { group = name }, label = { Text(name) }, modifier = Modifier.testTag("library-group-$name")) }
                                             } else {
-                                                items(remoteGroups, key = { it.kind.name + ":" + it.id }) { remote ->
-                                                    FilterChip(selected = group == remote.name, onClick = {
-                                                        group = remote.name
-                                                        onAction(AppAction.OpenXtreamGroup(remote.kind, remote.id))
-                                                    }, label = { Text(xtreamGroupLabel(remote)) }, modifier = Modifier.testTag("library-group-" + remote.name))
+                                                items(remoteDisplayGroups, key = { it.kind.name + ":" + it.label }) { remote ->
+                                                    FilterChip(selected = group == remote.label, onClick = {
+                                                        group = remote.label
+                                                        onAction(AppAction.OpenXtreamGroups(remote.kind, remote.sources.map { source -> source.id }))
+                                                    }, label = { Text(remote.label) }, modifier = Modifier.testTag("library-group-" + remote.label))
                                                 }
                                             }
                                         }
