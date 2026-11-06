@@ -133,6 +133,7 @@ fun OttNativeApp(
     var tab by rememberSaveable { mutableStateOf(LibraryTab.HOME) }
     var search by rememberSaveable { mutableStateOf("") }
     var group by rememberSaveable(state.selectedSourceId, tab) { mutableStateOf("") }
+    var qualityOptions by remember { mutableStateOf<List<MediaEntry>>(emptyList()) }
     var showSources by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showForYouPreferences by rememberSaveable { mutableStateOf(false) }
@@ -185,6 +186,14 @@ fun OttNativeApp(
         value = withContext(Dispatchers.Default) { tabEntries.filter { (group.isBlank() || (if (lazyXtream) it.group.trim() else CatalogDisplayGroup.group(it)) == group) && (search.isBlank() || it.name.contains(search, ignoreCase = true) || CatalogDisplayGroup.group(it).contains(search, ignoreCase = true)) }
     }
     }
+    // Fold only the live channel cards, never the original media entries.
+    val displayCards by produceState<List<LiveQualityCard>>(emptyList(), visibleEntries, tab) {
+        value = withContext(Dispatchers.Default) {
+            if (tab == LibraryTab.LIVE) liveQualityCards(visibleEntries)
+            else visibleEntries.map { LiveQualityCard(it, it.name, listOf(it)) }
+        }
+    }
+    LaunchedEffect(tab, group, state.selectedSourceId) { qualityOptions = emptyList() }
     val catalogHeaderCount = 1
     val railFocus = remember { FocusRequester() }
     val welcomeFocus = remember { FocusRequester() }
@@ -192,7 +201,7 @@ fun OttNativeApp(
     val gridState = rememberLazyGridState()
     val focusScope = rememberCoroutineScope()
     var lastFocusedEntryId by rememberSaveable { mutableStateOf<String?>(null) }
-    val focusEntryId = visibleEntries.firstOrNull { it.id == lastFocusedEntryId }?.id ?: visibleEntries.firstOrNull()?.id
+    val focusEntryId = displayCards.firstOrNull { it.entry.id == lastFocusedEntryId }?.entry?.id ?: displayCards.firstOrNull()?.entry?.id
     var libraryFocusSet by remember(isTv, fullscreen, state.sources.isEmpty()) { mutableStateOf(false) }
     LaunchedEffect(isTv, fullscreen, state.isBusy, state.sources.isEmpty()) {
         if (isTv && !fullscreen && !state.isBusy && !libraryFocusSet) {
@@ -201,7 +210,7 @@ fun OttNativeApp(
             withFrameNanos { }
             if (state.sources.isEmpty() || tab == LibraryTab.HOME) welcomeFocus.requestFocus()
             else if (tab != LibraryTab.HOME && lastFocusedEntryId != null && focusEntryId != null) {
-                gridState.scrollToItem(visibleEntries.indexOfFirst { it.id == focusEntryId } + catalogHeaderCount)
+                gridState.scrollToItem(displayCards.indexOfFirst { it.entry.id == focusEntryId } + catalogHeaderCount)
                 withFrameNanos { }
                 catalogFocus.requestFocus()
             } else railFocus.requestFocus()
@@ -253,7 +262,7 @@ fun OttNativeApp(
                                                         else focusScope.launch {
                                                             // A remembered grid position can put a new tab's target
                                                             // outside the lazy viewport. Compose it before focusing.
-                                                            gridState.scrollToItem(visibleEntries.indexOfFirst { it.id == focusEntryId } + catalogHeaderCount)
+                                                            gridState.scrollToItem(displayCards.indexOfFirst { it.entry.id == focusEntryId } + catalogHeaderCount)
                                                             withFrameNanos { }
                                                             catalogFocus.requestFocus()
                                                         }
@@ -352,13 +361,13 @@ fun OttNativeApp(
                                     }
                                     if (!(lazyXtream && remoteKind != null && group.isBlank())) {
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Text(pluralStringResource(R.plurals.library_entry_count, visibleEntries.size, visibleEntries.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(pluralStringResource(R.plurals.library_entry_count, displayCards.size, displayCards.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             if (isTv) Text(stringResource(R.string.library_remote_hint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                             }
                                         }
-                                        if (visibleEntries.isEmpty()) {
+                                        if (displayCards.isEmpty()) {
                                             // Categories-only is the expected initial state for Xtream on demand.
                                             // Do not call it an empty library or suggest refreshing the whole catalog.
                                             if (!(lazyXtream && remoteKind != null && group.isBlank())) {
@@ -368,10 +377,14 @@ fun OttNativeApp(
                                                 }
                                             }
                                         } else {
-                                            items(visibleEntries, key = { it.id }) { entry ->
+                                            items(displayCards, key = { it.entry.id }) { card ->
+                                                val entry = card.entry
                                                 MediaCard(entry, entry.id in state.favoriteIds, state.playingEntry?.id == entry.id, onAction,
                                                     Modifier.then(if (entry.id == focusEntryId) Modifier.focusRequester(catalogFocus) else Modifier)
-                                                        .onFocusChanged { if (it.hasFocus) lastFocusedEntryId = entry.id })
+                                                        .onFocusChanged { if (it.hasFocus) lastFocusedEntryId = entry.id },
+                                                    displayName = card.displayName,
+                                                    variantCount = card.options.size,
+                                                    onOpen = if (card.options.size > 1) ({ qualityOptions = card.options }) else null)
                                             }
                                         }
                                     }
@@ -423,6 +436,28 @@ fun OttNativeApp(
             }
         }
         if (showGuidePicker) NeonGuidePicker(state.entries, { showGuidePicker = false; onAction(AppAction.OpenEpg(it)) }, { showGuidePicker = false })
+        if (qualityOptions.isNotEmpty()) {
+            AlertDialog(
+                modifier = Modifier.tvRemoteInput(),
+                onDismissRequest = { qualityOptions = emptyList() },
+                title = { Text(stringResource(R.string.starlink_quality_choose)) },
+                text = {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 420.dp)) {
+                        items(qualityOptions, key = { it.id }) { option ->
+                            ActionButton(
+                                (qualityName(option.name) ?: option.name) + " — " + option.name,
+                                { qualityOptions = emptyList(); onAction(AppAction.Play(option)) },
+                                Modifier.fillMaxWidth(),
+                                compact = true,
+                            )
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { qualityOptions = emptyList() }) {
+                    Text(stringResource(R.string.starlink_quality_cancel))
+                } },
+            )
+        }
         state.epgEntry?.let { GuideDialog(it, state.programmes, state.epgLoading, onAction) }
         state.movieEntry?.let { MovieDialog(it, state.isBusy, it.id in state.favoriteIds, onAction) }
         state.seriesEntry?.let { SeriesDialog(it, state.episodes, state.isBusy, onAction) }
@@ -508,7 +543,9 @@ private fun EmptyLibrary(tab: LibraryTab, filtered: Boolean, loading: Boolean, o
 }
 
 @Composable
-internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, onAction: (AppAction) -> Unit, modifier: Modifier = Modifier) {
+internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, onAction: (AppAction) -> Unit,
+                         modifier: Modifier = Modifier, displayName: String? = null,
+                         variantCount: Int = 1, onOpen: (() -> Unit)? = null) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(18.dp)
     val favoriteDescription = stringResource(
@@ -516,7 +553,7 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
         entry.name,
     )
     Card(
-        onClick = { onAction(when (entry.kind) { MediaKind.SERIES -> AppAction.OpenSeries(entry); MediaKind.MOVIE -> AppAction.OpenMovie(entry); else -> AppAction.Play(entry) }) },
+        onClick = { if (onOpen != null) onOpen() else onAction(when (entry.kind) { MediaKind.SERIES -> AppAction.OpenSeries(entry); MediaKind.MOVIE -> AppAction.OpenMovie(entry); else -> AppAction.Play(entry) }) },
         modifier = modifier.fillMaxWidth().testTag("catalog-item-${entry.id}").onFocusChanged { focused = it.isFocused }
             .border(BorderStroke(if (focused || playing) 2.dp else 0.dp, if (focused || playing) MaterialTheme.colorScheme.primary else Color.Transparent), shape),
         colors = CardDefaults.cardColors(containerColor = if (focused) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface),
@@ -535,7 +572,9 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
             if (playing) Text(stringResource(R.string.library_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.BottomStart).background(MaterialTheme.colorScheme.background.copy(alpha = .85f)).padding(6.dp))
         }
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(entry.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(displayName ?: entry.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
+            if (variantCount > 1) Text(stringResource(R.string.starlink_quality_variants_count, variantCount),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             Text(CatalogDisplayGroup.group(entry).ifBlank { if (entry.kind == MediaKind.LIVE) stringResource(R.string.library_live_video) else stringResource(R.string.library_video) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             ActionButton(if (favorite) stringResource(R.string.library_favorite_selected) else stringResource(R.string.library_favorite_add), { onAction(AppAction.ToggleFavorite(entry)) }, Modifier.fillMaxWidth().semantics { contentDescription = favoriteDescription }, compact = true, selected = favorite)
             if (entry.kind == MediaKind.LIVE) ActionButton(stringResource(R.string.library_tv_guide), { onAction(AppAction.OpenEpg(entry)) }, Modifier.fillMaxWidth(), compact = true)
