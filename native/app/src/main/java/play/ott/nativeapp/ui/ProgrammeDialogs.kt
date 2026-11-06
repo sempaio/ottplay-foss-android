@@ -40,8 +40,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.Programme
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.util.TimeZone
 import androidx.compose.ui.platform.LocalConfiguration
 
 @Composable
@@ -52,8 +51,7 @@ internal fun GuideDialog(entry: MediaEntry, programmes: List<Programme>, loading
     val locale = LocalConfiguration.current.locales[0]
     val startFormat = stringResource(R.string.dialog_programme_start_format)
     val endFormat = stringResource(R.string.dialog_programme_end_format)
-    val formatter = remember(locale, startFormat) { SimpleDateFormat(startFormat, locale) }
-    val timeFormatter = remember(locale, endFormat) { SimpleDateFormat(endFormat, locale) }
+    val timeZone = remember { TimeZone.getDefault() }
     val initialIndex = remember(entry.id, ordered) {
         ordered.indexOfFirst { it.endMillis > System.currentTimeMillis() }.coerceAtLeast(0)
     }
@@ -82,10 +80,13 @@ internal fun GuideDialog(entry: MediaEntry, programmes: List<Programme>, loading
                         val catchup = entry.catchup
                         val inArchiveWindow = catchup != null && catchup.days > 0 && programme.startMillis >= now - (catchup.days * 86_400_000).toLong()
                         val replayable = past && inArchiveWindow
+                        val (startLabel, endLabel) = remember(programme.startMillis, programme.endMillis, locale, startFormat, endFormat, timeZone) {
+                            programmeTimeLabels(programme.startMillis, programme.endMillis, locale, timeZone, startFormat, endFormat)
+                        }
                         ProgrammeCard(
                             title = programme.title,
                             description = programme.description,
-                            time = stringResource(R.string.dialog_programme_range, formatter.format(Date(programme.startMillis)), timeFormatter.format(Date(programme.endMillis))),
+                            time = stringResource(R.string.dialog_programme_range, startLabel, endLabel),
                             status = when { live -> stringResource(R.string.dialog_programme_live); replayable -> stringResource(R.string.dialog_programme_archive); past -> stringResource(R.string.dialog_programme_ended); else -> stringResource(R.string.dialog_programme_soon) },
                             live = live,
                             actionLabel = when { live -> stringResource(R.string.dialog_watch); replayable -> stringResource(R.string.dialog_watch_archive); else -> null },
