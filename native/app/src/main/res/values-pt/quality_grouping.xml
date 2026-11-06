@@ -1,0 +1,5 @@
+<resources>
+    <string name="starlink_quality_choose">Escolher qualidade</string>
+    <string name="starlink_quality_cancel">Fechar</string>
+    <string name="starlink_quality_variants_count">%1$d opções de qualidade</string>
+</resources>
