@@ -85,7 +85,7 @@ internal fun GuideDialog(entry: MediaEntry, programmes: List<Programme>, loading
                         ProgrammeCard(
                             title = programme.title,
                             description = programme.description,
-                            time = stringResource(R.string.dialog_programme_range, formatter.format(Date(programme.startMillis)), timeFormatter.format(Date(programme.endMillis))),
+                            time = stringResource(R.string.dialog_programme_range, formatter.format(Date(programme.startMillis)), programmeEndLabel(programme.startMillis, programme.endMillis, formatter, timeFormatter)),
                             status = when { live -> stringResource(R.string.dialog_programme_live); replayable -> stringResource(R.string.dialog_programme_archive); past -> stringResource(R.string.dialog_programme_ended); else -> stringResource(R.string.dialog_programme_soon) },
                             live = live,
                             actionLabel = when { live -> stringResource(R.string.dialog_watch); replayable -> stringResource(R.string.dialog_watch_archive); else -> null },
