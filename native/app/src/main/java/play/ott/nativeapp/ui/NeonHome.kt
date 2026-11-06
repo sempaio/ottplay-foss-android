@@ -38,6 +38,8 @@ import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.data.ForYouEngine
 import play.ott.nativeapp.data.CatalogDisplayGroup
+import play.ott.nativeapp.data.ShowcasePlanner
+import play.ott.nativeapp.data.ShowcaseRow
 
 /** Original geometric mark, used until the supplied brand master is available as a file. */
 @Composable
@@ -53,7 +55,13 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
     val live = stringResource(R.string.library_heading_live)
     val movies = stringResource(R.string.neon_featured_movies)
     val series = stringResource(R.string.neon_featured_series)
-    val rails by produceState<List<HomeRail>>(emptyList(), state.entries, live, movies, series) {
+    val liveProviderGroups by produceState<Set<String>>(emptySet(), state.entries) {
+        value = withContext(Dispatchers.Default) {
+            state.entries.asSequence().filter { it.kind == MediaKind.LIVE }
+                .map { it.group.trim() }.filter { it.isNotBlank() }.toSet()
+        }
+    }
+    val rails by produceState<List<HomeRail>>(emptyList(), state.entries, live, movies, series, liveProviderGroups) {
         value = withContext(Dispatchers.Default) {
             val grouped = state.entries.groupBy { it.kind }
             buildList {
@@ -62,9 +70,16 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                     if (entries.isNotEmpty()) add(HomeRail(label, kind, "", entries.take(20)))
                 }
                 // Bound the home preview; complete categories remain available in the virtual grid.
-                state.entries.groupBy { it.kind to CatalogDisplayGroup.group(it) }.entries.asSequence().filter { it.key.second.isNotBlank() }.take(12).forEach { (key, entries) ->
-                    add(HomeRail(key.second, key.first, key.second, entries.take(20)))
-                }
+                val groupedByCategory: Map<Pair<MediaKind, String>, List<MediaEntry>> =
+                    state.entries.groupBy { entry: MediaEntry ->
+                        entry.kind to CatalogDisplayGroup.resolve(entry, liveProviderGroups)
+                    }
+                groupedByCategory.entries.asSequence()
+                    .filter { it.key.second.isNotBlank() }
+                    .take(12)
+                    .forEach { (key, categoryEntries) ->
+                        add(HomeRail(key.second, key.first, key.second, categoryEntries.take(20)))
+                    }
             }
         }
     }
@@ -72,14 +87,33 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
     val sourceIds = remember(state.sources) { state.sources.map { it.id }.toSet() }
     val recent = remember(state.recent, sourceIds) { state.recent.filter { it.entry.sourceId in sourceIds && it.positionMs > 0 }.take(20) }
     var quickChannelSearch by rememberSaveable { mutableStateOf("") }
-    val matchedChannels by produceState<List<MediaEntry>>(emptyList(), state.entries, quickChannelSearch) {
+    var showcaseKindName by rememberSaveable { mutableStateOf(MediaKind.MOVIE.name) }
+    val showcaseKind = MediaKind.valueOf(showcaseKindName)
+    var showcaseCategory by rememberSaveable { mutableStateOf("") }
+    var showcaseBatch by rememberSaveable { mutableStateOf(0) }
+    val showcaseCategories by produceState<List<String>>(emptyList(), state.entries, showcaseKind) {
+        value = withContext(Dispatchers.Default) {
+            ShowcasePlanner.categories(state.entries, showcaseKind)
+        }
+    }
+    val showcaseRows by produceState<List<ShowcaseRow>>(
+        emptyList(), state.entries, showcaseKind, showcaseCategory, showcaseBatch
+    ) {
+        value = withContext(Dispatchers.Default) {
+            ShowcasePlanner.rows(
+                state.entries, showcaseKind, showcaseCategory, showcaseBatch,
+                maxRows = 6, batchSize = 12
+            )
+        }
+    }
+    val matchedChannels by produceState<List<MediaEntry>>(emptyList(), state.entries, quickChannelSearch, liveProviderGroups) {
         if (quickChannelSearch.isNotBlank()) delay(180)
         value = withContext(Dispatchers.Default) {
             if (quickChannelSearch.isBlank()) emptyList()
             else state.entries.asSequence().filter {
                 it.kind == MediaKind.LIVE &&
                     (it.name.contains(quickChannelSearch, ignoreCase = true) ||
-                        CatalogDisplayGroup.group(it).contains(quickChannelSearch, ignoreCase = true))
+                        CatalogDisplayGroup.resolve(it, liveProviderGroups).contains(quickChannelSearch, ignoreCase = true))
             }.take(18).toList()
         }
     }
@@ -128,6 +162,123 @@ internal fun NeonHome(state: AppUiState, onAction: (AppAction) -> Unit, initialF
                 else LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(matchedChannels, key = { ForYouEngine.key(it) }) { entry ->
                         PosterCard(entry, { onAction(AppAction.Play(entry)) }, Modifier.width(220.dp), landscape = true)
+                    }
+                }
+            }
+        }
+        item(key = "showcase-chooser") {
+            Column(
+                Modifier.fillMaxWidth().testTag("showcase-controls"),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    "Explore do seu jeito",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(
+                        listOf(MediaKind.MOVIE, MediaKind.SERIES, MediaKind.LIVE),
+                        key = { it.name }
+                    ) { kind ->
+                        val label = when (kind) {
+                            MediaKind.MOVIE -> stringResource(R.string.library_tab_movies)
+                            MediaKind.SERIES -> stringResource(R.string.library_tab_series)
+                            else -> stringResource(R.string.library_tab_live)
+                        }
+                        FilterChip(
+                            selected = showcaseKind == kind,
+                            onClick = {
+                                showcaseKindName = kind.name
+                                showcaseCategory = ""
+                                showcaseBatch = 0
+                            },
+                            label = { Text(label) },
+                            modifier = Modifier.testTag("showcase-kind-${kind.name}")
+                        )
+                    }
+                }
+                if (showcaseCategories.isNotEmpty()) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item(key = "all-showcase-categories") {
+                            FilterChip(
+                                selected = showcaseCategory.isBlank(),
+                                onClick = { showcaseCategory = ""; showcaseBatch = 0 },
+                                label = { Text("Todas as categorias") },
+                                modifier = Modifier.testTag("showcase-category-all")
+                            )
+                        }
+                        items(showcaseCategories, key = { it }) { category ->
+                            FilterChip(
+                                selected = showcaseCategory == category,
+                                onClick = { showcaseCategory = category; showcaseBatch = 0 },
+                                label = { Text(category, maxLines = 1) },
+                                modifier = Modifier.testTag("showcase-category-$category")
+                            )
+                        }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ActionButton(
+                            "Próxima categoria",
+                            {
+                                val current = showcaseCategories.indexOf(showcaseCategory)
+                                showcaseCategory = showcaseCategories[
+                                    (current + 1).coerceAtLeast(0) % showcaseCategories.size
+                                ]
+                                showcaseBatch = 0
+                            },
+                            Modifier.weight(1f).testTag("showcase-next-category"),
+                            compact = true
+                        )
+                        ActionButton(
+                            "Mais títulos",
+                            { showcaseBatch = if (showcaseBatch >= Int.MAX_VALUE - 1) 0 else showcaseBatch + 1 },
+                            Modifier.weight(1f).testTag("showcase-next-batch"),
+                            compact = true
+                        )
+                    }
+                } else if (state.isBusy) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+            }
+        }
+        items(showcaseRows, key = { "showcase-${it.kind.name}-${it.title}" }) { row ->
+            Column(
+                Modifier.fillMaxWidth().testTag("showcase-rail-${row.title}"),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        row.title,
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    ActionButton(
+                        stringResource(R.string.neon_see_all),
+                        { onBrowse(row.kind, row.title) },
+                        compact = true
+                    )
+                }
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(row.items, key = { it.id }) { entry ->
+                        PosterCard(
+                            entry,
+                            {
+                                onAction(when (entry.kind) {
+                                    MediaKind.SERIES -> AppAction.OpenSeries(entry)
+                                    MediaKind.MOVIE -> AppAction.OpenMovie(entry)
+                                    else -> AppAction.Play(entry)
+                                })
+                            },
+                            Modifier.width(if (entry.kind == MediaKind.LIVE) 220.dp else 152.dp),
+                            landscape = entry.kind == MediaKind.LIVE
+                        )
                     }
                 }
             }
