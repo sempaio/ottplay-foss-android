@@ -14,6 +14,12 @@ internal data class LiveQualityCard(
 private data class QualityLabel(val base: String, val quality: String?, val codec: String?)
 private val codecSuffix = Regex("""\s*\[(H\.?265|HEVC|H\.?264|AVC)\]\s*$""", RegexOption.IGNORE_CASE)
 private val qualitySuffix = Regex("""\s+(4K|UHD|FULL[\s-]*HD|FHD|HD|SD)\s*$""", RegexOption.IGNORE_CASE)
+private val resolutionSuffix = Regex("""\s*\((2160p|1080p|720p|480p)\)\s*$""", RegexOption.IGNORE_CASE)
+private fun canonicalChannelName(name: String): String = when {
+    name.matches(Regex("""(?i)^(TV\s+)?Globo\s+Rio\s+de\s+Janeiro$""")) -> "Globo RJ"
+    name.matches(Regex("""(?i)^(TV\s+)?Globo\s+S[aã]o\s+Paulo$""")) -> "Globo SP"
+    else -> name
+}
 
 private fun describe(name: String): QualityLabel {
     val raw = name.trim()
@@ -25,6 +31,7 @@ private fun describe(name: String): QualityLabel {
     }
     val withoutCodec = if (codecMatch == null) raw else raw.substring(0, codecMatch.range.first).trimEnd()
     val qualityMatch = qualitySuffix.find(withoutCodec)
+    val resolutionMatch = if (qualityMatch == null) resolutionSuffix.find(withoutCodec) else null
     val quality = when (qualityMatch?.groupValues?.get(1)?.uppercase(Locale.ROOT)?.replace(" ", "")?.replace("-", "")) {
         "UHD", "4K" -> "4K"
         "FULLHD", "FHD" -> "FHD"
@@ -32,8 +39,13 @@ private fun describe(name: String): QualityLabel {
         "SD" -> "SD"
         else -> null
     }
-    val base = if (qualityMatch == null) withoutCodec else withoutCodec.substring(0, qualityMatch.range.first).trimEnd()
-    return QualityLabel(base, quality, codec)
+    val resolvedQuality = quality ?: resolutionMatch?.groupValues?.get(1)?.lowercase(Locale.ROOT)
+    val base = when {
+        qualityMatch != null -> withoutCodec.substring(0, qualityMatch.range.first).trimEnd()
+        resolutionMatch != null -> withoutCodec.substring(0, resolutionMatch.range.first).trimEnd()
+        else -> withoutCodec
+    }
+    return QualityLabel(canonicalChannelName(base), resolvedQuality, codec)
 }
 
 internal fun qualityName(name: String): String? {
@@ -44,10 +56,10 @@ internal fun qualityName(name: String): String? {
 }
 
 private fun rank(label: String?): Int = when {
-    label?.startsWith("4K") == true -> 4
-    label?.startsWith("FHD") == true -> 3
-    label?.startsWith("HD") == true -> 2
-    label?.startsWith("SD") == true -> 1
+    label?.startsWith("4K") == true || label?.startsWith("2160p") == true -> 4
+    label?.startsWith("FHD") == true || label?.startsWith("1080p") == true -> 3
+    label?.startsWith("HD") == true || label?.startsWith("720p") == true -> 2
+    label?.startsWith("SD") == true || label?.startsWith("480p") == true -> 1
     else -> 0
 }
 

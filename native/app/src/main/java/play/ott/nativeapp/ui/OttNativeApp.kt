@@ -95,6 +95,7 @@ import play.ott.nativeapp.i18n.AppLanguages
 import play.ott.nativeapp.data.CatalogDisplayGroup
 import play.ott.nativeapp.data.XtreamDisplayGroups
 import play.ott.nativeapp.data.SmartLiveCatalog
+import play.ott.nativeapp.data.LiveNetworkDiscovery
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -222,6 +223,16 @@ fun OttNativeApp(
     }
     var liveNetwork by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(tab, group) { liveNetwork = "" }
+    // Only when the user explicitly selects an open-TV network, retrieve a few
+    // regional provider groups on demand. Reuse the visited category cache.
+    LaunchedEffect(lazyXtream, state.selectedSourceId, group, liveNetwork) {
+        if (lazyXtream && tab == LibraryTab.LIVE && group == "Abertos" && liveNetwork.isNotBlank()) {
+            val related = LiveNetworkDiscovery.related(state.xtreamGroups, liveNetwork)
+            if (related.isNotEmpty()) {
+                onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, related.map { it.id }))
+            }
+        }
+    }
     val liveNetworks = remember(visibleEntries, tab, group) {
         if (tab == LibraryTab.LIVE && group == "Abertos") SmartLiveCatalog.networks(visibleEntries)
         else emptyList()
@@ -234,9 +245,10 @@ fun OttNativeApp(
             if (tab == LibraryTab.LIVE) {
                 val byNetwork = if (liveNetwork.isBlank()) visibleEntries
                     else visibleEntries.filter { SmartLiveCatalog.network(it) == liveNetwork }
-                liveQualityCards(SmartLiveCatalog.prominentFirst(byNetwork)) { entry ->
+                val cards = liveQualityCards(SmartLiveCatalog.prominentFirst(byNetwork)) { entry ->
                     SmartLiveCatalog.category(entry, availableLiveLabels)
                 }
+                if (group == "Séries") LiveSeasonGroups.join(cards) else cards
             } else visibleEntries.map { LiveQualityCard(it, it.name, listOf(it)) }
         }
     }
@@ -503,12 +515,12 @@ fun OttNativeApp(
             AlertDialog(
                 modifier = Modifier.tvRemoteInput(),
                 onDismissRequest = { qualityOptions = emptyList() },
-                title = { Text(stringResource(R.string.starlink_quality_choose)) },
+                title = { Text(if (LiveSeasonGroups.isSeasonBundle(qualityOptions)) "Temporadas — canais 24h" else stringResource(R.string.starlink_quality_choose)) },
                 text = {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 420.dp)) {
                         items(qualityOptions, key = { it.id }) { option ->
                             ActionButton(
-                                (qualityName(option.name) ?: option.name) + " — " + option.name,
+                                if (LiveSeasonGroups.isSeasonBundle(qualityOptions)) "Temporada " + (LiveSeasonGroups.season(option.name)?.number ?: 1) + " - " + (qualityName(option.name) ?: "Ao vivo") else (qualityName(option.name) ?: option.name) + " - " + option.name,
                                 { qualityOptions = emptyList(); onAction(AppAction.Play(option)) },
                                 Modifier.fillMaxWidth(),
                                 compact = true,
@@ -636,7 +648,10 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
         }
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(displayName ?: entry.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
-            if (variantCount > 1) Text(stringResource(R.string.starlink_quality_variants_count, variantCount),
+            if (variantCount > 1) Text(
+                if (entry.kind == MediaKind.LIVE && LiveSeasonGroups.season(entry.name) != null)
+                    "Temporadas e transmissões: $variantCount" else
+                    stringResource(R.string.starlink_quality_variants_count, variantCount),
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             Text(CatalogDisplayGroup.group(entry).ifBlank { if (entry.kind == MediaKind.LIVE) stringResource(R.string.library_live_video) else stringResource(R.string.library_video) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             ActionButton(if (favorite) stringResource(R.string.library_favorite_selected) else stringResource(R.string.library_favorite_add), { onAction(AppAction.ToggleFavorite(entry)) }, Modifier.fillMaxWidth().semantics { contentDescription = favoriteDescription }, compact = true, selected = favorite)

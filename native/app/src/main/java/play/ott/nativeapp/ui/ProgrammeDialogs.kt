@@ -39,6 +39,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import play.ott.nativeapp.core.MediaEntry
+import play.ott.nativeapp.data.SeriesRecovery
 import play.ott.nativeapp.core.Programme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -134,7 +135,19 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
                 }
                 if (entry.description.isNotBlank()) Text(entry.description, style = MaterialTheme.typography.bodyMedium, maxLines = 4, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if (ordered.isEmpty() && !loading) Text(stringResource(R.string.dialog_series_empty))
+                if (ordered.isEmpty() && !loading) {
+                    val direct = SeriesRecovery.directPlayCandidate(entry, episodes)
+                    if (direct != null) {
+                        Text("Esta série não possui episódios separados. A fonte oferece reprodução direta.",
+                            style = MaterialTheme.typography.bodyMedium)
+                        ActionButton("Reproduzir conteúdo", {
+                            onAction(AppAction.Play(direct))
+                            onAction(AppAction.CloseSeries)
+                        }, selected = true)
+                    } else {
+                        Text(stringResource(R.string.dialog_series_empty))
+                    }
+                }
                 val seasons = remember(ordered) { ordered.map { it.season ?: 1 }.distinct() }
                 val activeSeason = selectedSeason?.takeIf { it in seasons } ?: seasons.firstOrNull()
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

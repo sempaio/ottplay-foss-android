@@ -18,6 +18,7 @@ import play.ott.nativeapp.core.*
 import play.ott.nativeapp.data.NativeRepository
 import play.ott.nativeapp.data.ForYouProfile
 import play.ott.nativeapp.data.ForYouEngine
+import play.ott.nativeapp.data.SeriesRecovery
 import play.ott.nativeapp.playback.PlaybackItems
 import play.ott.nativeapp.ui.AppAction
 import play.ott.nativeapp.ui.AppUiState
@@ -373,7 +374,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 updateState { it.copy(seriesEntry = action.entry, episodes = emptyList(), isBusy = true) }
                 detailJob = operation {
                     val source = availableSources().first { it.id == action.entry.sourceId }
-                    val episodes = repository.providers.loadEpisodes(source, action.entry)
+                    // M3U series can have a direct video URL. Never send them to Xtream
+                    // get_series_info, which would fail even if that URL plays normally.
+                    val episodes = if (SeriesRecovery.needsEpisodeLookup(source.kind, action.entry))
+                        repository.providers.loadEpisodes(source, action.entry)
+                    else emptyList()
                     updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
                 }
             }
