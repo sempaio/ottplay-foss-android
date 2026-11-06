@@ -55,12 +55,15 @@ private fun rank(label: String?): Int = when {
  *  Different program numbers and regional affiliates are distinct channel identities.
  *  VOD/series, untagged streams and same-quality duplicates remain distinct.
  */
-internal fun liveQualityCards(entries: List<MediaEntry>): List<LiveQualityCard> {
+internal fun liveQualityCards(
+    entries: List<MediaEntry>,
+    categoryKey: (MediaEntry) -> String = { it.group.trim().lowercase(Locale.ROOT) },
+): List<LiveQualityCard> {
     val groups = LinkedHashMap<String, MutableList<MediaEntry>>()
     for ((index, entry) in entries.withIndex()) {
         val label = describe(entry.name)
         val key = if (entry.kind == MediaKind.LIVE && label.quality != null && label.base.isNotBlank()) {
-            listOf(entry.sourceId, entry.group.trim().lowercase(Locale.ROOT),
+            listOf(entry.sourceId, categoryKey(entry).lowercase(Locale.ROOT),
                 label.base.lowercase(Locale.ROOT)).joinToString("\u0000")
         } else "single:$index"
         groups.getOrPut(key) { mutableListOf() }.add(entry)

@@ -26,9 +26,14 @@ object ForYouEngine {
     // Only explicit, user-editable topical interests. Never infer sensitive
     // personal characteristics from channel titles or viewing behavior.
     val topics = listOf(
-        "futebol", "gospel", "filmes", "series", "desenhos", "animes",
-        "novelas", "documentarios", "comedia", "acao", "romance",
-        "infantil", "esportes", "natureza", "ficcao cientifica"
+        // Visible interests are subjects, not the Movies / Series / Live tabs.
+        "gospel", "desenhos", "animes", "documentarios", "futebol", "esportes",
+        "suspense", "terror", "aventura", "ficcao cientifica", "romance",
+        "drama", "comedia", "acao", "natureza", "historia",
+        "classicos", "lancamentos", "filmes brasileiros", "series brasileiras",
+        "novelas", "infantil",
+        // Legacy stored profiles remain supported, but these are not onboarding questions.
+        "filmes", "series"
     )
 
     /** Subtopics are explicitly chosen, never inferred from sensitive attributes. */
@@ -48,8 +53,37 @@ object ForYouEngine {
         "animes" to listOf("acao" to "Ação", "aventura" to "Aventura",
             "fantasia" to "Fantasia", "infantis" to "Infantis"),
         "novelas" to listOf("brasileiras" to "Brasileiras", "latinas" to "Latinas",
-            "classicas" to "Clássicas")
+            "classicas" to "Clássicas"),
+        "desenhos" to listOf("antigos" to "Desenhos antigos", "classicos" to "Clássicos",
+            "recentes" to "Desenhos recentes", "filmes-animados" to "Filmes de animação",
+            "infantis" to "Para crianças", "educativos" to "Educativos"),
+        "animes" to listOf("criancas" to "Para crianças", "jovens" to "Para adolescentes",
+            "adultos" to "Para adultos", "classicos" to "Animes clássicos",
+            "lancamentos" to "Lançamentos", "acao" to "Ação",
+            "aventura" to "Aventura", "fantasia" to "Fantasia"),
+        "documentarios" to listOf("historia" to "História", "sobrevivencia" to "Sobrevivência",
+            "investigacao" to "Investigação", "natureza" to "Natureza",
+            "ciencia" to "Ciência", "reality" to "Realidade e aventura"),
+        "series brasileiras" to listOf("humor" to "Humor brasileiro",
+            "classicas" to "Séries clássicas", "drama" to "Drama nacional"),
+        "filmes brasileiros" to listOf("classicos" to "Clássicos nacionais",
+            "recentes" to "Filmes recentes", "comedia" to "Comédia nacional",
+            "drama" to "Drama nacional"),
+        "terror" to listOf("sobrenatural" to "Sobrenatural",
+            "psicologico" to "Psicológico", "monstros" to "Monstros"),
+        "suspense" to listOf("misterio" to "Mistério",
+            "investigacao" to "Investigação", "psicologico" to "Psicológico"),
+        "gospel" to listOf("louvor" to "Louvor e música", "cultos" to "Cultos ao vivo",
+            "pregacoes" to "Pregações", "filmes" to "Filmes cristãos",
+            "familia" to "Programas para a família")
     )
+    /** One follow-up per chosen subject. Nothing unrelated is asked. */
+    fun followUps(selected: Set<String>): List<Pair<String, List<Pair<String, String>>>> =
+        topics.asSequence().filter { it in selected }
+            .mapNotNull { topic ->
+                subtopics[topic]?.takeIf { it.isNotEmpty() }?.let { topic to it }
+            }.toList()
+
     val validSubInterests: Set<String> = subtopics.flatMap { (topic, values) ->
         values.map { item -> topic + ":" + item.first }
     }.toSet()
@@ -88,7 +122,37 @@ object ForYouEngine {
         "animes:infantis" to listOf("infantil", "kids"),
         "novelas:brasileiras" to listOf("novela brasileira", "globoplay"),
         "novelas:latinas" to listOf("novela mexicana", "latina", "televisa"),
-        "novelas:classicas" to listOf("novela classica", "classicas")
+        "novelas:classicas" to listOf("novela classica", "classicas"),
+        "desenhos:antigos" to listOf("classico", "antigo", "anos 80", "anos 90",
+            "popeye", "animaniacs", "pica pau", "scooby doo"),
+        "desenhos:recentes" to listOf("lancamento", "2026", "novidade"),
+        "desenhos:filmes-animados" to listOf("filme de animacao", "animacao", "animation",
+            "filme animado", "desenho animado"),
+        "animes:criancas" to listOf("kids", "infantil", "pokemon", "beyblade"),
+        "animes:jovens" to listOf("shonen", "aventura", "naruto", "one piece"),
+        "animes:adultos" to listOf("seinen", "anime adulto"),
+        "animes:classicos" to listOf("classico", "dragon ball", "cavaleiros do zodiaco"),
+        "animes:lancamentos" to listOf("lancamento", "2026", "estreia"),
+        "documentarios:sobrevivencia" to listOf("largados e pelados", "sobrevivencia",
+            "sobreviver", "selva", "fronteira"),
+        "documentarios:investigacao" to listOf("investigacao", "crime", "misterio", "fronteira"),
+        "documentarios:reality" to listOf("quilos mortais", "largados e pelados", "realidade"),
+        "series brasileiras:humor" to listOf("humor brasileiro", "comedia brasileira",
+            "a grande familia", "vai que cola", "sob nova direcao"),
+        "series brasileiras:classicas" to listOf("seriado brasileiro classico",
+            "a grande familia", "sob nova direcao"),
+        "series brasileiras:drama" to listOf("drama brasileiro", "drama nacional"),
+        "filmes brasileiros:classicos" to listOf("filme brasileiro classico", "cinema brasileiro classico"),
+        "filmes brasileiros:recentes" to listOf("filme brasileiro 2026", "filme nacional recente"),
+        "filmes brasileiros:comedia" to listOf("comedia brasileira", "comedia nacional"),
+        "filmes brasileiros:drama" to listOf("drama brasileiro", "drama nacional"),
+        "gospel:familia" to listOf("familia crista", "programa da familia", "programa cristao"),
+        "terror:sobrenatural" to listOf("sobrenatural", "fantasma", "espirito"),
+        "terror:psicologico" to listOf("terror psicologico", "psicologico"),
+        "terror:monstros" to listOf("monstros", "criaturas"),
+        "suspense:misterio" to listOf("misterio", "enigma"),
+        "suspense:investigacao" to listOf("investigacao", "policial"),
+        "suspense:psicologico" to listOf("suspense psicologico", "psicologico"),
     )
 
     private val terms = mapOf(
@@ -99,14 +163,27 @@ object ForYouEngine {
         "desenhos" to listOf("desenho", "desenhos", "animacao", "cartoon", "animation"),
         "animes" to listOf("anime", "animes", "animacao japonesa"),
         "novelas" to listOf("novela", "novelas", "telenovela"),
-        "documentarios" to listOf("documentario", "documentarios", "documentary", "documentaries"),
+        "documentarios" to listOf("documentario", "documentarios", "documentary", "documentaries",
+            "history channel", "history", "largados e pelados", "quilos mortais",
+            "a fronteira", "sobrevivencia", "investigacao"),
         "comedia" to listOf("comedia", "humor"),
         "acao" to listOf("acao", "action"),
         "romance" to listOf("romance", "romantico"),
         "infantil" to listOf("infantil", "kids", "crianca"),
         "esportes" to listOf("esporte", "esportes", "sport", "sports", "nba", "ufc"),
         "natureza" to listOf("natureza", "nature", "animal", "selvagem"),
-        "ficcao cientifica" to listOf("ficcao cientifica", "sci fi", "scifi"),
+        "ficcao cientifica" to listOf("ficcao cientifica", "sci fi", "scifi", "star trek", "star wars"),
+        "suspense" to listOf("suspense", "thriller", "misterio"),
+        "terror" to listOf("terror", "horror", "assombrado"),
+        "aventura" to listOf("aventura", "adventure", "exploracao"),
+        "drama" to listOf("drama"),
+        "historia" to listOf("historia", "history", "historico"),
+        "classicos" to listOf("classico", "classicos", "anos 80", "anos 90", "retro"),
+        "lancamentos" to listOf("lancamentos", "estreias", "recentes", "2026"),
+        "filmes brasileiros" to listOf("filmes brasileiros", "filmes nacionais",
+            "cinema brasileiro", "cinema nacional"),
+        "series brasileiras" to listOf("series brasileiras", "series nacionais", "serie brasileira",
+            "seriado brasileiro"),
     )
 
     fun key(entry: MediaEntry) = "${entry.sourceId}:${entry.id}"
