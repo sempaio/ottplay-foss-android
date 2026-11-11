@@ -146,6 +146,11 @@ android {
         productFlavors.full.signingConfig = signingConfigs.release
     }
     buildTypes {
+        debug {
+            // QA-only identity: keep the approved installed player untouched.
+            applicationIdSuffix ".m81rebufferqa"
+            versionNameSuffix "-M81-Rebuffer-QA"
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
