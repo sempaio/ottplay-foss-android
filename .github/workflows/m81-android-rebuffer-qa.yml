@@ -5,6 +5,8 @@ on:
     paths:
       - .github/workflows/m81-android-rebuffer-qa.yml
       - src/device/media-backend.ts
+      - android/app/build.gradle
+      - android/app/src/debug/res/values/strings.xml
   workflow_dispatch:
 permissions:
   contents: write
@@ -37,16 +39,18 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --console=plain :app:assembleFullDebug
-      - name: Verify signed debug APK
+      - name: Verify isolated signed debug APK
         run: |
           set -euo pipefail
-          test -s android/app/build/outputs/apk/full/debug/app-full-debug.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify android/app/build/outputs/apk/full/debug/app-full-debug.apk
-          sha256sum android/app/build/outputs/apk/full/debug/app-full-debug.apk
+          mkdir -p qa-output
+          cp android/app/build/outputs/apk/full/debug/app-full-debug.apk qa-output/STARLINK-Android-M81-Rebuffer-QA.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify qa-output/STARLINK-Android-M81-Rebuffer-QA.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging qa-output/STARLINK-Android-M81-Rebuffer-QA.apk | grep -F "package: name='play.ott.foss.m81rebufferqa'"
+          sha256sum qa-output/STARLINK-Android-M81-Rebuffer-QA.apk
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: STARLINK-M81-Android-Rebuffer-QA
-          path: android/app/build/outputs/apk/full/debug/app-full-debug.apk
+          path: qa-output/STARLINK-Android-M81-Rebuffer-QA.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish prerelease for mobile installation
@@ -55,4 +59,4 @@ jobs:
         run: |
           set -euo pipefail
           tag="m81-rebuffer-qa-${GITHUB_SHA:0:10}"
-          gh release create "$tag" android/app/build/outputs/apk/full/debug/app-full-debug.apk --target "$GITHUB_SHA" --prerelease --title "STARLINK Android Rebuffer QA ${GITHUB_SHA:0:10}" --notes "Experimental build for device playback testing; does not replace the approved QA 9.1."
+          gh release create "$tag" qa-output/STARLINK-Android-M81-Rebuffer-QA.apk --target "$GITHUB_SHA" --prerelease --title "STARLINK Android Rebuffer QA ${GITHUB_SHA:0:10}" --notes "Experimental build for device playback testing; does not replace the approved QA 9.1."
