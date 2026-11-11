@@ -1,0 +1,58 @@
+name: STARLINK IPTV M81 - Rebuffer Android QA
+on:
+  push:
+    branches: [fix/m81-live-stall-autoreconnect-20261111]
+    paths:
+      - .github/workflows/m81-android-rebuffer-qa.yml
+      - src/device/media-backend.ts
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android compile SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+      - name: Install web dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Sync native app plugins
+        run: node scripts/build-android.cjs sync
+      - name: Build isolated debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain :app:assembleFullDebug
+      - name: Verify signed debug APK
+        run: |
+          set -euo pipefail
+          test -s android/app/build/outputs/apk/full/debug/app-full-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify android/app/build/outputs/apk/full/debug/app-full-debug.apk
+          sha256sum android/app/build/outputs/apk/full/debug/app-full-debug.apk
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: STARLINK-M81-Android-Rebuffer-QA
+          path: android/app/build/outputs/apk/full/debug/app-full-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish prerelease for mobile installation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="m81-rebuffer-qa-${GITHUB_SHA:0:10}"
+          gh release create "$tag" android/app/build/outputs/apk/full/debug/app-full-debug.apk --target "$GITHUB_SHA" --prerelease --title "STARLINK Android Rebuffer QA ${GITHUB_SHA:0:10}" --notes "Experimental build for device playback testing; does not replace the approved QA 9.1."
