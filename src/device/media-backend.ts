@@ -12,6 +12,7 @@ interface MediaBackendRequest {
     paused?: boolean;
     position?: number;
     sourceUrl?: string;
+    stallRecoveryAttempt?: number;
     timelineOffset?: number;
     transient?: boolean;
     url: string;
@@ -114,6 +115,12 @@ function createMediaBackend(ports: MediaBackendPorts) {
         var timer: any = null;
         var phase = "loading";
         var awaitingRecovery = false;
+        // A new live source gets a fresh budget; automatic reconnects inherit it.
+        var stallRecoveryAttempt = request.stallRecoveryAttempt || 0;
+        var stalledLiveTicks = 0;
+        var lastLivePosition: number | null = null;
+        var hasLiveProgress = stallRecoveryAttempt > 0;
+        var healthyLiveTicks = 0;
         var retainPause = request.paused === true;
         var restorePlaying = false;
         var applyingPause = false;
@@ -143,7 +150,56 @@ function createMediaBackend(ports: MediaBackendPorts) {
             )
                 timer = ports.setInterval(function () {
                     observe();
+                    if (current()) inspectLiveStall();
                 }, 1000);
+        }
+        function inspectLiveStall(): void {
+            if (
+                !handle.active() ||
+                lane !== "main" ||
+                !context ||
+                context.kind !== "live" ||
+                phase !== "playing" ||
+                awaitingRecovery ||
+                !engine ||
+                retainPause
+            ) {
+                stalledLiveTicks = 0;
+                lastLivePosition = null;
+                return;
+            }
+            var sample = engine.sample();
+            if (sample.paused || !isFinite(sample.position) || sample.position < 0) {
+                stalledLiveTicks = 0;
+                lastLivePosition = null;
+                return;
+            }
+            if (lastLivePosition === null) {
+                lastLivePosition = sample.position;
+                return;
+            }
+            if (
+                sample.position > lastLivePosition + 0.25 ||
+                sample.position < lastLivePosition - 1
+            ) {
+                lastLivePosition = sample.position;
+                hasLiveProgress = true;
+                stalledLiveTicks = 0;
+                healthyLiveTicks++;
+                // A stable 12-second run completes the previous recovery episode.
+                if (healthyLiveTicks >= 12) stallRecoveryAttempt = 0;
+                return;
+            }
+            healthyLiveTicks = 0;
+            // Do not reboot decoders whose live clock never exposed progress.
+            // After three quick attempts, probe the same channel periodically
+            // so it can recover later without a rapid restart loop.
+            if (!hasLiveProgress) return;
+            var retryTicks = stallRecoveryAttempt >= 3 ? 60 : 15;
+            if (++stalledLiveTicks >= retryTicks) {
+                stalledLiveTicks = 0;
+                if (handle.active()) handle.restart(true);
+            }
         }
         function current() {
             return alive && lanes[lane] === handle;
@@ -485,7 +541,7 @@ function createMediaBackend(ports: MediaBackendPorts) {
                     });
                 };
             },
-            restart: function () {
+            restart: function (automaticStall?: boolean) {
                 if (
                     lane !== "main" ||
                     !context ||
@@ -528,6 +584,9 @@ function createMediaBackend(ports: MediaBackendPorts) {
                     paused: paused,
                     position: live ? 0 : sample.position,
                     timelineOffset: live ? 0 : position - sample.position,
+                    stallRecoveryAttempt: automaticStall
+                        ? Math.min(3, stallRecoveryAttempt + 1)
+                        : 0,
                     url: request.url,
                 });
                 return next && next.active()

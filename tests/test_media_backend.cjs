@@ -1452,6 +1452,105 @@ test("EOF retains one final attempt before synchronous engine disposal", () => {
     assert.equal(f.backend.lastAttempt("pip"), null);
 });
 
+test("a playing live stream that stops advancing reconnects the same channel", (f) => {
+    f.domain({ generation: 1, kind: "live", position: 0 });
+    const original = f.backend.open({ url: "live-buffer-empty" });
+    f.playing(0, 14);
+    f.timers.findLast((entry) => entry.active).callback();
+    f.leases[0].sample.position = 15;
+    f.timers.findLast((entry) => entry.active).callback();
+    // The channel played, then the cached seconds ran out.
+    for (let i = 0; i < 19 && f.leases.length === 1; i++) {
+        const timer = f.timers.findLast((entry) => entry.active);
+        assert.ok(timer, "live video must still be observed");
+        timer.callback();
+    }
+    assert.equal(f.leases.length, 2, "a stalled live decoder must be replaced");
+    assert.equal(f.leases[0].disposed, 1);
+    assert.equal(original.active(), false);
+    assert.equal(f.leases[1].request.url, "live-buffer-empty");
+    assert.equal(f.leases[1].request.position, 0, "live restarts at live edge");
+});
+
+test("forward progress, pause and VOD cannot trigger automatic live recovery", (f) => {
+    f.domain({ generation: 1, kind: "live", position: 0 });
+    const active = f.backend.open({ url: "working-live" });
+    f.playing(0, 10);
+    for (let i = 0; i < 30; i++) {
+        f.leases[0].sample.position += 1;
+        const timer = f.timers.findLast((entry) => entry.active);
+        timer.callback();
+    }
+    assert.equal(f.leases.length, 1, "a slow but advancing stream must not restart");
+    active.pause();
+    assert.equal(f.timers.some((timer) => timer.active), false);
+    assert.equal(f.leases.length, 1);
+    f.domain({ generation: 2, kind: "vod", position: 0 });
+    f.backend.open({ url: "movie" });
+    f.playing(1, 20);
+    for (let i = 0; i < 30; i++) {
+        const timer = f.timers.findLast((entry) => entry.active);
+        timer.callback();
+    }
+    assert.equal(f.leases.length, 2, "VOD must not be mistaken for live");
+});
+
+test("stalled live reconnect attempts are bounded until playback recovers", (f) => {
+    f.domain({ generation: 1, kind: "live", position: 0 });
+    f.backend.open({ url: "unavailable-live" });
+    for (let attempt = 0; attempt < 4; attempt++) {
+        const index = f.leases.length - 1;
+        f.playing(index, 30);
+        if (attempt === 0) {
+            f.timers.findLast((entry) => entry.active).callback();
+            f.leases[index].sample.position = 31;
+            f.timers.findLast((entry) => entry.active).callback();
+        }
+        const originalCount = f.leases.length;
+        for (let tick = 0; tick < 20 && f.leases.length === originalCount; tick++) {
+            const timer = f.timers.findLast((entry) => entry.active);
+            assert.ok(timer);
+            timer.callback();
+        }
+    }
+    assert.equal(f.leases.length, 4, "no rapid reconnect loop");
+    // Continue to retry periodically if the origin recovers minutes later.
+    for (let tick = 0; tick < 62 && f.leases.length === 4; tick++) {
+        const timer = f.timers.findLast((entry) => entry.active);
+        assert.ok(timer);
+        timer.callback();
+    }
+    assert.equal(f.leases.length, 5, "slower retry eventually attempts same channel again");
+});
+
+test("live buffering with readyState below two still reconnects after clock stops", (f) => {
+    f.domain({ generation: 1, kind: "live", position: 0 });
+    f.backend.open({ url: "slow-hls" });
+    f.playing(0, 11);
+    f.timers.findLast((entry) => entry.active).callback();
+    f.leases[0].sample.position = 12;
+    f.timers.findLast((entry) => entry.active).callback();
+    f.leases[0].sample.ready = 1;
+    f.leases[0].event("waiting");
+    for (let i = 0; i < 20 && f.leases.length === 1; i++) {
+        const timer = f.timers.findLast((entry) => entry.active);
+        assert.ok(timer, "buffering must not disable the live watchdog");
+        timer.callback();
+    }
+    assert.equal(f.leases.length, 2);
+    assert.equal(f.leases[1].request.url, "slow-hls");
+});
+
+test("live decoders without a measurable clock never reconnect spuriously", (f) => {
+    f.domain({ generation: 1, kind: "live", position: 0 });
+    f.backend.open({ url: "avplay-static-clock" });
+    f.playing(0, 0);
+    for (let i = 0; i < 35; i++) {
+        f.timers.findLast((entry) => entry.active).callback();
+    }
+    assert.equal(f.leases.length, 1);
+});
+
 console.log(
     "PASS media backend: " + passed + " ES5 lease/observer/device scenarios"
 );
