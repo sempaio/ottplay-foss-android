@@ -259,9 +259,9 @@ class NativeRepository(
 
     suspend fun programmes(entry: MediaEntry): List<Programme> = withContext(Dispatchers.IO) {
         val cached = db.programmes(entry)
-        if (cached.isNotEmpty()) cached else {
-            val source = sources().firstOrNull { it.id == entry.sourceId }
-            if (source?.kind == SourceKind.XTREAM) providers.loadShortEpg(source, entry) else cached
+        val source = sources().firstOrNull { it.id == entry.sourceId }
+        currentGuide(cached, source?.kind, System.currentTimeMillis()) {
+            providers.loadShortEpg(checkNotNull(source), entry)
         }
     }
 
