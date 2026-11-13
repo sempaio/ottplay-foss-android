@@ -79,3 +79,13 @@ A consulta anterior do EPG encontrou3785 programas antigos, zero atuais/futuros,
 5. Conferir assinatura/SHA do APK efetivamente entregue e concluir homologação antes de qualquer substituição. Não alterar M81 para aprovar Android.
 
 Este documento substitui afirmações de estado corrente dos relatórios anteriores, mantendo-os como histórico. Não autoriza merge, retomada de testes, implantação, atualização de fontes ou instalação no cliente.
+# M81-APP-01 — sinopse VOD Android, candidata de 13/11/2026
+
+Base de codigo: `fix/starlink-live-network-recovery-qa8-20261106`, commit `f0440ec5f68a3eb570a7f5151042ffa0eac32b88`. Trabalho em worktree isolado `fix/m81-app-01-vod-synopsis-20261113`; checkout preexistente `starlink-live-recovery-qa8-20261106` tinha alteracao local no Gradle e foi preservado. O APK funcional citado em `AGENTS.md` nao foi modificado; identidade do APK instalado hoje nao foi conferida. PRs Android #29 (categorias/Para Voce) e #30 (EPG) estao abertos como drafts e nao alteram `XtreamProvider.kt`.
+
+Fluxo verificado: `AppAction.OpenMovie` chama `ProviderRepository.loadMovieInfo`, que le `get_vod_info` em `XtreamProvider.vod`; `MovieDialog` mostra `MediaEntry.description` quando nao vazia. A candidata usa `info.description` quando nao branca, depois `info.plot`, depois a descricao ja presente no item. Nao altera requisicoes, URL/extension, capa, identidade, favoritos, categorias, temporadas, episodios ou player. Campos adicionais nao foram incluidos sem contrato verificado.
+
+Limite do servidor: o codigo operacional M81 observado em `app/routers/xtream_api.py` monta `get_vod_info` de filmes com `description` vazia e sem `plot`; portanto esta correcao Android so mostra sinopse quando o servidor realmente fornece `description` ou `plot`, ou o item ja tem descricao. Nenhum painel, banco, lista ou publicacao foi alterado.
+
+Validacao local: `cd native; .\gradlew.bat --no-daemon --max-workers=2 :core:test :app:assembleParaVoceTest` com `ANDROID_HOME=C:\Users\ia\AppData\Local\Android\Sdk` concluiu `BUILD SUCCESSFUL`; 87 testes do core, zero falhas/erros. Teste novo usa `ProviderRepository.loadMovieInfo` e cobre description, plot, espacos, precedencia, null/ausencia, preservacao de identidade, URL e capa. Primeira tentativa sem `ANDROID_HOME` falhou antes da compilacao por SDK nao localizado; repeticao com SDK local passou. Nao houve instalacao ou teste em celular.
+
