@@ -132,7 +132,8 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             segments[segments.lastIndex] = segments.last().substringBeforeLast('.') + "." + extension
             parsed.newBuilder().encodedPath("/").apply { segments.forEach { addPathSegment(it) } }.build().toString()
         } else entry.url
-        return entry.copy(url = url, description = info?.string("description").orEmpty().ifBlank { entry.description },
+        val description = info?.string("description").orEmpty().ifBlank { info?.string("plot").orEmpty() }
+        return entry.copy(url = url, description = description.ifBlank { entry.description },
             logo = info?.string("movie_image").orEmpty().ifBlank { entry.logo })
     }
 

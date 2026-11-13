@@ -72,6 +72,15 @@ android {
             matchingFallbacks += "debug"
             resValue("string", "app_name", "STARLINK Para Você Teste")
         }
+        create("synopsisQa") {
+            initWith(getByName("debug"))
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            applicationIdSuffix = ".paravoce.sinopseqa"
+            versionNameSuffix = "-sinopse-qa"
+            matchingFallbacks += "debug"
+            resValue("string", "app_name", "STARLINK Sinopse QA")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

@@ -44,6 +44,41 @@ class StarlinkXtreamTest {
         }
     }
 
+    @Test fun `movie details use description then plot and preserve existing synopsis when absent`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val source = config(server)
+            val url = server.url("/").newBuilder().addPathSegment("movie")
+                .addPathSegment(source.username).addPathSegment(source.password)
+                .addPathSegment("42.mp4").build().toString()
+            val entry = MediaEntry("film", source.id, "Film", url, MediaKind.MOVIE,
+                group = "Cinema", logo = "https://example.invalid/original.jpg",
+                description = "Existing synopsis", providerId = "42")
+            val cases = listOf(
+                """{"info":{"description":"Description"},"movie_data":{"container_extension":"mkv"}}""" to "Description",
+                """{"info":{"plot":"Plot"},"movie_data":{"container_extension":"mkv"}}""" to "Plot",
+                """{"info":{"description":"   ","plot":"Plot"},"movie_data":{"container_extension":"mkv"}}""" to "Plot",
+                """{"info":{"description":"Description","plot":"Plot"},"movie_data":{"container_extension":"mkv"}}""" to "Description",
+                """{"info":{"description":null,"plot":null},"movie_data":{"container_extension":"mkv"}}""" to "Existing synopsis",
+                """{"info":{},"movie_data":{"container_extension":"mkv"}}""" to "Existing synopsis",
+                """{"movie_data":{"container_extension":"mkv"}}""" to "Existing synopsis",
+            )
+            for ((response, expected) in cases) {
+                server.enqueue(MockResponse().setBody(response))
+                val result = ProviderRepository().loadMovieInfo(source, entry)
+                assertEquals(expected, result.description)
+                assertEquals(entry.id, result.id)
+                assertEquals(entry.sourceId, result.sourceId)
+                assertEquals(entry.providerId, result.providerId)
+                assertEquals(entry.kind, result.kind)
+                assertEquals(entry.group, result.group)
+                assertEquals(entry.logo, result.logo)
+                assertEquals(url.substringBeforeLast('.') + ".mkv", result.url)
+                assertEquals("get_vod_info", server.takeRequest().requestUrl?.queryParameter("action"))
+            }
+        }
+    }
+
     @Test fun `movie dialog reuses the resolved VOD URL without an extra metadata request`() = runBlocking {
         MockWebServer().use { s ->
             s.start()
