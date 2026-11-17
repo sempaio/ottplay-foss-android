@@ -82,7 +82,22 @@ internal fun EveryCineVisualApp(
     var showForYou by rememberSaveable { mutableStateOf(false) }
     var showPrivacy by rememberSaveable { mutableStateOf(false) }
     val savedPages = rememberSaveableStateHolder()
+    val pagePager = rememberPagerState(pageCount = { EveryCinePage.entries.size })
     val snackbar = remember { SnackbarHostState() }
+    // MainFragment in the reference is a ViewPager2. Keep swipe navigation
+    // and bottom-nav selection synchronized, without dropping each page state.
+    LaunchedEffect(pageName) {
+        val index = EveryCinePage.entries.indexOf(EveryCinePage.valueOf(pageName))
+        if (pagePager.currentPage != index) pagePager.scrollToPage(index)
+    }
+    LaunchedEffect(pagePager.currentPage) {
+        val current = EveryCinePage.entries[pagePager.currentPage].name
+        if (current != pageName) {
+            pageName = current
+            selectedCategory = ""
+            search = ""
+        }
+    }
 
     val isTv = LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK ==
         Configuration.UI_MODE_TYPE_TELEVISION
@@ -151,9 +166,13 @@ internal fun EveryCineVisualApp(
                         shape = RoundedCornerShape(8.dp),
                     )
                 }
-                Box(Modifier.weight(1f)) {
-                    savedPages.SaveableStateProvider(pageName) {
-                        when (page) {
+                HorizontalPager(
+                    state = pagePager, modifier = Modifier.weight(1f)
+                        .testTag("everycine-main-pager"),
+                ) { pageIndex ->
+                    val pane = EveryCinePage.entries[pageIndex]
+                    savedPages.SaveableStateProvider(pane.name) {
+                        when (pane) {
                             EveryCinePage.HOME -> EveryCineHome(
                                 state, recent, onAction, search,
                                 onBrowse = ::browse,
