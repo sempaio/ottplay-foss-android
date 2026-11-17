@@ -47,6 +47,12 @@ internal fun everyCineSections(
     return sections
 }
 
+/** Original home uses a banner pager, with only real catalog titles as pages. */
+internal fun everyCineBannerEntries(entries: List<MediaEntry>, recent: List<RecentPlayback>): List<MediaEntry> =
+    (entries.asSequence().filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES } +
+        recent.asSequence().map { it.entry }.filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES })
+        .distinctBy { it.sourceId to it.id }.take(5).toList()
+
 internal fun everyCineFeatured(entries: List<MediaEntry>, recent: List<RecentPlayback>): MediaEntry? =
     entries.firstOrNull { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }
         ?: recent.firstOrNull { it.entry.kind == MediaKind.MOVIE || it.entry.kind == MediaKind.SERIES }?.entry
