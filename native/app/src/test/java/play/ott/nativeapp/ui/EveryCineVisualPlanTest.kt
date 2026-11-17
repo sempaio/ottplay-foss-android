@@ -53,6 +53,15 @@ class EveryCineVisualPlanTest {
         assertTrue(everyCineSections(entries, emptyList(), emptySet()).all { it.entries.size <= 20 })
     }
 
+    @Test fun bannerPagerUsesUniqueRealMoviesAndKeepsOnlyFive() {
+        val first = media("filme-1", MediaKind.MOVIE)
+        val many = (1..9).map { media("filme-$it", MediaKind.MOVIE) }
+        val banner = everyCineBannerEntries(listOf(first) + many, emptyList())
+        assertEquals(5, banner.size)
+        assertEquals(5, banner.map { it.id }.distinct().size)
+        assertEquals("filme-1", banner.first().id)
+    }
+
     @Test fun featuredSelectionReusesRealCatalogOrRecentItem() {
         val movie = media("film", MediaKind.MOVIE)
         val channel = media("channel", MediaKind.LIVE)
