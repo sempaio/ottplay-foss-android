@@ -2,7 +2,7 @@ name: STARLINK M81 Android installable QA build
 
 on:
   push:
-    branches: [feature/starlink-qa91-proxima-atualizacao-20261117]
+    branches: [feature/starlink-qa91-proxima-atualizacao-20261117, feature/starlink-everycine-fluxo-visual-20261117]
     paths:
       - 'native/**'
       - '.github/workflows/starlink-m81-qa-installable.yml'
@@ -32,22 +32,22 @@ jobs:
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
       - name: Compile and run core and Android tests
         working-directory: native
-        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :core:test :app:testLayoutUnitTest :app:assembleQaM81Test
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :core:test :app:testLayoutUnitTest :app:assembleEveryCineQa
       - name: Validate independent APK and generate receipt
         run: |
           set -euo pipefail
-          APK=native/app/build/outputs/apk/qaM81Test/app-qaM81Test.apk
+          APK=native/app/build/outputs/apk/everyCineQa/app-everyCineQa.apk
           test -s "$APK"
           mkdir -p qa-install
-          cp "$APK" qa-install/STARLINK-M81-ANDROID-TESTE.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose qa-install/STARLINK-M81-ANDROID-TESTE.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging qa-install/STARLINK-M81-ANDROID-TESTE.apk | grep -F "package: name='br.starlink.iptv.qam81test'"
-          sha256sum qa-install/STARLINK-M81-ANDROID-TESTE.apk | tee qa-install/SHA256SUMS.txt
-          printf 'Candidato para validacao manual\nCommit: %s\nPacote: br.starlink.iptv.qam81test\nOrigem: QA8 (06/11/2026) com aviso inicial/atualizacao M81\nNao substitui a QA9.1: instala separadamente\nNao tem chave de producao e nao atualiza sua instalacao anterior\nAvisos do painel exigem a API proposta na PR 58, ainda nao publicada\n' "$GITHUB_SHA" > qa-install/LEIA-ANTES.txt
+          cp "$APK" qa-install/STARLINK-EVERYCINE-VISUAL-TESTE.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose qa-install/STARLINK-EVERYCINE-VISUAL-TESTE.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging qa-install/STARLINK-EVERYCINE-VISUAL-TESTE.apk | grep -F "package: name='br.starlink.iptv.everycineqa'"
+          sha256sum qa-install/STARLINK-EVERYCINE-VISUAL-TESTE.apk | tee qa-install/SHA256SUMS.txt
+          printf 'Candidato para validacao manual\nCommit: %s\nPacote: br.starlink.iptv.everycineqa\nOrigem: QA8 (06/11/2026) + Every Cine visual e aviso inicial M81\nNao substitui a QA9.1: instala separadamente\nNao tem chave de producao e nao atualiza sua instalacao anterior\nAvisos do painel exigem a API proposta na PR 58, ainda nao publicada\n' "$GITHUB_SHA" > qa-install/LEIA-ANTES.txt
       - name: Upload test APK only (never publish official release)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: STARLINK-M81-ANDROID-TESTE
+          name: STARLINK-EVERYCINE-VISUAL-TESTE
           path: qa-install/
           if-no-files-found: error
           retention-days: 30
