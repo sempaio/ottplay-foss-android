@@ -26,6 +26,7 @@ import play.ott.nativeapp.ui.AppUiState
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val updates = play.ott.nativeapp.data.UpdateClient(application)
+    private val announcements = play.ott.nativeapp.data.AnnouncementClient()
     private var latestUpdate: play.ott.nativeapp.data.AppUpdate? = null
     private var updateJob: Job? = null
     private val repository = (application as OttplayApplication).repository
@@ -106,6 +107,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     init {
         checkUpdate(false)
+        loadAnnouncement()
         viewModelScope.launch {
             repository.recentByProfile.collect { byProfile ->
                 updateState {
@@ -141,6 +143,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             catch (_: Exception) {
                 updateState { it.copy(isBusy = false) }; setErrorText { message(R.string.message_saved_sources_unreadable) }
             }
+        }
+    }
+
+    private fun loadAnnouncement() {
+        if (!BuildConfig.CUSTOMER_MODE) return
+        viewModelScope.launch {
+            try {
+                val welcome = announcements.active()
+                updateState { current -> current.copy(
+                    welcomeId = welcome?.id,
+                    welcomeTitle = welcome?.title.orEmpty(),
+                    welcomeMessage = welcome?.message.orEmpty(),
+                ) }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Offline access and playback remain available. */ }
         }
     }
 
@@ -246,6 +263,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.DismissUpdatePrompt -> updateState { current ->
                 if (current.updateMandatory) current else current.copy(dismissedUpdateVersion = current.updateVersionCode)
             }
+            AppAction.DismissWelcome -> updateState { current -> current.copy(dismissedWelcomeId = current.welcomeId) }
             AppAction.InstallUpdate -> {
                 if (updateJob?.isActive != true) latestUpdate?.let { update ->
                     updateJob = viewModelScope.launch {
