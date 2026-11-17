@@ -48,6 +48,17 @@ class EveryCineVisualPlanTest {
         assertTrue(everyCineVisible(entries, MediaKind.LIVE, "", "xyz").isEmpty())
     }
 
+    @Test fun selectedRemoteCategoryIncludesOnlyItsOriginalXtreamGroups() {
+        val hd = media("esporte-hd", MediaKind.LIVE, "ESPORTES HD")
+        val fhd = media("esporte-fhd", MediaKind.LIVE, "Esportes FHD")
+        val open = media("globo", MediaKind.LIVE, "Abertos")
+        val all = listOf(hd, fhd, open)
+        val filtered = everyCineVisibleRemote(all, MediaKind.LIVE,
+            setOf(" esportes hd ", "ESPORTES FHD"), "")
+        assertEquals(listOf(hd, fhd), filtered)
+        assertEquals(listOf(open), everyCineVisibleRemote(all, MediaKind.LIVE, setOf("Abertos"), "globo"))
+    }
+
     @Test fun sectionsAreBoundedForInstantRendering() {
         val entries = (1..300).map { media("film-$it", MediaKind.MOVIE, "Colecao") }
         assertTrue(everyCineSections(entries, emptyList(), emptySet()).all { it.entries.size <= 20 })
