@@ -150,7 +150,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             updateState { it.copy(checkingUpdate = true) }
             try {
                 latestUpdate = updates.latest()
-                updateState { it.copy(updateAvailable = latestUpdate != null) }
+                updateState { it.copy(
+                    updateAvailable = latestUpdate != null,
+                    updateVersionCode = latestUpdate?.version,
+                    updateVersionName = latestUpdate?.name.orEmpty(),
+                    updateMessage = latestUpdate?.text.orEmpty(),
+                    updateMandatory = latestUpdate?.mandatory == true,
+                ) }
                 if (manual && latestUpdate == null) setNoticeText { message(R.string.neon_no_update) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { if (manual) setNoticeText { message(R.string.neon_update_failed) } }
@@ -237,6 +243,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
             }
             AppAction.CheckUpdate -> checkUpdate(true)
+            AppAction.DismissUpdatePrompt -> updateState { current ->
+                if (current.updateMandatory) current else current.copy(dismissedUpdateVersion = current.updateVersionCode)
+            }
             AppAction.InstallUpdate -> {
                 if (updateJob?.isActive != true) latestUpdate?.let { update ->
                     updateJob = viewModelScope.launch {
