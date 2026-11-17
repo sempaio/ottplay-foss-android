@@ -129,6 +129,7 @@ fun OttNativeApp(
         OttTheme {
             CustomerLoginScreen(busy = state.isBusy, onSubmit = { onAction(AppAction.SaveSource(it)) })
             state.error?.let { CustomerErrorDialog(it) { onAction(AppAction.DismissError) } }
+            StarlinkUpdatePrompt(state, onAction)
         }
         return
     }
@@ -490,6 +491,7 @@ fun OttNativeApp(
         if (showSettings && !showPrivacy) SettingsDialog(state, onAction, customerMode = customerMode, onGuide = { showGuidePicker = true; showSettings = false }, onFavorites = { tab = LibraryTab.FAVORITES; showSettings = false }, onSources = { showSettings = false; if (customerMode) sourceEditorOpen = true else showSources = true }, onPrivacy = { showPrivacy = true }, onForYou = { showSettings = false; showForYouPreferences = true }) { showSettings = false }
         if (showPrivacy) PrivacyPolicyDialog { showPrivacy = false }
         if (state.sources.isNotEmpty() && !state.isBusy && !fullscreen &&
+            !play.ott.nativeapp.data.shouldShowUpdatePrompt(state.updateVersionCode, state.dismissedUpdateVersion, state.updateMandatory) &&
             (showForYouPreferences || !state.forYouProfile.onboardingDone)) {
             ForYouDialog(state.forYouProfile, onSave = { topics, subtopics, dislikes, consent ->
                 onAction(AppAction.SaveForYou(topics, subtopics, dislikes, consent))
@@ -533,6 +535,7 @@ fun OttNativeApp(
                 } },
             )
         }
+        if (customerMode && !fullscreen) StarlinkUpdatePrompt(state, onAction)
         state.epgEntry?.let { GuideDialog(it, state.programmes, state.epgLoading, onAction) }
         state.movieEntry?.let { MovieDialog(it, state.isBusy, it.id in state.favoriteIds, onAction) }
         state.seriesEntry?.let { SeriesDialog(it, state.episodes, state.isBusy, onAction) }
@@ -546,6 +549,34 @@ fun OttNativeApp(
             )
         }
     }
+}
+
+@Composable
+private fun StarlinkUpdatePrompt(state: AppUiState, onAction: (AppAction) -> Unit) {
+    if (!play.ott.nativeapp.data.shouldShowUpdatePrompt(
+            state.updateVersionCode, state.dismissedUpdateVersion, state.updateMandatory
+        )) return
+    AlertDialog(
+        modifier = Modifier.tvRemoteInput(),
+        onDismissRequest = { if (!state.updateMandatory) onAction(AppAction.DismissUpdatePrompt) },
+        title = { Text(stringResource(R.string.starlink_update_title)) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.starlink_update_version, state.updateVersionName))
+            if (state.updateMessage.isNotBlank()) Text(state.updateMessage.take(1000))
+            Text(stringResource(R.string.starlink_update_confirmation))
+        } },
+        confirmButton = {
+            ActionButton(
+                stringResource(if (state.checkingUpdate) R.string.starlink_update_preparing else R.string.starlink_update_confirm),
+                { onAction(AppAction.InstallUpdate) }, selected = true, enabled = !state.checkingUpdate,
+            )
+        },
+        dismissButton = {
+            if (!state.updateMandatory) TextButton(onClick = { onAction(AppAction.DismissUpdatePrompt) }) {
+                Text(stringResource(R.string.starlink_update_later))
+            }
+        },
+    )
 }
 
 @Composable
