@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -286,7 +288,7 @@ private fun EveryCineHome(
     val content = remember(state.entries, recent, search) {
         state.entries.filter { search.isBlank() || it.name.contains(search, ignoreCase = true) }
     }
-    val featured = remember(content, recent) { everyCineFeatured(content, recent) }
+    val banners = remember(content, recent) { everyCineBannerEntries(content, recent) }
     val sections = remember(content, recent, state.favoriteIds) {
         everyCineSections(content, recent, state.favoriteIds)
     }
@@ -301,8 +303,8 @@ private fun EveryCineHome(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item(key = "banner") {
-            EveryCineFeatureBanner(featured, onClick = {
-                if (featured != null) openContent(featured, onAction)
+            EveryCineFeatureBanner(banners, onClick = { selected ->
+                if (selected != null) openContent(selected, onAction)
                 else onBrowse(MediaKind.MOVIE, "")
             })
         }
@@ -349,31 +351,51 @@ private fun EveryCineHome(
 }
 
 @Composable
-private fun EveryCineFeatureBanner(entry: MediaEntry?, onClick: () -> Unit) {
+private fun EveryCineFeatureBanner(entries: List<MediaEntry>, onClick: (MediaEntry?) -> Unit) {
     val screenHeight = LocalConfiguration.current.screenHeightDp
-    BoxWithConstraints(
-        Modifier.fillMaxWidth().testTag("everycine-feature-banner").clickable(onClick = onClick),
-    ) {
-        val heroHeight = if (screenHeight < 420) 190.dp else 454.dp
-        Box(Modifier.fillMaxWidth().height(heroHeight).background(cinemaPanel)) {
-            if (entry?.logo?.isNotBlank() == true) AsyncImage(
-                entry.logo, contentDescription = null, modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = .15f), .42f to Color.Transparent,
-                1f to cinemaBlack,
-            )))
-            Column(
-                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 26.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text("STARLINK  •  PARA VOCÊ", fontSize = 11.sp, color = cinemaWhite, letterSpacing = 1.6.sp)
-                Text(entry?.name ?: "Seus filmes e séries em um só lugar",
-                    fontSize = 27.sp, fontWeight = FontWeight.Black, color = cinemaWhite, maxLines = 2,
-                    lineHeight = 30.sp)
-                Text(if (entry != null) "Ver detalhes  ▶" else "Explorar catálogo  ›",
-                    color = cinemaWhite, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    val heroHeight = if (screenHeight < 420) 190.dp else 454.dp
+    val pager = rememberPagerState(pageCount = { maxOf(1, entries.size) })
+    Box(Modifier.fillMaxWidth().height(heroHeight).testTag("everycine-feature-banner")) {
+        HorizontalPager(
+            state = pager, modifier = Modifier.fillMaxSize().testTag("everycine-feature-pager"),
+        ) { index ->
+            val entry = entries.getOrNull(index)
+            Box(Modifier.fillMaxSize().background(cinemaPanel).clickable { onClick(entry) }) {
+                if (entry?.logo?.isNotBlank() == true) AsyncImage(
+                    entry.logo, contentDescription = null, modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = .15f),
+                    .45f to Color.Black.copy(alpha = .03f),
+                    1f to cinemaBlack,
+                )))
+                Column(
+                    Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 30.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("STARLINK  •  PARA VOCÊ", fontSize = 11.sp, color = cinemaWhite,
+                        letterSpacing = 1.6.sp)
+                    Text(entry?.name ?: "Seus filmes e séries em um só lugar",
+                        fontSize = 27.sp, fontWeight = FontWeight.Black, color = cinemaWhite,
+                        maxLines = 2, lineHeight = 30.sp)
+                    Text(if (entry != null) "Ver detalhes  ▶" else "Explorar catálogo  ›",
+                        color = cinemaWhite, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
+            }
+        }
+        if (entries.size > 1) Row(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 13.dp)
+                .testTag("everycine-banner-indicator"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            entries.indices.forEach { i ->
+                Box(Modifier.width(if (pager.currentPage == i) 30.dp else 20.dp)
+                    .height(6.dp).background(
+                        if (pager.currentPage == i) Color.White else Color.White.copy(alpha = .5f),
+                        RoundedCornerShape(4.dp),
+                    ))
             }
         }
     }
