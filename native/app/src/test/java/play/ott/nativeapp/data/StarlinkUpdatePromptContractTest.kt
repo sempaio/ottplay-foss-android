@@ -28,6 +28,13 @@ class StarlinkUpdatePromptContractTest {
         assertTrue(update.mandatory)
     }
 
+    @Test fun officialCanRequireUpdateButQaRemainsOptional() {
+        assertTrue(effectiveMandatoryUpdate(true, "br.starlink.iptv"))
+        assertFalse(effectiveMandatoryUpdate(true, "br.starlink.iptv.layout"))
+        assertFalse(effectiveMandatoryUpdate(true, "br.starlink.iptv.paravoce"))
+        assertFalse(effectiveMandatoryUpdate(false, "br.starlink.iptv"))
+    }
+
     @Test fun absentOrOlderReleaseNeverShowsPrompt() {
         assertFalse(shouldShowUpdatePrompt(null, null, false))
         assertNull(parseUpdate(payload("1"), "br.starlink.iptv.layout", 11))
