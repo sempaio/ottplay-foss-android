@@ -172,7 +172,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     updateVersionCode = latestUpdate?.version,
                     updateVersionName = latestUpdate?.name.orEmpty(),
                     updateMessage = latestUpdate?.text.orEmpty(),
-                    updateMandatory = latestUpdate?.mandatory == true,
+                    updateMandatory = play.ott.nativeapp.data.effectiveMandatoryUpdate(
+                        latestUpdate?.mandatory == true, BuildConfig.APPLICATION_ID
+                    ),
                 ) }
                 if (manual && latestUpdate == null) setNoticeText { message(R.string.neon_no_update) }
             } catch (e: CancellationException) { throw e }
