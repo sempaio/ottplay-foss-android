@@ -123,7 +123,7 @@ internal fun EveryCineVisualApp(
     BackHandler(enabled = fullscreen && state.playingEntry != null && !inPictureInPicture) {
         if (state.playingEntry?.kind == MediaKind.LIVE) fullscreen = false else onAction(AppAction.StopPlayback)
     }
-    BackHandler(enabled = !fullscreen && page != EveryCinePage.HOME && !showSettings && !searchOpened && !inPictureInPicture) {
+    BackHandler(enabled = !fullscreen && page != EveryCinePage.HOME && !showSettings && !showSource && !showGuide && !showForYou && !searchOpened && !inPictureInPicture) {
         pageName = EveryCinePage.HOME.name
     }
     Box(Modifier.fillMaxSize().background(cinemaBlack).testTag("everycine-visual-shell")) {
@@ -320,7 +320,8 @@ private fun EveryCineHome(
                 }
             }
         }
-        items(sections, key = { it.title }) { section ->
+        items(sections.size, key = { "rail-" + it }) { sectionIndex ->
+            val section = sections[sectionIndex]
             Column(Modifier.fillMaxWidth().testTag("everycine-section-" + section.title)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
