@@ -15,6 +15,11 @@ data class AppUiState(
     val xtreamGroups: List<play.ott.nativeapp.core.XtreamGroup> = emptyList(),
     val updateAvailable: Boolean = false,
     val checkingUpdate: Boolean = false,
+    val updateVersionCode: Long? = null,
+    val updateVersionName: String = "",
+    val updateMessage: String = "",
+    val updateMandatory: Boolean = false,
+    val dismissedUpdateVersion: Long? = null,
     val recent: List<play.ott.nativeapp.data.RecentPlayback> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
     val forYouProfile: ForYouProfile = ForYouProfile(),
@@ -43,6 +48,7 @@ sealed interface AppAction {
     data object Logout : AppAction
     data object CheckUpdate : AppAction
     data object InstallUpdate : AppAction
+    data object DismissUpdatePrompt : AppAction
     data object Refresh : AppAction
     data class ToggleFavorite(val entry: MediaEntry) : AppAction
     data class SaveForYou(val interests: Set<String>, val subInterests: Set<String>, val dislikedInterests: Set<String>, val allowViewingSignals: Boolean) : AppAction
