@@ -58,6 +58,22 @@ internal fun everyCineFeatured(entries: List<MediaEntry>, recent: List<RecentPla
         ?: recent.firstOrNull { it.entry.kind == MediaKind.MOVIE || it.entry.kind == MediaKind.SERIES }?.entry
         ?: entries.firstOrNull()
 
+/** Remote category labels can merge several original Xtream category names. */
+internal fun everyCineVisibleRemote(
+    entries: List<MediaEntry>,
+    kind: MediaKind,
+    originalGroups: Set<String>,
+    query: String,
+): List<MediaEntry> {
+    val allowed = originalGroups.map { it.trim().lowercase() }.toSet()
+    return entries.filter { entry ->
+        entry.kind == kind &&
+            (allowed.isEmpty() || entry.group.trim().lowercase() in allowed) &&
+            (query.isBlank() || entry.name.contains(query, ignoreCase = true) ||
+                entry.group.contains(query, ignoreCase = true))
+    }
+}
+
 internal fun everyCineVisible(
     entries: List<MediaEntry>,
     kind: MediaKind,
