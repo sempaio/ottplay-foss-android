@@ -1,4 +1,10 @@
 <resources>
     <string name="app_name" translatable="false">STARLINK IPTV</string>
     <string name="local_playlist">Local playlist</string>
+    <string name="starlink_update_title">STARLINK IPTV update</string>
+    <string name="starlink_update_version">Version %1$s is available</string>
+    <string name="starlink_update_confirmation">The Android installer will ask you to confirm the update. Your existing app data will be kept if the signature matches.</string>
+    <string name="starlink_update_confirm">Update</string>
+    <string name="starlink_update_preparing">Preparing...</string>
+    <string name="starlink_update_later">Later</string>
 </resources>

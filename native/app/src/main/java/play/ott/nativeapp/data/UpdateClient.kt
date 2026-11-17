@@ -20,9 +20,9 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-internal data class AppUpdate(val version: Long, val name: String, val packageName: String, val url: String, val sha256: String, val text: String)
+internal data class AppUpdate(val version: Long, val name: String, val packageName: String, val url: String, val sha256: String, val text: String, val mandatory: Boolean = false)
 
-/** Only the read-only M81 update contract is used. Preview updates are always optional. */
+/** Only the read-only M81 update contract is used. Preview updates are never forced. */
 internal class UpdateClient(private val context: Context) {
     private val client = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
@@ -116,5 +116,14 @@ internal fun parseUpdate(raw: String, packageName: String, currentVersion: Long)
     require(url.isHttps && url.username.isEmpty() && url.password.isEmpty())
     val checksum = string("sha256")
     require(checksum.matches(Regex("[a-fA-F0-9]{64}")))
-    return AppUpdate(version, string("version_name"), packageName, url.toString(), checksum, string("text").take(4000))
+    val mandatory = string("force_upgrade").lowercase() in setOf("1", "true")
+    return AppUpdate(version, string("version_name"), packageName, url.toString(), checksum, string("text").take(4000), mandatory)
 }
+
+/** An optional notice can be deferred for this launch; mandatory notices cannot. */
+internal fun shouldShowUpdatePrompt(version: Long?, dismissedVersion: Long?, mandatory: Boolean): Boolean =
+    version != null && (mandatory || dismissedVersion != version)
+
+/** Preserve optional QA variants: only the official signed package can be blocked. */
+internal fun effectiveMandatoryUpdate(requested: Boolean, packageName: String): Boolean =
+    requested && packageName == "br.starlink.iptv"

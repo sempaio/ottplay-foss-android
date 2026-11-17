@@ -26,6 +26,7 @@ import play.ott.nativeapp.ui.AppUiState
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val updates = play.ott.nativeapp.data.UpdateClient(application)
+    private val announcements = play.ott.nativeapp.data.AnnouncementClient()
     private var latestUpdate: play.ott.nativeapp.data.AppUpdate? = null
     private var updateJob: Job? = null
     private val repository = (application as OttplayApplication).repository
@@ -106,6 +107,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     init {
         checkUpdate(false)
+        loadAnnouncement()
         viewModelScope.launch {
             repository.recentByProfile.collect { byProfile ->
                 updateState {
@@ -144,13 +146,36 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun loadAnnouncement() {
+        if (!BuildConfig.CUSTOMER_MODE) return
+        viewModelScope.launch {
+            try {
+                val welcome = announcements.active()
+                updateState { current -> current.copy(
+                    welcomeId = welcome?.id,
+                    welcomeTitle = welcome?.title.orEmpty(),
+                    welcomeMessage = welcome?.message.orEmpty(),
+                ) }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Offline access and playback remain available. */ }
+        }
+    }
+
     private fun checkUpdate(manual: Boolean) {
         if (updateJob?.isActive == true) return
         updateJob = viewModelScope.launch {
             updateState { it.copy(checkingUpdate = true) }
             try {
                 latestUpdate = updates.latest()
-                updateState { it.copy(updateAvailable = latestUpdate != null) }
+                updateState { it.copy(
+                    updateAvailable = latestUpdate != null,
+                    updateVersionCode = latestUpdate?.version,
+                    updateVersionName = latestUpdate?.name.orEmpty(),
+                    updateMessage = latestUpdate?.text.orEmpty(),
+                    updateMandatory = play.ott.nativeapp.data.effectiveMandatoryUpdate(
+                        latestUpdate?.mandatory == true, BuildConfig.APPLICATION_ID
+                    ),
+                ) }
                 if (manual && latestUpdate == null) setNoticeText { message(R.string.neon_no_update) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { if (manual) setNoticeText { message(R.string.neon_update_failed) } }
@@ -237,6 +262,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
             }
             AppAction.CheckUpdate -> checkUpdate(true)
+            AppAction.DismissUpdatePrompt -> updateState { current ->
+                if (current.updateMandatory) current else current.copy(dismissedUpdateVersion = current.updateVersionCode)
+            }
+            AppAction.DismissWelcome -> updateState { current -> current.copy(dismissedWelcomeId = current.welcomeId) }
             AppAction.InstallUpdate -> {
                 if (updateJob?.isActive != true) latestUpdate?.let { update ->
                     updateJob = viewModelScope.launch {

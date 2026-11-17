@@ -1,3 +1,9 @@
 <resources>
     <string name="local_playlist">Lista de reprodução local</string>
+    <string name="starlink_update_title">Atualização STARLINK IPTV</string>
+    <string name="starlink_update_version">Versão %1$s disponível</string>
+    <string name="starlink_update_confirmation">O instalador do Android pedirá sua confirmação. Seus dados atuais serão preservados se a assinatura for compatível.</string>
+    <string name="starlink_update_confirm">Atualizar</string>
+    <string name="starlink_update_preparing">Preparando...</string>
+    <string name="starlink_update_later">Depois</string>
 </resources>
