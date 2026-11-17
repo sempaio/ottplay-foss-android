@@ -449,10 +449,15 @@ private fun EveryCineLive(
 ) {
     val categories = if (remoteCategories.isNotEmpty()) remoteCategories
         else state.entries.filter { it.kind == MediaKind.LIVE }.map { it.group }.filter { it.isNotBlank() }.distinct()
-    val channels = remember(state.entries, search, selectedCategory, remoteCategories) {
-        // Xtream category entries can have a different original group name;
-        // display their real names without guessing or rewriting the provider group.
-        everyCineVisible(state.entries, MediaKind.LIVE,
+    val remoteGroupNames = remember(state.xtreamGroups, selectedCategory) {
+        XtreamDisplayGroups.merge(state.xtreamGroups)
+            .firstOrNull { it.kind == MediaKind.LIVE && it.label == selectedCategory }
+            ?.sources?.map { it.name }?.toSet().orEmpty()
+    }
+    val channels = remember(state.entries, search, selectedCategory, remoteCategories, remoteGroupNames) {
+        if (remoteCategories.isNotEmpty() && selectedCategory.isNotBlank())
+            everyCineVisibleRemote(state.entries, MediaKind.LIVE, remoteGroupNames, search)
+        else everyCineVisible(state.entries, MediaKind.LIVE,
             if (remoteCategories.isNotEmpty()) "" else selectedCategory, search)
     }
     val compact = LocalConfiguration.current.screenHeightDp < 420
@@ -588,8 +593,15 @@ private fun EveryCineCatalog(
 ) {
     val categories = if (remoteCategories.isNotEmpty()) remoteCategories
         else state.entries.filter { it.kind == kind }.map { it.group }.filter { it.isNotBlank() }.distinct()
-    val visible = remember(state.entries, kind, search, selectedCategory, remoteCategories) {
-        everyCineVisible(state.entries, kind,
+    val remoteGroupNames = remember(state.xtreamGroups, kind, selectedCategory) {
+        XtreamDisplayGroups.merge(state.xtreamGroups)
+            .firstOrNull { it.kind == kind && it.label == selectedCategory }
+            ?.sources?.map { it.name }?.toSet().orEmpty()
+    }
+    val visible = remember(state.entries, kind, search, selectedCategory, remoteCategories, remoteGroupNames) {
+        if (hasRemoteCategories && selectedCategory.isNotBlank())
+            everyCineVisibleRemote(state.entries, kind, remoteGroupNames, search)
+        else everyCineVisible(state.entries, kind,
             if (hasRemoteCategories) "" else selectedCategory, search)
     }
     Column(Modifier.fillMaxSize().testTag("everycine-catalog-screen")) {
