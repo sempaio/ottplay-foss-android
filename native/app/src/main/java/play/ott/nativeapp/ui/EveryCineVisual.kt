@@ -350,10 +350,11 @@ private fun EveryCineHome(
 
 @Composable
 private fun EveryCineFeatureBanner(entry: MediaEntry?, onClick: () -> Unit) {
+    val screenHeight = LocalConfiguration.current.screenHeightDp
     BoxWithConstraints(
         Modifier.fillMaxWidth().testTag("everycine-feature-banner").clickable(onClick = onClick),
     ) {
-        val heroHeight = if (maxHeight < 400.dp) 220.dp else 380.dp
+        val heroHeight = if (screenHeight < 420) 190.dp else 454.dp
         Box(Modifier.fillMaxWidth().height(heroHeight).background(cinemaPanel)) {
             if (entry?.logo?.isNotBlank() == true) AsyncImage(
                 entry.logo, contentDescription = null, modifier = Modifier.fillMaxSize(),
@@ -426,81 +427,126 @@ private fun EveryCineLive(
     val categories = if (remoteCategories.isNotEmpty()) remoteCategories
         else state.entries.filter { it.kind == MediaKind.LIVE }.map { it.group }.filter { it.isNotBlank() }.distinct()
     val channels = remember(state.entries, search, selectedCategory, remoteCategories) {
-        // Xtream category payloads are loaded on demand; their original group string
-        // can differ from the translated category label.
+        // Xtream category entries can have a different original group name;
+        // display their real names without guessing or rewriting the provider group.
         everyCineVisible(state.entries, MediaKind.LIVE,
             if (remoteCategories.isNotEmpty()) "" else selectedCategory, search)
     }
-    Column(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
-        Box(Modifier.fillMaxWidth().height(209.dp).background(Color.Black)) {
-            val playing = state.playingEntry?.takeIf { it.kind == MediaKind.LIVE }
-            if (playing == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    NeonEmblem(Modifier.size(60.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text("Escolha um canal para assistir", color = cinemaGrey)
-                }
-            } else NativePlayerPane(
-                playing, controller, false,
-                onFullscreen = onFullscreen,
-                onPictureInPicture = {},
-                onStop = { onAction(AppAction.StopPlayback) },
-                onRetry = { onAction(AppAction.Play(playing)) },
-                onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        LazyRow(
-            modifier = Modifier.testTag("everycine-live-categories"),
-            contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item { EveryCineCategoryChip("Todos", selectedCategory.isBlank()) { onSelectCategory("") } }
-            items(categories, key = { it }) { name ->
-                EveryCineCategoryChip(name, name == selectedCategory) { onSelectCategory(name) }
+    val compact = LocalConfiguration.current.screenHeightDp < 420
+    if (compact) {
+        // Rotate or shrink: preserve the two functional parts side-by-side.
+        Row(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
+            EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
+                Modifier.weight(1f).fillMaxHeight())
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
+                if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                EveryCineChannelRows(channels, state, onAction, onFullscreen, Modifier.weight(1f))
             }
         }
-        if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        LazyColumn(
-            Modifier.fillMaxSize().padding(top = 10.dp).testTag("everycine-channel-list"),
-            contentPadding = PaddingValues(bottom = 20.dp),
-        ) {
-            items(channels, key = { it.sourceId + ":" + it.id }) { channel ->
-                val selected = state.playingEntry?.id == channel.id
-                Row(
-                    Modifier.fillMaxWidth().clickable {
-                        if (selected) onFullscreen() else onAction(AppAction.Play(channel))
-                    }.padding(horizontal = 12.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Box(Modifier.size(55.dp).background(cinemaPanel, RoundedCornerShape(6.dp)),
-                        contentAlignment = Alignment.Center) {
-                        if (channel.logo.isNotBlank()) AsyncImage(
-                            channel.logo, contentDescription = null,
-                            modifier = Modifier.fillMaxSize().padding(3.dp),
-                            contentScale = ContentScale.Fit,
-                        ) else Text("TV", color = cinemaGrey, fontSize = 14.sp)
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(channel.name, color = cinemaWhite,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(channel.group.ifBlank { "Ao vivo" }, color = cinemaGrey, fontSize = 12.sp, maxLines = 1)
-                    }
-                    Text(if (selected) "▶" else "▷", color = cinemaAccent, fontSize = 21.sp)
-                    Text(if (channel.id in state.favoriteIds) "♥" else "♡",
-                        color = cinemaWhite, fontSize = 22.sp, modifier = Modifier
-                            .clickable { onAction(AppAction.ToggleFavorite(channel)) }
-                            .padding(4.dp))
+    } else {
+        Column(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
+            EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
+                Modifier.fillMaxWidth().height(209.dp))
+            EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
+            if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            EveryCineChannelRows(channels, state, onAction, onFullscreen, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun EveryCineInlinePlayer(
+    state: AppUiState,
+    controller: MediaController?,
+    onAction: (AppAction) -> Unit,
+    onFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.background(Color.Black).testTag("everycine-inline-player")) {
+        val playing = state.playingEntry?.takeIf { it.kind == MediaKind.LIVE }
+        if (playing == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                NeonEmblem(Modifier.size(50.dp))
+                Spacer(Modifier.height(8.dp))
+                Text("Selecione um canal", color = cinemaGrey, fontSize = 13.sp)
+            }
+        } else NativePlayerPane(
+            playing, controller, false,
+            onFullscreen = onFullscreen,
+            onPictureInPicture = {},
+            onStop = { onAction(AppAction.StopPlayback) },
+            onRetry = { onAction(AppAction.Play(playing)) },
+            onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun EveryCineLiveCategories(
+    categories: List<String>, selectedCategory: String, onSelectCategory: (String) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().testTag("everycine-live-categories")
+            .padding(top = 8.dp, bottom = 5.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item { EveryCineCategoryChip("Todos", selectedCategory.isBlank()) { onSelectCategory("") } }
+        items(categories, key = { it }) { name ->
+            EveryCineCategoryChip(name, name == selectedCategory) { onSelectCategory(name) }
+        }
+    }
+}
+
+@Composable
+private fun EveryCineChannelRows(
+    channels: List<MediaEntry>,
+    state: AppUiState,
+    onAction: (AppAction) -> Unit,
+    onFullscreen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier.testTag("everycine-channel-list"),
+        contentPadding = PaddingValues(bottom = 20.dp),
+    ) {
+        items(channels, key = { it.sourceId + ":" + it.id }) { channel ->
+            val selected = state.playingEntry?.id == channel.id
+            Row(
+                Modifier.fillMaxWidth().clickable {
+                    if (selected) onFullscreen() else onAction(AppAction.Play(channel))
+                }.padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(Modifier.size(55.dp).background(cinemaPanel, RoundedCornerShape(6.dp)),
+                    contentAlignment = Alignment.Center) {
+                    if (channel.logo.isNotBlank()) AsyncImage(
+                        channel.logo, contentDescription = null,
+                        modifier = Modifier.fillMaxSize().padding(3.dp),
+                        contentScale = ContentScale.Fit,
+                    ) else Text("TV", color = cinemaGrey, fontSize = 14.sp)
                 }
-                HorizontalDivider(color = Color(0xFF222225), thickness = .5.dp)
+                Column(Modifier.weight(1f)) {
+                    Text(channel.name, color = cinemaWhite,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(channel.group.ifBlank { "Ao vivo" }, color = cinemaGrey,
+                        fontSize = 12.sp, maxLines = 1)
+                }
+                Text(if (selected) "▶" else "▷", color = cinemaAccent, fontSize = 21.sp)
+                Text(if (channel.id in state.favoriteIds) "♥" else "♡",
+                    color = cinemaWhite, fontSize = 22.sp, modifier = Modifier
+                        .clickable { onAction(AppAction.ToggleFavorite(channel)) }
+                        .padding(4.dp))
             }
-            if (channels.isEmpty() && !state.isBusy) item {
-                Text("Selecione uma categoria para carregar os canais.",
-                    color = cinemaGrey, modifier = Modifier.padding(20.dp))
-            }
+            HorizontalDivider(color = Color(0xFF222225), thickness = .5.dp)
+        }
+        if (channels.isEmpty() && !state.isBusy) item {
+            Text("Selecione uma categoria para carregar os canais.",
+                color = cinemaGrey, modifier = Modifier.padding(20.dp))
         }
     }
 }
