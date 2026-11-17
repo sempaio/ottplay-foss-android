@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 
 internal data class AppUpdate(val version: Long, val name: String, val packageName: String, val url: String, val sha256: String, val text: String, val mandatory: Boolean = false)
 
-/** Only the read-only M81 update contract is used. Preview updates are always optional. */
+/** Only the read-only M81 update contract is used. Preview updates are never forced. */
 internal class UpdateClient(private val context: Context) {
     private val client = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
@@ -123,3 +123,7 @@ internal fun parseUpdate(raw: String, packageName: String, currentVersion: Long)
 /** An optional notice can be deferred for this launch; mandatory notices cannot. */
 internal fun shouldShowUpdatePrompt(version: Long?, dismissedVersion: Long?, mandatory: Boolean): Boolean =
     version != null && (mandatory || dismissedVersion != version)
+
+/** Preserve optional QA variants: only the official signed package can be blocked. */
+internal fun effectiveMandatoryUpdate(requested: Boolean, packageName: String): Boolean =
+    requested && packageName == "br.starlink.iptv"
