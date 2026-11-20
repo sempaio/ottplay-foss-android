@@ -5,13 +5,17 @@ import play.ott.nativeapp.R
 import android.app.PendingIntent
 import android.content.res.Configuration
 import android.os.Process
+import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -26,6 +30,9 @@ import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -46,6 +53,8 @@ class PlaybackService : MediaSessionService() {
     private var sessionPlayer: ChannelNavigationPlayer? = null
     private var httpClient: OkHttpClient? = null
     private var progress: PlaybackProgressRecorder? = null
+    private var liveRecoveryJob: Job? = null
+    private var liveRecoveryListener: Player.Listener? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
@@ -67,8 +76,14 @@ class PlaybackService : MediaSessionService() {
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
         httpClient = client
+        // Start conservatively on adaptive HLS. The bandwidth meter promotes quality as
+        // throughput measurements arrive; fixed-quality sources remain unchanged.
+        val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
+            .setInitialBitrateEstimate(650_000L)
+            .build()
         val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(ItemMediaSourceFactory(this, client))
+            .setBandwidthMeter(bandwidthMeter)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
                 true,
@@ -77,6 +92,7 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         player = exoPlayer
+        startLivePlaybackRecovery(exoPlayer)
         val app = application as OttplayApplication
         val repository = app.repository
         val isTelevision = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
@@ -134,11 +150,105 @@ class PlaybackService : MediaSessionService() {
         mediaSession = builder.build()
     }
 
+    /**
+     * Recovery runs in the media service, not in a UI screen: a controller/surface being
+     * recreated will not silently disable the watchdog. Only live content is eligible.
+     * No provider URLs, authorization headers or tokens are logged.
+     */
+    private fun startLivePlaybackRecovery(exoPlayer: ExoPlayer) {
+        val policy = LivePlaybackRecoveryPolicy()
+        var naturallyEnded = false
+        var retryableError = false
+        val listener = object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                policy.reset()
+                naturallyEnded = false
+                retryableError = false
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                    naturallyEnded = true
+                } else {
+                    naturallyEnded = false
+                    if (!playWhenReady) policy.reset() // user pause, audio focus loss or app exit
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                retryableError = isRetryableLiveError(error)
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) retryableError = false
+            }
+        }
+        exoPlayer.addListener(listener)
+        liveRecoveryListener = listener
+        liveRecoveryJob = serviceScope.launch {
+            while (isActive) {
+                delay(1_500L)
+                val current = exoPlayer.currentMediaItem
+                val live = current?.requestMetadata?.extras
+                    ?.getBoolean(PlaybackItems.EXTRA_IS_LIVE, false) == true
+                val playbackState = when (exoPlayer.playbackState) {
+                    Player.STATE_BUFFERING -> LiveRecoveryState.BUFFERING
+                    Player.STATE_READY -> LiveRecoveryState.READY
+                    Player.STATE_ENDED -> LiveRecoveryState.ENDED
+                    else -> LiveRecoveryState.IDLE
+                }
+                val reconnect = policy.evaluate(
+                    nowMs = SystemClock.elapsedRealtime(),
+                    currentMediaId = current?.mediaId,
+                    isLive = live,
+                    playWhenReady = exoPlayer.playWhenReady,
+                    naturallyEnded = naturallyEnded,
+                    state = playbackState,
+                    isPlaying = exoPlayer.isPlaying,
+                    positionMs = exoPlayer.currentPosition,
+                    retryableError = retryableError,
+                )
+                if (!reconnect) continue
+                if (exoPlayer.currentMediaItem != current || !live ||
+                    (!exoPlayer.playWhenReady && !naturallyEnded)) continue
+                try {
+                    // stop() on ExoPlayer retains the selected media item. The session
+                    // wrapper only clears the playlist for EXPLICIT user Stop.
+                    exoPlayer.stop()
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                    naturallyEnded = false
+                    retryableError = false
+                } catch (_: Exception) {
+                    // The policy enforces backoff even if the source remains unavailable.
+                }
+            }
+        }
+    }
+
+    private fun isRetryableLiveError(error: PlaybackException): Boolean = when (error.errorCode) {
+        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> true
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> {
+            val response = generateSequence(error as Throwable) { it.cause }
+                .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+                .firstOrNull()
+            val status = response?.responseCode ?: 0
+            status == 408 || status == 429 || status in 500..599
+        }
+        else -> false // 401/403, unsupported codec, DRM and decoder failures are not transient.
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     // MediaSessionService's default onTaskRemoved retains ongoing playback, and stops an idle
     // service. Do not couple this to Activity onStop/onDestroy or store Activity references here.
     override fun onDestroy() {
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
+        liveRecoveryListener?.let { listener -> player?.removeListener(listener) }
+        liveRecoveryListener = null
         progress?.close()
         progress = null
         mediaSession?.release()
