@@ -614,7 +614,7 @@ private fun EveryCineFamilyCard(
     onClick: () -> Unit,
 ) {
     Column(
-        Modifier.width(135.dp).clickable(onClick).testTag("everycine-family-" + title),
+        Modifier.width(135.dp).clickable(onClick = onClick).testTag("everycine-family-" + title),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Box(
