@@ -34,30 +34,35 @@ internal fun CustomerLoginScreen(original: SourceConfig? = null, busy: Boolean, 
     var visible by remember { mutableStateOf(false) }
     var missing by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
-    val colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-        focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedBorderColor = Color.Transparent)
-    Surface(Modifier.tvRemoteInput().fillMaxSize().testTag("customer-login"), color = MaterialTheme.colorScheme.background) {
-        Box(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(24.dp), contentAlignment = Alignment.Center) {
-            Column(Modifier.widthIn(max = 420.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                Image(painterResource(R.drawable.starlink_logo), stringResource(R.string.library_brand_name), Modifier.size(132.dp).testTag("customer-brand"))
-                Text(stringResource(R.string.customer_login_title), style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
+    val colors = OutlinedTextFieldDefaults.colors(
+        unfocusedContainerColor = Color(0xFF171719),
+        focusedContainerColor = Color(0xFF171719),
+        focusedBorderColor = Color(0xFF29D8EB),
+        unfocusedBorderColor = Color(0xFF37373B),
+        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+    )
+    Surface(Modifier.tvRemoteInput().fillMaxSize().testTag("customer-login"), color = Color.Black) {
+        Box(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 24.dp), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.widthIn(max = 320.dp).verticalScroll(rememberScrollState()).padding(top = if (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 420) 18.dp else 62.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Image(painterResource(R.drawable.starlink_logo), stringResource(R.string.library_brand_name), Modifier.size(70.dp).testTag("customer-brand"))
+                Text(stringResource(R.string.customer_login_title), style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Spacer(Modifier.height(36.dp))
                 OutlinedTextField(username, { username = it; missing = false }, enabled = !busy,
                     placeholder = { Text(stringResource(R.string.customer_username)) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next, keyboardType = KeyboardType.Text),
-                    shape = RoundedCornerShape(28.dp), colors = colors, modifier = Modifier.fillMaxWidth().testTag("customer-username"))
+                    shape = RoundedCornerShape(12.dp), colors = colors, modifier = Modifier.fillMaxWidth().testTag("customer-username"))
                 OutlinedTextField(password, { password = it; missing = false }, enabled = !busy,
                     placeholder = { Text(stringResource(R.string.customer_password)) }, singleLine = true,
                     visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                     trailingIcon = { TextButton({ visible = !visible }) { Text(stringResource(if (visible) R.string.dialog_hide else R.string.dialog_show)) } },
-                    shape = RoundedCornerShape(28.dp), colors = colors, modifier = Modifier.fillMaxWidth().testTag("customer-password"))
+                    shape = RoundedCornerShape(12.dp), colors = colors, modifier = Modifier.fillMaxWidth().testTag("customer-password"))
                 if (missing) Text(stringResource(R.string.customer_missing_credentials), color = MaterialTheme.colorScheme.error)
                 ActionButton(stringResource(if (busy) R.string.customer_signing_in else R.string.customer_sign_in), {
                     visible = false; keyboard?.hide()
                     missing = username.isBlank() || password.isBlank()
                     if (!missing) onSubmit(SourceConfig(id, "STARLINK IPTV", SourceKind.XTREAM, StarlinkConfig.XTREAM_BASE_URL, username.trim(), password))
-                }, Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(28.dp)).testTag("customer-sign-in"), selected = true, enabled = !busy)
+                }, Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(24.dp)).testTag("customer-sign-in"), selected = true, enabled = !busy)
                 CustomerSupportLink()
                 onDismiss?.let { TextButton(it) { Text(stringResource(R.string.dialog_cancel)) } }
             }

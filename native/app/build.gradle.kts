@@ -82,6 +82,16 @@ android {
             matchingFallbacks += "debug"
             resValue("string", "app_name", "STARLINK M81 Teste")
         }
+        // Visual prototype installs separately from QA 9.1 and previous M81 test builds.
+        create("everyCineQa") {
+            initWith(getByName("debug"))
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            applicationIdSuffix = ".everycineqa"
+            versionNameSuffix = "-everycine-visual-qa"
+            matchingFallbacks += "debug"
+            resValue("string", "app_name", "STARLINK Visual Teste")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

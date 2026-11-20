@@ -134,6 +134,24 @@ fun OttNativeApp(
         }
         return
     }
+    // Visual contract from the user's Every Cine navigation and layout resources.
+    // Only the STARLINK customer variant uses this shell; original OTT screen remains
+    // available for internal comparison and the QA 9.1 installed app is untouched.
+    if (customerMode) {
+        OttTheme {
+            EveryCineVisualApp(
+                state, onAction, controller,
+                onPictureInPicture = onPictureInPicture,
+                onFullscreenChanged = onFullscreenChanged,
+                inPictureInPicture = inPictureInPicture,
+            )
+            if (state.playingEntry == null) {
+                StarlinkUpdatePrompt(state, onAction)
+                StarlinkWelcomePrompt(state, onAction)
+            }
+        }
+        return
+    }
     val keyToCatalog = if (LocalLayoutDirection.current == LayoutDirection.Rtl) Key.DirectionLeft else Key.DirectionRight
     var tab by rememberSaveable { mutableStateOf(LibraryTab.HOME) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -755,7 +773,7 @@ private fun SourcesDialog(state: AppUiState, onAction: (AppAction) -> Unit, onDi
 }
 
 @Composable
-private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onForYou: () -> Unit, onDismiss: () -> Unit) {
+internal fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onForYou: () -> Unit, onDismiss: () -> Unit) {
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     var languageTag by remember(configuration) { mutableStateOf(AppLanguages.currentTag()) }
