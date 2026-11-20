@@ -115,7 +115,7 @@ internal fun EveryCineVisualApp(
         }
         selectedCategory = category
         search = ""
-        if (hasRemoteCategories && category.isNotBlank()) {
+        if (kind != MediaKind.LIVE && hasRemoteCategories && category.isNotBlank()) {
             mergedGroups.firstOrNull { it.kind == kind && it.label == category }?.let { group ->
                 onAction(AppAction.OpenXtreamGroups(kind, group.sources.map { it.id }))
             }
@@ -179,7 +179,6 @@ internal fun EveryCineVisualApp(
                             )
                             EveryCinePage.LIVE -> EveryCineLive(
                                 state, controller, onAction, search, selectedCategory,
-                                mergedGroups.filter { it.kind == MediaKind.LIVE }.map { it.label },
                                 onSelectCategory = { browse(MediaKind.LIVE, it) },
                                 onFullscreen = { fullscreen = true },
                             )
@@ -311,10 +310,13 @@ private fun EveryCineHome(
     val sections = remember(content, recent, state.favoriteIds) {
         everyCineSections(content, recent, state.favoriteIds)
     }
-    val remoteCategories = remember(state.xtreamGroups) {
-        XtreamDisplayGroups.merge(state.xtreamGroups).filter {
-            it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES || it.kind == MediaKind.LIVE
-        }.take(24)
+    val homeCategories = remember(state.xtreamGroups, state.entries) {
+        val live = EveryCineFamilyIndex.available(state.entries, state.xtreamGroups)
+            .map { MediaKind.LIVE to it }
+        val vod = XtreamDisplayGroups.merge(state.xtreamGroups)
+            .filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }
+            .take(16).map { it.kind to it.label }
+        live + vod
     }
     LazyColumn(
         Modifier.fillMaxSize().testTag("everycine-home"),
@@ -328,13 +330,13 @@ private fun EveryCineHome(
             })
         }
         if (state.isBusy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        if (remoteCategories.isNotEmpty()) item(key = "categories") {
+        if (homeCategories.isNotEmpty()) item(key = "categories") {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("Explore as categorias", color = cinemaWhite,
                     fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(remoteCategories, key = { it.kind.name + it.label }) { group ->
-                        EveryCineCategoryChip(group.label, false) { onBrowse(group.kind, group.label) }
+                    items(homeCategories, key = { it.first.name + it.second }) { group ->
+                        EveryCineCategoryChip(group.second, false) { onBrowse(group.first, group.second) }
                     }
                 }
             }
@@ -462,43 +464,178 @@ private fun EveryCineLive(
     onAction: (AppAction) -> Unit,
     search: String,
     selectedCategory: String,
-    remoteCategories: List<String>,
     onSelectCategory: (String) -> Unit,
     onFullscreen: () -> Unit,
 ) {
-    val categories = if (remoteCategories.isNotEmpty()) remoteCategories
-        else state.entries.filter { it.kind == MediaKind.LIVE }.map { it.group }.filter { it.isNotBlank() }.distinct()
-    val remoteGroupNames = remember(state.xtreamGroups, selectedCategory) {
-        XtreamDisplayGroups.merge(state.xtreamGroups)
-            .firstOrNull { it.kind == MediaKind.LIVE && it.label == selectedCategory }
-            ?.sources?.map { it.name }?.toSet().orEmpty()
+    val selected = selectedCategory.ifBlank { EveryCineFamilyIndex.ALL }
+    val categories = remember(state.entries, state.xtreamGroups) {
+        EveryCineFamilyIndex.available(state.entries, state.xtreamGroups)
     }
-    val channels = remember(state.entries, search, selectedCategory, remoteCategories, remoteGroupNames) {
-        if (remoteCategories.isNotEmpty() && selectedCategory.isNotBlank())
-            everyCineVisibleRemote(state.entries, MediaKind.LIVE, remoteGroupNames, search)
-        else everyCineVisible(state.entries, MediaKind.LIVE,
-            if (remoteCategories.isNotEmpty()) "" else selectedCategory, search)
+    val cards = remember(state.entries, state.xtreamGroups, selected, search) {
+        EveryCineFamilyIndex.cards(state.entries, state.xtreamGroups, selected, search)
     }
+    var openedCard by rememberSaveable { mutableStateOf("") }
+    var openedChild by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(selected) { openedCard = ""; openedChild = "" }
+    val card = cards.firstOrNull { it.key == openedCard }
+
+    val sourceGroups = remember(state.xtreamGroups, card?.key) {
+        val ids = card?.remoteIds.orEmpty().toSet()
+        state.xtreamGroups.filter { it.kind == MediaKind.LIVE && it.id in ids }
+            .map { it.name.trim().lowercase() }.toSet()
+    }
+    val loaded = remember(state.entries, sourceGroups) {
+        if (sourceGroups.isEmpty()) emptyList() else state.entries.filter { entry ->
+            entry.kind == MediaKind.LIVE && entry.group.trim().lowercase() in sourceGroups
+        }
+    }
+    val members = remember(card, loaded) {
+        (card?.entries.orEmpty() + loaded).distinctBy { it.sourceId to it.id }
+    }
+    val nested = remember(card, members) {
+        // An unnamed provider bucket (e.g. "ESPORTES HD") expands to the
+        // *actual* families found after lazy Xtream download (ESPN, Premiere...).
+        if (card != null && card.remoteIds.isNotEmpty() && members.isNotEmpty()) {
+            val loadedCards = EveryCineFamilyIndex.cards(
+                members, emptyList(), EveryCineFamilyIndex.ALL, "")
+            if (loadedCards.size > 1) loadedCards else emptyList()
+        } else emptyList()
+    }
+    val channels = nested.firstOrNull { it.key == openedChild }?.entries
+        ?: if (nested.isNotEmpty()) emptyList() else members
+
+    BackHandler(enabled = openedCard.isNotBlank()) {
+        if (openedChild.isNotEmpty()) openedChild = "" else openedCard = ""
+    }
+    @Composable fun familyBrowser(modifier: Modifier) {
+        Column(modifier) {
+            LazyRow(
+                Modifier.fillMaxWidth().testTag("everycine-live-categories")
+                    .padding(vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item { EveryCineCategoryChip("Todos", selected == EveryCineFamilyIndex.ALL) {
+                    openedCard = ""; openedChild = ""; onSelectCategory("")
+                } }
+                items(categories, key = { it }) { name ->
+                    EveryCineCategoryChip(name, selected == name) {
+                        openedCard = ""; openedChild = ""; onSelectCategory(name)
+                    }
+                }
+            }
+            if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+
+            if (card == null) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(136.dp),
+                    modifier = Modifier.fillMaxSize().testTag("everycine-family-grid"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(15.dp),
+                ) {
+                    gridItems(cards, key = { it.key }) { family ->
+                        EveryCineFamilyCard(
+                            title = family.title,
+                            logo = family.entries.firstOrNull { it.logo.isNotBlank() }?.logo.orEmpty(),
+                            count = family.entries.size.takeIf { it > 0 },
+                        ) {
+                            openedCard = family.key
+                            openedChild = ""
+                            if (family.remoteIds.isNotEmpty()) {
+                                onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, family.remoteIds))
+                            }
+                        }
+                    }
+                    if (cards.isEmpty() && !state.isBusy) item {
+                        Text("Nenhuma família disponível nesta categoria.",
+                            color = cinemaGrey, modifier = Modifier.padding(12.dp))
+                    }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("‹ Voltar", color = cinemaAccent, modifier = Modifier
+                        .clickable { if (openedChild.isNotEmpty()) openedChild = "" else openedCard = "" }
+                        .padding(end = 14.dp), fontSize = 16.sp)
+                    Text(
+                        nested.firstOrNull { it.key == openedChild }?.title ?: card.title,
+                        color = cinemaWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                        maxLines = 1, modifier = Modifier.weight(1f),
+                    )
+                }
+                if (nested.isNotEmpty() && openedChild.isEmpty()) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(136.dp),
+                        modifier = Modifier.fillMaxSize().testTag("everycine-subfamily-grid"),
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        gridItems(nested, key = { it.key }) { family ->
+                            EveryCineFamilyCard(family.title,
+                                family.entries.firstOrNull { it.logo.isNotBlank() }?.logo.orEmpty(),
+                                family.entries.size) {
+                                openedChild = family.key
+                            }
+                        }
+                    }
+                } else {
+                    EveryCineChannelRows(channels, state, onAction, onFullscreen,
+                        Modifier.weight(1f))
+                }
+            }
+        }
+    }
+
     val compact = LocalConfiguration.current.screenHeightDp < 420
     if (compact) {
-        // Rotate or shrink: preserve the two functional parts side-by-side.
         Row(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
             EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
                 Modifier.weight(1f).fillMaxHeight())
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
-                if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                EveryCineChannelRows(channels, state, onAction, onFullscreen, Modifier.weight(1f))
-            }
+            familyBrowser(Modifier.weight(1f).fillMaxHeight())
         }
     } else {
         Column(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
             EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
                 Modifier.fillMaxWidth().height(209.dp))
-            EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
-            if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            EveryCineChannelRows(channels, state, onAction, onFullscreen, Modifier.weight(1f))
+            familyBrowser(Modifier.weight(1f))
         }
+    }
+}
+
+@Composable
+private fun EveryCineFamilyCard(
+    title: String,
+    logo: String,
+    count: Int?,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier.width(135.dp).clickable(onClick = onClick).testTag("everycine-family-" + title),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(118.dp)
+                .background(cinemaPanel, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (logo.isNotBlank()) {
+                AsyncImage(
+                    logo, contentDescription = title, contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(10.dp),
+                )
+            } else {
+                Text(title.take(2).uppercase(), color = cinemaAccent, fontSize = 36.sp,
+                    fontWeight = FontWeight.Black)
+            }
+        }
+        Text(title, color = cinemaWhite, maxLines = 2,
+            overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(if (count != null) "$count opções" else "Abrir canais",
+            color = cinemaGrey, fontSize = 11.sp)
     }
 }
 
