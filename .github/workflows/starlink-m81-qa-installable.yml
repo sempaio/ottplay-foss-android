@@ -2,7 +2,7 @@ name: STARLINK M81 Android installable QA build
 
 on:
   push:
-    branches: [feature/starlink-qa91-proxima-atualizacao-20261117, feature/starlink-everycine-fluxo-visual-20261117]
+    branches: [feature/starlink-qa91-proxima-atualizacao-20261117, feature/starlink-everycine-fluxo-visual-20261117, fix/starlink-everycine-live-recovery-20261120]
     paths:
       - 'native/**'
       - '.github/workflows/starlink-m81-qa-installable.yml'
