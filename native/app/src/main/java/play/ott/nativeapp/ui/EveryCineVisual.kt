@@ -35,12 +35,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.session.MediaController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import play.ott.nativeapp.R
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.data.ForYouEngine
 import play.ott.nativeapp.data.SeriesRecovery
 import play.ott.nativeapp.data.SmartLiveCatalog
+import play.ott.nativeapp.data.XtreamDisplayGroup
 import play.ott.nativeapp.data.XtreamDisplayGroups
 
 private val cinemaBlack = Color(0xFF050506)
@@ -89,18 +93,29 @@ internal fun EveryCineVisualApp(
     val savedPages = rememberSaveableStateHolder()
     val pagePager = rememberPagerState(pageCount = { EveryCinePage.entries.size })
     val snackbar = remember { SnackbarHostState() }
+    var programmaticPageTarget by remember { mutableStateOf<Int?>(null) }
     // MainFragment in the reference is a ViewPager2. Keep swipe navigation
-    // and bottom-nav selection synchronized, without dropping each page state.
+    // and bottom-nav selection synchronized, without dropping programmatic category browsing.
     LaunchedEffect(pageName) {
         val index = EveryCinePage.entries.indexOf(EveryCinePage.valueOf(pageName))
-        if (pagePager.currentPage != index) pagePager.scrollToPage(index)
+        if (pagePager.currentPage != index) {
+            programmaticPageTarget = index
+            try {
+                pagePager.scrollToPage(index)
+            } finally {
+                programmaticPageTarget = null
+            }
+        }
     }
-    LaunchedEffect(pagePager.currentPage) {
-        val current = EveryCinePage.entries[pagePager.currentPage].name
-        if (current != pageName) {
-            pageName = current
-            selectedCategory = ""
-            search = ""
+    LaunchedEffect(pagePager) {
+        snapshotFlow { pagePager.settledPage }.collect { settled ->
+            if (programmaticPageTarget != null) return@collect
+            val current = EveryCinePage.entries[settled].name
+            if (current != pageName) {
+                pageName = current
+                selectedCategory = ""
+                search = ""
+            }
         }
     }
 
@@ -179,20 +194,18 @@ internal fun EveryCineVisualApp(
                     savedPages.SaveableStateProvider(pane.name) {
                         when (pane) {
                             EveryCinePage.HOME -> EveryCineHome(
-                                state, recent, onAction, search,
+                                state, recent, mergedGroups, onAction, search,
                                 onBrowse = ::browse,
                                 onForYou = { showForYou = true },
                             )
                             EveryCinePage.LIVE -> EveryCineLive(
-                                state, controller, onAction, search, selectedCategory,
-                                mergedGroups.filter { it.kind == MediaKind.LIVE }.map { it.label },
+                                state, controller, mergedGroups, onAction, search, selectedCategory,
                                 onSelectCategory = { browse(MediaKind.LIVE, it) },
                                 onFullscreen = { fullscreen = true },
                                 onPictureInPicture = onPictureInPicture,
                             )
                             EveryCinePage.CATALOG -> EveryCineCatalog(
-                                state, onAction, search, catalogKind, selectedCategory,
-                                mergedGroups.filter { it.kind == catalogKind }.map { it.label },
+                                state, mergedGroups, onAction, search, catalogKind, selectedCategory,
                                 onKind = { catalogKindName = it.name; selectedCategory = "" },
                                 onCategory = { browse(catalogKind, it) },
                                 hasRemoteCategories = hasRemoteCategories,
@@ -320,31 +333,50 @@ private fun EveryCineBottomNavigation(page: EveryCinePage, onSelect: (EveryCineP
     }
 }
 
+private data class EveryCineHomeModel(
+    val banners: List<MediaEntry> = emptyList(),
+    val sections: List<EveryCineSection> = emptyList(),
+    val recommendations: List<MediaEntry> = emptyList(),
+    val ready: Boolean = false,
+)
+
+private data class EveryCineListState<T>(
+    val items: List<T> = emptyList(),
+    val ready: Boolean = false,
+)
+
 @Composable
 private fun EveryCineHome(
     state: AppUiState,
     recent: List<play.ott.nativeapp.data.RecentPlayback>,
+    mergedGroups: List<XtreamDisplayGroup>,
     onAction: (AppAction) -> Unit,
     search: String,
     onBrowse: (MediaKind, String) -> Unit,
     onForYou: () -> Unit,
 ) {
-    val content = remember(state.entries, recent, search) {
-        state.entries.filter {
-            search.isBlank() || it.name.contains(search, ignoreCase = true) ||
-                it.group.contains(search, ignoreCase = true)
+    val homeModel by produceState(
+        initialValue = EveryCineHomeModel(),
+        state.entries, recent, search, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys,
+    ) {
+        if (search.isNotBlank()) delay(250)
+        value = withContext(Dispatchers.Default) {
+            val content = if (search.isBlank()) state.entries else state.entries.filter {
+                it.name.contains(search, ignoreCase = true) ||
+                    it.group.contains(search, ignoreCase = true)
+            }
+            val banners = everyCineBannerEntries(content, recent)
+            val sections = everyCineSections(content, recent, state.favoriteIds)
+            val recommendations = if (!state.forYouProfile.onboardingDone) emptyList()
+            else ForYouEngine.recommend(content, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys)
+            EveryCineHomeModel(banners, sections, recommendations, ready = true)
         }
     }
-    val banners = remember(content, recent) { everyCineBannerEntries(content, recent) }
-    val sections = remember(content, recent, state.favoriteIds) {
-        everyCineSections(content, recent, state.favoriteIds)
-    }
-    val recommendations = remember(content, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys) {
-        if (!state.forYouProfile.onboardingDone) emptyList()
-        else ForYouEngine.recommend(content, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys)
-    }
-    val remoteCategories = remember(state.xtreamGroups) {
-        XtreamDisplayGroups.merge(state.xtreamGroups).filter {
+    val banners = homeModel.banners
+    val sections = homeModel.sections
+    val recommendations = homeModel.recommendations
+    val remoteCategories = remember(mergedGroups) {
+        mergedGroups.filter {
             it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES || it.kind == MediaKind.LIVE
         }.take(24)
     }
@@ -444,7 +476,7 @@ private fun EveryCineHome(
                 }
             }
         }
-        if (sections.isEmpty() && !state.isBusy) item {
+        if (homeModel.ready && sections.isEmpty() && !state.isBusy) item {
             Text("Escolha uma categoria acima para carregar o catálogo STARLINK.",
                 color = cinemaGrey, modifier = Modifier.padding(20.dp))
         }
@@ -574,28 +606,38 @@ private fun EveryCineCategoryChip(label: String, selected: Boolean, onClick: () 
 private fun EveryCineLive(
     state: AppUiState,
     controller: MediaController?,
+    mergedGroups: List<XtreamDisplayGroup>,
     onAction: (AppAction) -> Unit,
     search: String,
     selectedCategory: String,
-    remoteCategories: List<String>,
     onSelectCategory: (String) -> Unit,
     onFullscreen: () -> Unit,
     onPictureInPicture: () -> Unit,
 ) {
-    val categories = if (remoteCategories.isNotEmpty()) remoteCategories
+    val liveGroups = remember(mergedGroups) { mergedGroups.filter { it.kind == MediaKind.LIVE } }
+    val remoteCategories = remember(liveGroups) { liveGroups.map { it.label } }
+    val categories = remember(remoteCategories, state.entries) {
+        if (remoteCategories.isNotEmpty()) remoteCategories
         else state.entries.filter { it.kind == MediaKind.LIVE }.map { it.group }.filter { it.isNotBlank() }.distinct()
-    val remoteGroupNames = remember(state.xtreamGroups, selectedCategory) {
-        XtreamDisplayGroups.merge(state.xtreamGroups)
-            .firstOrNull { it.kind == MediaKind.LIVE && it.label == selectedCategory }
+    }
+    val remoteGroupNames = remember(liveGroups, selectedCategory) {
+        liveGroups.firstOrNull { it.label == selectedCategory }
             ?.sources?.map { it.name }?.toSet().orEmpty()
     }
-    val channelCards = remember(state.entries, search, selectedCategory, remoteCategories, remoteGroupNames) {
-        val visible = if (remoteCategories.isNotEmpty() && selectedCategory.isNotBlank())
-            everyCineVisibleRemote(state.entries, MediaKind.LIVE, remoteGroupNames, search)
-        else everyCineVisible(state.entries, MediaKind.LIVE,
-            if (remoteCategories.isNotEmpty()) "" else selectedCategory, search)
-        liveQualityCards(SmartLiveCatalog.prominentFirst(visible))
+    val channelCardsState by produceState(
+        initialValue = EveryCineListState<LiveQualityCard>(),
+        state.entries, search, selectedCategory, remoteCategories, remoteGroupNames,
+    ) {
+        if (search.isNotBlank()) delay(250)
+        value = withContext(Dispatchers.Default) {
+            val visible = if (remoteCategories.isNotEmpty() && selectedCategory.isNotBlank())
+                everyCineVisibleRemote(state.entries, MediaKind.LIVE, remoteGroupNames, search)
+            else everyCineVisible(state.entries, MediaKind.LIVE,
+                if (remoteCategories.isNotEmpty()) "" else selectedCategory, search)
+            EveryCineListState(liveQualityCards(SmartLiveCatalog.prominentFirst(visible)), ready = true)
+        }
     }
+    val channelCards = channelCardsState.items
     var qualityPicker by remember { mutableStateOf<LiveQualityCard?>(null) }
     qualityPicker?.let { card ->
         AlertDialog(
@@ -635,7 +677,7 @@ private fun EveryCineLive(
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
                 if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent)
-                EveryCineChannelRows(channelCards, state, onAction, onFullscreen, { qualityPicker = it }, Modifier.weight(1f))
+                EveryCineChannelRows(channelCards, channelCardsState.ready, state, onAction, onFullscreen, { qualityPicker = it }, Modifier.weight(1f))
             }
         }
     } else {
@@ -644,7 +686,7 @@ private fun EveryCineLive(
                 Modifier.fillMaxWidth().height(209.dp))
             EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
             if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent)
-            EveryCineChannelRows(channelCards, state, onAction, onFullscreen, { qualityPicker = it }, Modifier.weight(1f))
+            EveryCineChannelRows(channelCards, channelCardsState.ready, state, onAction, onFullscreen, { qualityPicker = it }, Modifier.weight(1f))
         }
     }
 }
@@ -698,6 +740,7 @@ private fun EveryCineLiveCategories(
 @Composable
 private fun EveryCineChannelRows(
     cards: List<LiveQualityCard>,
+    ready: Boolean,
     state: AppUiState,
     onAction: (AppAction) -> Unit,
     onFullscreen: () -> Unit,
@@ -770,7 +813,7 @@ private fun EveryCineChannelRows(
             }
             HorizontalDivider(color = Color(0xFF222225), thickness = .5.dp)
         }
-        if (cards.isEmpty() && !state.isBusy) item {
+        if (ready && cards.isEmpty() && !state.isBusy) item {
             Text("Selecione uma categoria para carregar os canais.",
                 color = cinemaGrey, modifier = Modifier.padding(20.dp))
         }
@@ -780,28 +823,39 @@ private fun EveryCineChannelRows(
 @Composable
 private fun EveryCineCatalog(
     state: AppUiState,
+    mergedGroups: List<XtreamDisplayGroup>,
     onAction: (AppAction) -> Unit,
     search: String,
     kind: MediaKind,
     selectedCategory: String,
-    remoteCategories: List<String>,
     onKind: (MediaKind) -> Unit,
     onCategory: (String) -> Unit,
     hasRemoteCategories: Boolean,
 ) {
-    val categories = if (remoteCategories.isNotEmpty()) remoteCategories
+    val kindGroups = remember(mergedGroups, kind) { mergedGroups.filter { it.kind == kind } }
+    val remoteCategories = remember(kindGroups) { kindGroups.map { it.label } }
+    val categories = remember(remoteCategories, state.entries, kind) {
+        if (remoteCategories.isNotEmpty()) remoteCategories
         else state.entries.filter { it.kind == kind }.map { it.group }.filter { it.isNotBlank() }.distinct()
-    val remoteGroupNames = remember(state.xtreamGroups, kind, selectedCategory) {
-        XtreamDisplayGroups.merge(state.xtreamGroups)
-            .firstOrNull { it.kind == kind && it.label == selectedCategory }
+    }
+    val remoteGroupNames = remember(kindGroups, selectedCategory) {
+        kindGroups.firstOrNull { it.label == selectedCategory }
             ?.sources?.map { it.name }?.toSet().orEmpty()
     }
-    val visible = remember(state.entries, kind, search, selectedCategory, remoteCategories, remoteGroupNames) {
-        if (hasRemoteCategories && selectedCategory.isNotBlank())
-            everyCineVisibleRemote(state.entries, kind, remoteGroupNames, search)
-        else everyCineVisible(state.entries, kind,
-            if (hasRemoteCategories) "" else selectedCategory, search)
+    val visibleState by produceState(
+        initialValue = EveryCineListState<MediaEntry>(),
+        state.entries, kind, search, selectedCategory, hasRemoteCategories, remoteGroupNames,
+    ) {
+        if (search.isNotBlank()) delay(250)
+        value = withContext(Dispatchers.Default) {
+            val entries = if (hasRemoteCategories && selectedCategory.isNotBlank())
+                everyCineVisibleRemote(state.entries, kind, remoteGroupNames, search)
+            else everyCineVisible(state.entries, kind,
+                if (hasRemoteCategories) "" else selectedCategory, search)
+            EveryCineListState(entries, ready = true)
+        }
     }
+    val visible = visibleState.items
     Column(Modifier.fillMaxSize().testTag("everycine-catalog-screen")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -829,7 +883,7 @@ private fun EveryCineCatalog(
             gridItems(visible, key = { it.sourceId + ":" + it.id }) { entry ->
                 EveryCinePoster(entry) { openContent(entry, onAction) }
             }
-            if (visible.isEmpty() && !state.isBusy) item {
+            if (visibleState.ready && visible.isEmpty() && !state.isBusy) item {
                 Text("Escolha uma categoria para carregar o catálogo.", color = cinemaGrey)
             }
         }
