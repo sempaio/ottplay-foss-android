@@ -27,6 +27,7 @@ import play.ott.nativeapp.ui.AppUiState
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val updates = play.ott.nativeapp.data.UpdateClient(application)
     private val announcements = play.ott.nativeapp.data.AnnouncementClient()
+    private val deviceSessions = play.ott.nativeapp.data.M81DeviceSessionClient()
     private var latestUpdate: play.ott.nativeapp.data.AppUpdate? = null
     private var updateJob: Job? = null
     private val repository = (application as OttplayApplication).repository
@@ -137,13 +138,60 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val sources = availableSources()
                 val selected = repository.preferences.data.first().selectedSourceId
                     ?.takeIf { id -> sources.any { it.id == id } } ?: sources.firstOrNull()?.id
-                updateState { it.copy(sources = sources, selectedSourceId = selected, isBusy = false) }
-                if (selected != null) load(selected, refresh = false)
+                val cachedAccountName = if (BuildConfig.CUSTOMER_MODE) {
+                    runCatching { repository.deviceSessionStore.readOrCreate().clientName }.getOrDefault("")
+                } else ""
+                updateState { it.copy(sources = sources, selectedSourceId = selected, accountName = cachedAccountName, isBusy = false) }
+                if (selected != null) {
+                    load(selected, refresh = false)
+                    if (BuildConfig.CUSTOMER_MODE && sources.any { it.id == selected && StarlinkConfig.isStarlinkAccount(it) }) {
+                        validateDeviceSession()
+                    }
+                }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) {
                 updateState { it.copy(isBusy = false) }; setErrorText { message(R.string.message_saved_sources_unreadable) }
             }
         }
+    }
+
+    private fun validateDeviceSession() {
+        if (!BuildConfig.CUSTOMER_MODE) return
+        viewModelScope.launch {
+            try {
+                val stored = withContext(Dispatchers.IO) { repository.deviceSessionStore.readOrCreate() }
+                val token = stored.sessionToken ?: return@launch
+                when (val result = deviceSessions.validate(token, stored.deviceId)) {
+                    is play.ott.nativeapp.data.M81SessionResult.Authorized -> {
+                        withContext(Dispatchers.IO) {
+                            repository.deviceSessionStore.saveToken(result.sessionToken, result.clientName, result.status)
+                        }
+                        if (result.clientName.isNotBlank()) {
+                            updateState { it.copy(accountName = result.clientName) }
+                        }
+                    }
+                    play.ott.nativeapp.data.M81SessionResult.RevokedOrExpired -> {
+                        revokeLocalSession(R.string.customer_device_limit_error)
+                    }
+                    is play.ott.nativeapp.data.M81SessionResult.Denied -> {
+                        revokeLocalSession(R.string.customer_access_error)
+                    }
+                    play.ott.nativeapp.data.M81SessionResult.RateLimited,
+                    play.ott.nativeapp.data.M81SessionResult.Unavailable -> Unit
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Offline access and playback remain available. */ }
+        }
+    }
+
+    private suspend fun revokeLocalSession(errorResId: Int) {
+        if (saveInFlight) return
+        loadJob?.cancelAndJoin(); detailJob?.cancel(); stop()
+        withContext(Dispatchers.IO) { runCatching { repository.deviceSessionStore.clearToken() } }
+        availableSources().forEach { repository.remove(it.id) }
+        repository.preferences.update { it.copy(selectedSourceId = null) }
+        updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
+        setErrorText { message(errorResId) }
     }
 
     private fun loadAnnouncement() {
@@ -257,6 +305,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.Logout -> operation {
                 if (saveInFlight) return@operation
                 loadJob?.cancelAndJoin(); detailJob?.cancel(); stop()
+                if (BuildConfig.CUSTOMER_MODE) {
+                    val stored = withContext(Dispatchers.IO) { runCatching { repository.deviceSessionStore.readOrCreate() }.getOrNull() }
+                    if (stored?.sessionToken != null) {
+                        deviceSessions.logout(stored.sessionToken, stored.deviceId)
+                    }
+                    withContext(Dispatchers.IO) { runCatching { repository.deviceSessionStore.clearToken() } }
+                }
                 availableSources().forEach { repository.remove(it.id) }
                 repository.preferences.update { it.copy(selectedSourceId = null) }
                 updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
@@ -287,11 +342,33 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 retirePendingSource(action.source.id)
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
+                var accountName = state.value.accountName
+                if (BuildConfig.CUSTOMER_MODE && StarlinkConfig.isStarlinkAccount(action.source)) {
+                    val stored = withContext(Dispatchers.IO) { repository.deviceSessionStore.readOrCreate() }
+                    when (val result = deviceSessions.login(action.source.username, action.source.password, stored.deviceId)) {
+                        is play.ott.nativeapp.data.M81SessionResult.Authorized -> {
+                            withContext(Dispatchers.IO) {
+                                repository.deviceSessionStore.saveToken(result.sessionToken, result.clientName, result.status)
+                            }
+                            accountName = result.clientName
+                        }
+                        is play.ott.nativeapp.data.M81SessionResult.Denied -> {
+                            val failure = if (result.code == "invalid_credentials") ProviderFailure.AUTHENTICATION
+                                else ProviderFailure.ACCOUNT_INACTIVE
+                            throw ProviderException("M81 session denied", failure = failure)
+                        }
+                        play.ott.nativeapp.data.M81SessionResult.RateLimited -> {
+                            throw ProviderException("M81 rate limited", statusCode = 429)
+                        }
+                        play.ott.nativeapp.data.M81SessionResult.RevokedOrExpired,
+                        play.ott.nativeapp.data.M81SessionResult.Unavailable -> Unit
+                    }
+                }
                 repository.save(action.source)
                 // Do not add a redundant full M3U source for our Xtream account.
                 // Existing installed sources are not deleted during this transition.
                 val sources = availableSources()
-                updateState { it.copy(sources = sources, sourceSaveRevision = it.sourceSaveRevision + 1) }
+                updateState { it.copy(sources = sources, accountName = accountName, sourceSaveRevision = it.sourceSaveRevision + 1) }
                 load(action.source.id, true)
                 } finally { saveInFlight = false } }
             }

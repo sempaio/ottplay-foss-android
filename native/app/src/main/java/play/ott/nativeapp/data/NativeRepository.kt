@@ -60,6 +60,7 @@ class NativeRepository(
     }
 
     private val vault = SourceVault(context)
+    internal val deviceSessionStore = M81DeviceSessionStore(context, vault)
     private val db = CatalogDatabase(context, vault)
     private val sourceMutex = Mutex()
     private val refreshMutex = Mutex()

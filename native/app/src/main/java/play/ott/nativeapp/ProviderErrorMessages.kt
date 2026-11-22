@@ -22,6 +22,7 @@ internal fun providerErrorResource(error: Exception, customerMode: Boolean = Bui
 private fun customerErrorResource(error: Exception): Int {
     val provider = error as? ProviderException
     return when {
+        provider?.statusCode == 429 -> R.string.customer_rate_limit_error
         provider?.failure == play.ott.nativeapp.core.ProviderFailure.AUTHENTICATION || provider?.statusCode == 401 -> R.string.customer_auth_error
         provider?.failure == play.ott.nativeapp.core.ProviderFailure.ACCOUNT_INACTIVE || provider?.statusCode == 403 -> R.string.customer_access_error
         provider?.failure == play.ott.nativeapp.core.ProviderFailure.TIMEOUT || error is java.net.SocketTimeoutException -> R.string.customer_timeout_error

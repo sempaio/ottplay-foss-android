@@ -24,6 +24,7 @@ data class AppUiState(
     val welcomeTitle: String = "",
     val welcomeMessage: String = "",
     val dismissedWelcomeId: Long? = null,
+    val accountName: String = "",
     val recent: List<play.ott.nativeapp.data.RecentPlayback> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
     val forYouProfile: ForYouProfile = ForYouProfile(),
