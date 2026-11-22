@@ -30,15 +30,18 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
-      - name: Compile and run core and Android tests
+      - name: Compile, lint, verify R8 official build, and run core and Android tests
         working-directory: native
-        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :core:test :app:testLayoutUnitTest :app:assembleEveryCineQa
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :core:test :app:testLayoutUnitTest :app:lintLayout :app:assembleEveryCineQa :app:assembleOfficial
       - name: Validate independent APK and generate receipt
         run: |
           set -euo pipefail
           APK=native/app/build/outputs/apk/everyCineQa/app-everyCineQa.apk
+          OFFICIAL_APK=native/app/build/outputs/apk/official/app-official-unsigned.apk
           test -s "$APK"
           unzip -tqq "$APK" # Confere a integridade ZIP antes de disponibilizar o APK
+          test -s "$OFFICIAL_APK"
+          unzip -tqq "$OFFICIAL_APK"
           mkdir -p qa-install
           cp "$APK" qa-install/STARLINK-EVERYCINE-VISUAL-TESTE.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose qa-install/STARLINK-EVERYCINE-VISUAL-TESTE.apk
@@ -62,5 +65,7 @@ jobs:
             native/app/build/test-results/
             native/core/build/reports/tests/
             native/app/build/reports/tests/
+            native/app/build/reports/lint-results-layout.html
+            native/app/build/reports/lint-results-layout.sarif
           if-no-files-found: ignore
           retention-days: 14
