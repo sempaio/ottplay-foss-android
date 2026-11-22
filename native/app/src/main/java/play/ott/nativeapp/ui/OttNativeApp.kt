@@ -826,7 +826,7 @@ internal fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, cu
                 SupportButton()
                 ActionButton(stringResource(R.string.neon_updates), { onAction(AppAction.CheckUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
                 if (state.updateAvailable) ActionButton(stringResource(R.string.neon_update_install), { onAction(AppAction.InstallUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
-                Text("STARLINK IPTV Prévia · " + play.ott.nativeapp.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.app_name) + " · " + play.ott.nativeapp.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
                 Text(stringResource(R.string.library_language), style = MaterialTheme.typography.titleSmall)
                 ActionButton(languageName, { showLanguages = true },
                     Modifier.fillMaxWidth().focusRequester(languageFocus).testTag("settings-language"))

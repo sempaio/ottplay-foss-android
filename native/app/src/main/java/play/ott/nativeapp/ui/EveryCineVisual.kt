@@ -21,6 +21,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -36,6 +38,9 @@ import coil.compose.AsyncImage
 import play.ott.nativeapp.R
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
+import play.ott.nativeapp.data.ForYouEngine
+import play.ott.nativeapp.data.SeriesRecovery
+import play.ott.nativeapp.data.SmartLiveCatalog
 import play.ott.nativeapp.data.XtreamDisplayGroups
 
 private val cinemaBlack = Color(0xFF050506)
@@ -141,7 +146,7 @@ internal fun EveryCineVisualApp(
     BackHandler(enabled = !fullscreen && page != EveryCinePage.HOME && !showSettings && !showSource && !showGuide && !showForYou && !searchOpened && !inPictureInPicture) {
         pageName = EveryCinePage.HOME.name
     }
-    Box(Modifier.fillMaxSize().background(cinemaBlack).testTag("everycine-visual-shell")) {
+    Box(Modifier.tvRemoteInput().fillMaxSize().background(cinemaBlack).testTag("everycine-visual-shell")) {
         if ((fullscreen || inPictureInPicture) && state.playingEntry != null) {
             NativePlayerPane(
                 state.playingEntry, controller, true,
@@ -176,12 +181,14 @@ internal fun EveryCineVisualApp(
                             EveryCinePage.HOME -> EveryCineHome(
                                 state, recent, onAction, search,
                                 onBrowse = ::browse,
+                                onForYou = { showForYou = true },
                             )
                             EveryCinePage.LIVE -> EveryCineLive(
                                 state, controller, onAction, search, selectedCategory,
                                 mergedGroups.filter { it.kind == MediaKind.LIVE }.map { it.label },
                                 onSelectCategory = { browse(MediaKind.LIVE, it) },
                                 onFullscreen = { fullscreen = true },
+                                onPictureInPicture = onPictureInPicture,
                             )
                             EveryCinePage.CATALOG -> EveryCineCatalog(
                                 state, onAction, search, catalogKind, selectedCategory,
@@ -193,6 +200,7 @@ internal fun EveryCineVisualApp(
                             EveryCinePage.PROFILE -> EveryCineProfile(
                                 state, recent, onAction,
                                 onSettings = { showSettings = true },
+                                onForYou = { showForYou = true },
                                 onBrowse = ::browse,
                             )
                         }
@@ -213,7 +221,9 @@ internal fun EveryCineVisualApp(
     state.movieEntry?.let {
         EveryCineMovieDetail(it, state.isBusy, it.id in state.favoriteIds, onAction)
     }
-    state.seriesEntry?.let { SeriesDialog(it, state.episodes, state.isBusy, onAction) }
+    state.seriesEntry?.let {
+        EveryCineSeriesDetail(it, state.episodes, state.isBusy, it.id in state.favoriteIds, onAction)
+    }
     state.error?.let { CustomerErrorDialog(it) { onAction(AppAction.DismissError) } }
     if (showGuide) {
         NeonGuidePicker(state.entries, {
@@ -277,20 +287,34 @@ private fun EveryCineBottomNavigation(page: EveryCinePage, onSelect: (EveryCineP
         Triple(EveryCinePage.PROFILE, "Perfil", "◉"),
     )
     Row(
-        Modifier.fillMaxWidth().height(56.dp).background(Color(0xFF111115))
+        Modifier.fillMaxWidth().height(58.dp).background(Color(0xFF111115))
             .testTag("everycine-bottom-navigation"),
     ) {
         items.forEach { (destination, label, symbol) ->
             val selected = page == destination
+            var focused by remember { mutableStateOf(false) }
             Column(
-                Modifier.weight(1f).fillMaxHeight().clickable { onSelect(destination) }
+                Modifier.weight(1f).fillMaxHeight()
+                    .onFocusChanged { focused = it.isFocused }
+                    .border(if (focused) 1.5.dp else 0.dp, if (focused) cinemaAccent else Color.Transparent)
+                    .clickable { onSelect(destination) }
                     .testTag("everycine-tab-" + destination.name),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Top,
             ) {
-                Text(symbol, fontSize = 23.sp, color = if (selected) cinemaWhite else cinemaGrey)
-                Text(label, fontSize = 11.sp, color = if (selected) cinemaWhite else cinemaGrey,
-                    maxLines = 1)
+                Box(
+                    Modifier.fillMaxWidth(.45f).height(2.5.dp)
+                        .background(if (selected) cinemaAccent else Color.Transparent, RoundedCornerShape(2.dp))
+                )
+                Spacer(Modifier.weight(1f))
+                Text(symbol, fontSize = 22.sp, color = if (selected) cinemaAccent else cinemaGrey)
+                Text(
+                    label, fontSize = 11.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (selected) cinemaAccent else cinemaGrey,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.weight(1f))
             }
         }
     }
@@ -303,13 +327,21 @@ private fun EveryCineHome(
     onAction: (AppAction) -> Unit,
     search: String,
     onBrowse: (MediaKind, String) -> Unit,
+    onForYou: () -> Unit,
 ) {
     val content = remember(state.entries, recent, search) {
-        state.entries.filter { search.isBlank() || it.name.contains(search, ignoreCase = true) }
+        state.entries.filter {
+            search.isBlank() || it.name.contains(search, ignoreCase = true) ||
+                it.group.contains(search, ignoreCase = true)
+        }
     }
     val banners = remember(content, recent) { everyCineBannerEntries(content, recent) }
     val sections = remember(content, recent, state.favoriteIds) {
         everyCineSections(content, recent, state.favoriteIds)
+    }
+    val recommendations = remember(content, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys) {
+        if (!state.forYouProfile.onboardingDone) emptyList()
+        else ForYouEngine.recommend(content, state.forYouProfile, state.favoriteIds, state.forYouRecentlyViewedKeys)
     }
     val remoteCategories = remember(state.xtreamGroups) {
         XtreamDisplayGroups.merge(state.xtreamGroups).filter {
@@ -327,7 +359,7 @@ private fun EveryCineHome(
                 else onBrowse(MediaKind.MOVIE, "")
             })
         }
-        if (state.isBusy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        if (state.isBusy) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent) }
         if (remoteCategories.isNotEmpty()) item(key = "categories") {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("Explore as categorias", color = cinemaWhite,
@@ -339,6 +371,55 @@ private fun EveryCineHome(
                 }
             }
         }
+        if (recommendations.isNotEmpty()) item(key = "for-you-rail") {
+            Column(Modifier.fillMaxWidth().testTag("everycine-section-Para Você")) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Para Você", Modifier.weight(1f), color = cinemaAccent,
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    )
+                    Text(
+                        "Ajustar", color = cinemaGrey, fontSize = 13.sp,
+                        modifier = Modifier.clickable(onClick = onForYou).padding(6.dp),
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(recommendations, key = { "foryou:" + it.sourceId + ":" + it.id }) { entry ->
+                        EveryCinePoster(entry, onClick = { openContent(entry, onAction) })
+                    }
+                }
+            }
+        } else if (!state.forYouProfile.onboardingDone) item(key = "for-you-prompt") {
+            Surface(
+                color = cinemaPanel,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+                    .border(1.dp, cinemaAccent.copy(alpha = .45f), RoundedCornerShape(12.dp))
+                    .clickable(onClick = onForYou)
+                    .testTag("everycine-for-you-banner"),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("STARLINK PARA VOCÊ", color = cinemaAccent, fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Text("Personalize suas recomendações locais", color = cinemaWhite,
+                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text("Configurar ›", color = cinemaAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
         items(sections.size, key = { "rail-" + it }) { sectionIndex ->
             val section = sections[sectionIndex]
             Column(Modifier.fillMaxWidth().testTag("everycine-section-" + section.title)) {
@@ -346,7 +427,7 @@ private fun EveryCineHome(
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(section.title, Modifier.weight(1f), color = cinemaWhite,
                         fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text("Ver tudo", color = cinemaGrey, fontSize = 13.sp,
+                    Text("Ver tudo", color = cinemaAccent, fontSize = 13.sp,
                         modifier = Modifier.clickable {
                             val first = section.entries.first()
                             onBrowse(first.kind, if (section.title == first.group) first.group else "")
@@ -395,13 +476,21 @@ private fun EveryCineFeatureBanner(entries: List<MediaEntry>, onClick: (MediaEnt
                         .padding(horizontal = 18.dp, vertical = 30.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("STARLINK  •  PARA VOCÊ", fontSize = 11.sp, color = cinemaWhite,
-                        letterSpacing = 1.6.sp)
+                    Text("STARLINK  •  PARA VOCÊ", fontSize = 11.sp, color = cinemaAccent,
+                        fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
                     Text(entry?.name ?: "Seus filmes e séries em um só lugar",
                         fontSize = 27.sp, fontWeight = FontWeight.Black, color = cinemaWhite,
                         maxLines = 2, lineHeight = 30.sp)
-                    Text(if (entry != null) "Ver detalhes  ▶" else "Explorar catálogo  ›",
-                        color = cinemaWhite, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Surface(
+                        color = cinemaAccent,
+                        shape = RoundedCornerShape(20.dp),
+                    ) {
+                        Text(
+                            if (entry != null) "▶  Ver detalhes" else "Explorar catálogo  ›",
+                            color = cinemaBlack, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        )
+                    }
                 }
             }
         }
@@ -413,7 +502,7 @@ private fun EveryCineFeatureBanner(entries: List<MediaEntry>, onClick: (MediaEnt
             entries.indices.forEach { i ->
                 Box(Modifier.width(if (pager.currentPage == i) 30.dp else 20.dp)
                     .height(6.dp).background(
-                        if (pager.currentPage == i) Color.White else Color.White.copy(alpha = .5f),
+                        if (pager.currentPage == i) cinemaAccent else Color.White.copy(alpha = .45f),
                         RoundedCornerShape(4.dp),
                     ))
             }
@@ -423,9 +512,20 @@ private fun EveryCineFeatureBanner(entries: List<MediaEntry>, onClick: (MediaEnt
 
 @Composable
 private fun EveryCinePoster(entry: MediaEntry, onClick: () -> Unit) {
-    Column(Modifier.width(134.dp).clickable(onClick = onClick).testTag("everycine-poster-" + entry.id)) {
-        Box(Modifier.size(width = 134.dp, height = 186.dp)
-            .background(cinemaPanel, RoundedCornerShape(6.dp))) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        Modifier.width(134.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(onClick = onClick)
+            .testTag("everycine-poster-" + entry.id),
+    ) {
+        Box(
+            Modifier.size(width = 134.dp, height = 186.dp)
+                .clip(shape)
+                .background(cinemaPanel, shape)
+                .border(if (focused) 2.dp else 0.dp, if (focused) cinemaAccent else Color.Transparent, shape),
+        ) {
             if (entry.logo.isNotBlank()) AsyncImage(
                 entry.logo, contentDescription = entry.name, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -433,25 +533,40 @@ private fun EveryCinePoster(entry: MediaEntry, onClick: () -> Unit) {
                 Text(entry.name.take(2).uppercase(), color = cinemaGrey, fontSize = 26.sp)
             }
             if (entry.kind == MediaKind.SERIES) Text(
-                "SÉRIE", color = cinemaWhite, fontSize = 10.sp,
+                "SÉRIE", color = cinemaAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.BottomStart)
-                    .background(Color.Black.copy(alpha = .7f)).padding(5.dp),
+                    .background(Color.Black.copy(alpha = .78f)).padding(horizontal = 6.dp, vertical = 4.dp),
             )
         }
         Text(entry.name, modifier = Modifier.padding(top = 8.dp),
-            color = cinemaWhite, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            color = if (focused) cinemaAccent else cinemaWhite, fontSize = 14.sp, maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
 private fun EveryCineCategoryChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(30.dp)
     Surface(
-        color = if (selected) cinemaWhite else Color(0xFF202024),
-        shape = RoundedCornerShape(30.dp),
-        modifier = Modifier.clickable(onClick = onClick),
+        color = if (selected) cinemaAccent else Color(0xFF1D1E24),
+        shape = shape,
+        modifier = Modifier
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = if (focused) 2.dp else if (selected) 0.dp else 1.dp,
+                color = if (focused) cinemaWhite else if (selected) Color.Transparent else Color(0xFF2E303A),
+                shape = shape,
+            )
+            .clickable(onClick = onClick),
     ) {
-        Text(label, color = if (selected) cinemaBlack else cinemaWhite,
-            fontSize = 13.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp))
+        Text(
+            label,
+            color = if (selected) cinemaBlack else cinemaWhite,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+        )
     }
 }
 
@@ -465,6 +580,7 @@ private fun EveryCineLive(
     remoteCategories: List<String>,
     onSelectCategory: (String) -> Unit,
     onFullscreen: () -> Unit,
+    onPictureInPicture: () -> Unit,
 ) {
     val categories = if (remoteCategories.isNotEmpty()) remoteCategories
         else state.entries.filter { it.kind == MediaKind.LIVE }.map { it.group }.filter { it.isNotBlank() }.distinct()
@@ -473,31 +589,62 @@ private fun EveryCineLive(
             .firstOrNull { it.kind == MediaKind.LIVE && it.label == selectedCategory }
             ?.sources?.map { it.name }?.toSet().orEmpty()
     }
-    val channels = remember(state.entries, search, selectedCategory, remoteCategories, remoteGroupNames) {
-        if (remoteCategories.isNotEmpty() && selectedCategory.isNotBlank())
+    val channelCards = remember(state.entries, search, selectedCategory, remoteCategories, remoteGroupNames) {
+        val visible = if (remoteCategories.isNotEmpty() && selectedCategory.isNotBlank())
             everyCineVisibleRemote(state.entries, MediaKind.LIVE, remoteGroupNames, search)
         else everyCineVisible(state.entries, MediaKind.LIVE,
             if (remoteCategories.isNotEmpty()) "" else selectedCategory, search)
+        liveQualityCards(SmartLiveCatalog.prominentFirst(visible))
+    }
+    var qualityPicker by remember { mutableStateOf<LiveQualityCard?>(null) }
+    qualityPicker?.let { card ->
+        AlertDialog(
+            onDismissRequest = { qualityPicker = null },
+            modifier = Modifier.tvRemoteInput(),
+            containerColor = cinemaPanel,
+            title = { Text(card.displayName, color = cinemaWhite) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    card.options.forEach { option ->
+                        ActionButton(
+                            option.name,
+                            onClick = {
+                                qualityPicker = null
+                                onAction(AppAction.Play(option))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            selected = state.playingEntry?.id == option.id,
+                            compact = true,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { qualityPicker = null }) {
+                    Text(stringResource(R.string.dialog_close), color = cinemaAccent)
+                }
+            },
+        )
     }
     val compact = LocalConfiguration.current.screenHeightDp < 420
     if (compact) {
         // Rotate or shrink: preserve the two functional parts side-by-side.
         Row(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
-            EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
+            EveryCineInlinePlayer(state, controller, onAction, onFullscreen, onPictureInPicture,
                 Modifier.weight(1f).fillMaxHeight())
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
-                if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                EveryCineChannelRows(channels, state, onAction, onFullscreen, Modifier.weight(1f))
+                if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent)
+                EveryCineChannelRows(channelCards, state, onAction, onFullscreen, { qualityPicker = it }, Modifier.weight(1f))
             }
         }
     } else {
         Column(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
-            EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
+            EveryCineInlinePlayer(state, controller, onAction, onFullscreen, onPictureInPicture,
                 Modifier.fillMaxWidth().height(209.dp))
             EveryCineLiveCategories(categories, selectedCategory, onSelectCategory)
-            if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            EveryCineChannelRows(channels, state, onAction, onFullscreen, Modifier.weight(1f))
+            if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent)
+            EveryCineChannelRows(channelCards, state, onAction, onFullscreen, { qualityPicker = it }, Modifier.weight(1f))
         }
     }
 }
@@ -508,6 +655,7 @@ private fun EveryCineInlinePlayer(
     controller: MediaController?,
     onAction: (AppAction) -> Unit,
     onFullscreen: () -> Unit,
+    onPictureInPicture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.background(Color.Black).testTag("everycine-inline-player")) {
@@ -521,7 +669,7 @@ private fun EveryCineInlinePlayer(
         } else NativePlayerPane(
             playing, controller, false,
             onFullscreen = onFullscreen,
-            onPictureInPicture = {},
+            onPictureInPicture = onPictureInPicture,
             onStop = { onAction(AppAction.StopPlayback) },
             onRetry = { onAction(AppAction.Play(playing)) },
             onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
@@ -549,26 +697,33 @@ private fun EveryCineLiveCategories(
 
 @Composable
 private fun EveryCineChannelRows(
-    channels: List<MediaEntry>,
+    cards: List<LiveQualityCard>,
     state: AppUiState,
     onAction: (AppAction) -> Unit,
     onFullscreen: () -> Unit,
+    onOpenQualities: (LiveQualityCard) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
         modifier.testTag("everycine-channel-list"),
         contentPadding = PaddingValues(bottom = 20.dp),
     ) {
-        items(channels, key = { it.sourceId + ":" + it.id }) { channel ->
-            val selected = state.playingEntry?.id == channel.id
+        items(cards, key = { it.entry.sourceId + ":" + it.entry.id }) { card ->
+            val channel = card.entry
+            val selected = card.options.any { it.id == state.playingEntry?.id }
+            var focused by remember { mutableStateOf(false) }
             Row(
-                Modifier.fillMaxWidth().clickable {
-                    if (selected) onFullscreen() else onAction(AppAction.Play(channel))
-                }.padding(horizontal = 12.dp, vertical = 7.dp),
+                Modifier.fillMaxWidth()
+                    .onFocusChanged { focused = it.isFocused }
+                    .background(if (selected) Color(0xFF13222A) else Color.Transparent)
+                    .border(if (focused) 1.5.dp else 0.dp, if (focused) cinemaAccent else Color.Transparent)
+                    .clickable {
+                        if (selected) onFullscreen() else onAction(AppAction.Play(channel))
+                    }.padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(Modifier.size(55.dp).background(cinemaPanel, RoundedCornerShape(6.dp)),
+                Box(Modifier.size(52.dp).background(cinemaPanel, RoundedCornerShape(6.dp)),
                     contentAlignment = Alignment.Center) {
                     if (channel.logo.isNotBlank()) AsyncImage(
                         channel.logo, contentDescription = null,
@@ -577,21 +732,45 @@ private fun EveryCineChannelRows(
                     ) else Text("TV", color = cinemaGrey, fontSize = 14.sp)
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(channel.name, color = cinemaWhite,
+                    Text(card.displayName, color = if (selected) cinemaAccent else cinemaWhite,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(channel.group.ifBlank { "Ao vivo" }, color = cinemaGrey,
-                        fontSize = 12.sp, maxLines = 1)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(channel.group.ifBlank { "Ao vivo" }, color = cinemaGrey,
+                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false))
+                        if (card.options.size > 1) Surface(
+                            color = Color(0xFF1F2B33),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.clickable { onOpenQualities(card) },
+                        ) {
+                            Text(
+                                "${card.options.size} qualidades",
+                                color = cinemaAccent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
                 }
-                Text(if (selected) "▶" else "▷", color = cinemaAccent, fontSize = 21.sp)
+                Surface(
+                    color = Color(0xFF1B1C22),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.clickable { onAction(AppAction.OpenEpg(channel)) }
+                        .testTag("everycine-epg-" + channel.id),
+                ) {
+                    Text("Guia", color = cinemaGrey, fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                }
+                Text(if (selected) "▶" else "▷", color = cinemaAccent, fontSize = 20.sp)
                 Text(if (channel.id in state.favoriteIds) "♥" else "♡",
-                    color = cinemaWhite, fontSize = 22.sp, modifier = Modifier
+                    color = if (channel.id in state.favoriteIds) cinemaAccent else cinemaWhite,
+                    fontSize = 21.sp, modifier = Modifier
                         .clickable { onAction(AppAction.ToggleFavorite(channel)) }
                         .padding(4.dp))
             }
             HorizontalDivider(color = Color(0xFF222225), thickness = .5.dp)
         }
-        if (channels.isEmpty() && !state.isBusy) item {
+        if (cards.isEmpty() && !state.isBusy) item {
             Text("Selecione uma categoria para carregar os canais.",
                 color = cinemaGrey, modifier = Modifier.padding(20.dp))
         }
@@ -663,6 +842,7 @@ private fun EveryCineProfile(
     recent: List<play.ott.nativeapp.data.RecentPlayback>,
     onAction: (AppAction) -> Unit,
     onSettings: () -> Unit,
+    onForYou: () -> Unit,
     onBrowse: (MediaKind, String) -> Unit,
 ) {
     val favorites = remember(state.entries, state.favoriteIds) {
@@ -676,14 +856,28 @@ private fun EveryCineProfile(
         item {
             Column(
                 Modifier.fillMaxWidth().background(Brush.verticalGradient(
-                    listOf(Color(0xFF1B2332), cinemaBlack)
+                    listOf(Color(0xFF102430), cinemaBlack)
                 )).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 NeonEmblem(Modifier.size(56.dp))
                 Spacer(Modifier.height(8.dp))
-                Text("Meu STARLINK", color = cinemaWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("Seu catálogo, seu histórico e suas preferências",
-                    color = cinemaGrey, fontSize = 12.sp)
+                Text(
+                    if (state.accountName.isNotBlank()) "Olá, ${state.accountName}" else "Meu STARLINK",
+                    color = cinemaWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Perfil ativo: ${state.forYouProfile.name}",
+                    color = cinemaAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EveryCineCategoryChip("Principal", state.activeForYouProfileId == "default") {
+                        onAction(AppAction.SwitchForYouProfile("default"))
+                    }
+                    EveryCineCategoryChip("Perfil 2", state.activeForYouProfileId == "secondary") {
+                        onAction(AppAction.SwitchForYouProfile("secondary"))
+                    }
+                }
             }
         }
         if (recent.isNotEmpty()) item {
@@ -699,6 +893,8 @@ private fun EveryCineProfile(
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Configurações e conta", color = cinemaWhite, fontSize = 18.sp,
                     fontWeight = FontWeight.Bold)
+                ActionButton("Preferências · Para Você", onForYou,
+                    Modifier.fillMaxWidth().testTag("everycine-profile-for-you"))
                 ActionButton("Minha conta e preferências", onSettings,
                     Modifier.fillMaxWidth().testTag("everycine-profile-settings"))
                 ActionButton("Ver canais ao vivo", { onBrowse(MediaKind.LIVE, "") }, Modifier.fillMaxWidth())
@@ -769,6 +965,124 @@ private fun EveryCineMovieDetail(
                         if (entry.description.isNotBlank()) Text(entry.description,
                             color = cinemaWhite, fontSize = 14.sp)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EveryCineSeriesDetail(
+    entry: MediaEntry,
+    episodes: List<MediaEntry>,
+    loading: Boolean,
+    favorite: Boolean,
+    onAction: (AppAction) -> Unit,
+) {
+    var selectedSeason by remember(entry.id) { mutableStateOf<Int?>(null) }
+    val ordered = remember(episodes) {
+        episodes.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.name }))
+    }
+    val seasons = remember(ordered) { ordered.map { it.season ?: 1 }.distinct() }
+    val activeSeason = selectedSeason?.takeIf { it in seasons } ?: seasons.firstOrNull()
+    val seasonEpisodes = remember(ordered, activeSeason) {
+        ordered.filter { (it.season ?: 1) == activeSeason }
+    }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { onAction(AppAction.CloseSeries) },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(color = cinemaBlack, modifier = Modifier.tvRemoteInput().fillMaxSize()
+            .testTag("everycine-series-details")) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                item(key = "hero") {
+                    Box(Modifier.fillMaxWidth().height(300.dp)) {
+                        if (entry.logo.isNotBlank()) AsyncImage(
+                            entry.logo, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+                        )
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = .2f), cinemaBlack)
+                        )))
+                        Text("‹", color = cinemaWhite, fontSize = 34.sp,
+                            modifier = Modifier.align(Alignment.TopStart)
+                                .clickable { onAction(AppAction.CloseSeries) }.padding(14.dp))
+                        Text(entry.name, color = cinemaWhite, fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold, maxLines = 3,
+                            modifier = Modifier.align(Alignment.BottomStart)
+                                .padding(horizontal = 16.dp, vertical = 16.dp))
+                    }
+                }
+                item(key = "meta") {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(entry.group.ifBlank { "Séries" }, color = cinemaGrey, fontSize = 13.sp,
+                                modifier = Modifier.weight(1f))
+                            Text(if (favorite) "♥ Na lista" else "♡ Minha lista",
+                                color = if (favorite) cinemaAccent else cinemaWhite,
+                                modifier = Modifier.clickable { onAction(AppAction.ToggleFavorite(entry)) })
+                        }
+                        if (entry.description.isNotBlank()) Text(entry.description,
+                            color = cinemaWhite, fontSize = 14.sp)
+                        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent)
+                        if (ordered.isEmpty() && !loading) {
+                            val direct = SeriesRecovery.directPlayCandidate(entry, episodes)
+                            if (direct != null) {
+                                ActionButton("▶  Reproduzir conteúdo", {
+                                    onAction(AppAction.Play(direct))
+                                    onAction(AppAction.CloseSeries)
+                                }, Modifier.fillMaxWidth(), selected = true)
+                            } else {
+                                Text(stringResource(R.string.dialog_series_empty), color = cinemaGrey)
+                            }
+                        }
+                    }
+                }
+                if (seasons.isNotEmpty()) item(key = "seasons") {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(seasons, key = { it }) { season ->
+                            EveryCineCategoryChip(
+                                stringResource(R.string.dialog_season, season),
+                                season == activeSeason,
+                            ) { selectedSeason = season }
+                        }
+                    }
+                }
+                items(seasonEpisodes, key = { it.sourceId + ":" + it.id }) { episode ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable {
+                                onAction(AppAction.Play(episode))
+                                onAction(AppAction.CloseSeries)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(Modifier.size(width = 104.dp, height = 62.dp)
+                            .clip(RoundedCornerShape(6.dp)).background(cinemaPanel),
+                            contentAlignment = Alignment.Center) {
+                            if (episode.logo.isNotBlank()) AsyncImage(
+                                episode.logo, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+                            ) else Text("▶", color = cinemaAccent, fontSize = 20.sp)
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            episode.episode?.let {
+                                Text(stringResource(R.string.dialog_episode, it),
+                                    color = cinemaAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            Text(episode.name, color = cinemaWhite, fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (episode.description.isNotBlank()) Text(episode.description,
+                                color = cinemaGrey, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text("▶", color = cinemaAccent, fontSize = 18.sp)
+                    }
+                    HorizontalDivider(color = Color(0xFF222225), thickness = .5.dp)
                 }
             }
         }
