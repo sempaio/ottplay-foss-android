@@ -39,6 +39,82 @@ internal sealed interface M81SessionResult {
     data object Unavailable : M81SessionResult
 }
 
+internal interface M81DeviceSessionApi {
+    suspend fun login(username: String, password: String, deviceId: String): M81SessionResult
+    suspend fun validate(sessionToken: String, deviceId: String): M81SessionResult
+    suspend fun logout(sessionToken: String, deviceId: String)
+}
+
+internal sealed interface M81SessionSyncOutcome {
+    data class Active(val clientName: String) : M81SessionSyncOutcome
+    data object Revoked : M81SessionSyncOutcome
+    data class Denied(val code: String) : M81SessionSyncOutcome
+    data object Deferred : M81SessionSyncOutcome
+}
+
+/**
+ * Handles M81 login during SaveSource. If switching to a different username, revokes/clears
+ * any previous account's cached session token before attempting login so a fail-open
+ * response never leaks the previous user's token or client name.
+ */
+internal suspend fun loginM81DeviceSession(
+    api: M81DeviceSessionApi,
+    store: M81DeviceSessionStore,
+    previousUsername: String?,
+    username: String,
+    password: String,
+): M81SessionResult {
+    val trimmedUser = username.trim()
+    val accountChanged = !previousUsername.isNullOrBlank() &&
+        !previousUsername.trim().equals(trimmedUser, ignoreCase = true)
+    val stored = withContext(Dispatchers.IO) { store.readOrCreate() }
+    if (accountChanged) {
+        if (!stored.sessionToken.isNullOrBlank()) {
+            api.logout(stored.sessionToken, stored.deviceId)
+        }
+        withContext(Dispatchers.IO) { store.clearToken() }
+    }
+    val result = api.login(trimmedUser, password, stored.deviceId)
+    if (result is M81SessionResult.Authorized) {
+        withContext(Dispatchers.IO) {
+            store.saveToken(result.sessionToken, result.clientName, result.status)
+        }
+    }
+    return result
+}
+
+/**
+ * Validates an existing M81 device session or recovers a missing token after a prior
+ * fail-open login so the device reclaims its slot in the 3-device limit automatically.
+ */
+internal suspend fun syncM81DeviceSession(
+    api: M81DeviceSessionApi,
+    store: M81DeviceSessionStore,
+    username: String,
+    password: String,
+): M81SessionSyncOutcome {
+    val stored = withContext(Dispatchers.IO) { store.readOrCreate() }
+    val token = stored.sessionToken
+    val result = if (!token.isNullOrBlank()) {
+        api.validate(token, stored.deviceId)
+    } else {
+        if (username.isBlank() || password.isBlank()) return M81SessionSyncOutcome.Deferred
+        api.login(username, password, stored.deviceId)
+    }
+    return when (result) {
+        is M81SessionResult.Authorized -> {
+            withContext(Dispatchers.IO) {
+                store.saveToken(result.sessionToken, result.clientName, result.status)
+            }
+            M81SessionSyncOutcome.Active(result.clientName)
+        }
+        M81SessionResult.RevokedOrExpired -> M81SessionSyncOutcome.Revoked
+        is M81SessionResult.Denied -> M81SessionSyncOutcome.Denied(result.code)
+        M81SessionResult.RateLimited,
+        M81SessionResult.Unavailable -> M81SessionSyncOutcome.Deferred
+    }
+}
+
 /**
  * Integrates with the M81 panel's 3-device session contract:
  * - POST /app/auth/login
@@ -48,7 +124,7 @@ internal sealed interface M81SessionResult {
 internal class M81DeviceSessionClient(
     private val baseUrl: String = StarlinkConfig.XTREAM_BASE_URL,
     private val requireHttps: Boolean = true,
-) {
+) : M81DeviceSessionApi {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val http = OkHttpClient.Builder()
         .connectTimeout(6, TimeUnit.SECONDS)
@@ -57,7 +133,7 @@ internal class M81DeviceSessionClient(
         .followSslRedirects(false)
         .build()
 
-    suspend fun login(username: String, password: String, deviceId: String): M81SessionResult =
+    override suspend fun login(username: String, password: String, deviceId: String): M81SessionResult =
         withContext(Dispatchers.IO) {
             val payload = buildJsonObject {
                 put("login", username.trim())
@@ -67,7 +143,7 @@ internal class M81DeviceSessionClient(
             postJson("/app/auth/login", payload, fallbackToken = null)
         }
 
-    suspend fun validate(sessionToken: String, deviceId: String): M81SessionResult =
+    override suspend fun validate(sessionToken: String, deviceId: String): M81SessionResult =
         withContext(Dispatchers.IO) {
             val payload = buildJsonObject {
                 put("session_token", sessionToken.trim())
@@ -76,19 +152,21 @@ internal class M81DeviceSessionClient(
             postJson("/app/auth/validate", payload, fallbackToken = sessionToken.trim())
         }
 
-    suspend fun logout(sessionToken: String, deviceId: String) = withContext(Dispatchers.IO) {
-        val payload = buildJsonObject {
-            put("session_token", sessionToken.trim())
-            put("device_id", deviceId.trim())
-        }.toString()
-        runCatching {
-            val endpoint = (baseUrl.trimEnd('/') + "/app/auth/logout").toHttpUrl()
-            require((!requireHttps || endpoint.isHttps) && endpoint.username.isEmpty() && endpoint.password.isEmpty())
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(payload.toRequestBody(jsonMediaType))
-                .build()
-            http.newCall(request).execute().close()
+    override suspend fun logout(sessionToken: String, deviceId: String) {
+        withContext(Dispatchers.IO) {
+            val payload = buildJsonObject {
+                put("session_token", sessionToken.trim())
+                put("device_id", deviceId.trim())
+            }.toString()
+            runCatching {
+                val endpoint = (baseUrl.trimEnd('/') + "/app/auth/logout").toHttpUrl()
+                require((!requireHttps || endpoint.isHttps) && endpoint.username.isEmpty() && endpoint.password.isEmpty())
+                val request = Request.Builder()
+                    .url(endpoint)
+                    .post(payload.toRequestBody(jsonMediaType))
+                    .build()
+                http.newCall(request).execute().close()
+            }
         }
     }
 

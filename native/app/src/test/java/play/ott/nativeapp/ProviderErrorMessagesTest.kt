@@ -27,5 +27,9 @@ class ProviderErrorMessagesTest {
         )
         cases.forEach { (failure, resource) -> assertEquals(resource, providerErrorResource(ProviderException("untrusted", failure = failure), false)) }
     }
-
+    @Test fun `customer mode maps rate limit and access errors to safe messages`() {
+        assertEquals(R.string.customer_rate_limit_error, providerErrorResource(ProviderException("M81 rate limited", statusCode = 429), true))
+        assertEquals(R.string.customer_auth_error, providerErrorResource(ProviderException("denied", statusCode = 401), true))
+        assertEquals(R.string.customer_access_error, providerErrorResource(ProviderException("inactive", statusCode = 403), true))
+    }
 }

@@ -144,8 +144,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 updateState { it.copy(sources = sources, selectedSourceId = selected, accountName = cachedAccountName, isBusy = false) }
                 if (selected != null) {
                     load(selected, refresh = false)
-                    if (BuildConfig.CUSTOMER_MODE && sources.any { it.id == selected && StarlinkConfig.isStarlinkAccount(it) }) {
-                        validateDeviceSession()
+                    val selectedSource = sources.firstOrNull { it.id == selected }
+                    if (BuildConfig.CUSTOMER_MODE && selectedSource != null && StarlinkConfig.isStarlinkAccount(selectedSource)) {
+                        validateDeviceSession(selectedSource)
                     }
                 }
             } catch (e: CancellationException) { throw e }
@@ -155,29 +156,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun validateDeviceSession() {
+    private fun validateDeviceSession(source: SourceConfig) {
         if (!BuildConfig.CUSTOMER_MODE) return
         viewModelScope.launch {
             try {
-                val stored = withContext(Dispatchers.IO) { repository.deviceSessionStore.readOrCreate() }
-                val token = stored.sessionToken ?: return@launch
-                when (val result = deviceSessions.validate(token, stored.deviceId)) {
-                    is play.ott.nativeapp.data.M81SessionResult.Authorized -> {
-                        withContext(Dispatchers.IO) {
-                            repository.deviceSessionStore.saveToken(result.sessionToken, result.clientName, result.status)
-                        }
-                        if (result.clientName.isNotBlank()) {
-                            updateState { it.copy(accountName = result.clientName) }
+                when (val outcome = play.ott.nativeapp.data.syncM81DeviceSession(
+                    api = deviceSessions,
+                    store = repository.deviceSessionStore,
+                    username = source.username,
+                    password = source.password,
+                )) {
+                    is play.ott.nativeapp.data.M81SessionSyncOutcome.Active -> {
+                        if (outcome.clientName.isNotBlank()) {
+                            updateState { it.copy(accountName = outcome.clientName) }
                         }
                     }
-                    play.ott.nativeapp.data.M81SessionResult.RevokedOrExpired -> {
+                    play.ott.nativeapp.data.M81SessionSyncOutcome.Revoked -> {
                         revokeLocalSession(R.string.customer_device_limit_error)
                     }
-                    is play.ott.nativeapp.data.M81SessionResult.Denied -> {
-                        revokeLocalSession(R.string.customer_access_error)
+                    is play.ott.nativeapp.data.M81SessionSyncOutcome.Denied -> {
+                        val errorRes = if (outcome.code == "invalid_credentials") R.string.customer_auth_error
+                        else R.string.customer_access_error
+                        revokeLocalSession(errorRes)
                     }
-                    play.ott.nativeapp.data.M81SessionResult.RateLimited,
-                    play.ott.nativeapp.data.M81SessionResult.Unavailable -> Unit
+                    play.ott.nativeapp.data.M81SessionSyncOutcome.Deferred -> Unit
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { /* Offline access and playback remain available. */ }
@@ -342,14 +344,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 retirePendingSource(action.source.id)
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
-                var accountName = state.value.accountName
+                val previousAccount = state.value.sources.firstOrNull { StarlinkConfig.isStarlinkAccount(it) }
+                val accountChanged = previousAccount != null &&
+                    !previousAccount.username.trim().equals(action.source.username.trim(), ignoreCase = true)
+                var accountName = if (accountChanged) "" else state.value.accountName
                 if (BuildConfig.CUSTOMER_MODE && StarlinkConfig.isStarlinkAccount(action.source)) {
-                    val stored = withContext(Dispatchers.IO) { repository.deviceSessionStore.readOrCreate() }
-                    when (val result = deviceSessions.login(action.source.username, action.source.password, stored.deviceId)) {
+                    when (val result = play.ott.nativeapp.data.loginM81DeviceSession(
+                        api = deviceSessions,
+                        store = repository.deviceSessionStore,
+                        previousUsername = previousAccount?.username,
+                        username = action.source.username,
+                        password = action.source.password,
+                    )) {
                         is play.ott.nativeapp.data.M81SessionResult.Authorized -> {
-                            withContext(Dispatchers.IO) {
-                                repository.deviceSessionStore.saveToken(result.sessionToken, result.clientName, result.status)
-                            }
                             accountName = result.clientName
                         }
                         is play.ott.nativeapp.data.M81SessionResult.Denied -> {
