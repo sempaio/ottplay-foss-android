@@ -12,6 +12,8 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import play.ott.nativeapp.core.*
@@ -376,7 +378,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // Existing installed sources are not deleted during this transition.
                 val sources = availableSources()
                 updateState { it.copy(sources = sources, accountName = accountName, sourceSaveRevision = it.sourceSaveRevision + 1) }
-                load(action.source.id, true)
+                load(action.source.id, true, skipAuthenticate = action.source.kind == SourceKind.XTREAM)
                 } finally { saveInFlight = false } }
             }
             is AppAction.DeleteSource -> operation {
@@ -519,12 +521,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun visitedXtreamEntries(): List<MediaEntry> {
-        // Limit cumulative memory, but never silently truncate an opened category.
-        while (visitedGroups.size > 8 ||
-            (visitedGroups.size > 1 && visitedGroups.values.sumOf { it.size } > 20_000)) {
-            visitedGroups.remove(visitedGroups.keys.first())
-        }
+    private fun visitedXtreamEntries(protectedKey: String? = null): List<MediaEntry> {
+        // Limit cumulative memory, keeping at least one category per MediaKind when possible.
+        play.ott.nativeapp.data.VisitedXtreamCache.prune(visitedGroups, protectedKey = protectedKey)
         // The same stream may be listed under two provider categories.
         // Never emit duplicate Compose card keys or delete the original stream IDs.
         return visitedGroups.values.flatten().distinctBy { it.sourceId to it.id }
@@ -547,46 +546,85 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             var shown = false
             try {
                 val source = availableSources().firstOrNull { it.id == id } ?: return@launch
-                // Read only the original category IDs behind the visible chip.
-                // Fetch sequentially to avoid flooding the server with duplicate requests.
+                val groupsToFetch = ArrayList<play.ott.nativeapp.core.XtreamGroup>()
+                var lastKey: String? = null
+                // Pass 1: serve in-memory and local SQLite cache hits in a single UI update.
                 for (group in groups) {
                     ensureActive()
                     if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
                     val key = id + ":" + group.kind + ":" + group.id
                     if (visitedGroups.containsKey(key)) {
+                        play.ott.nativeapp.data.VisitedXtreamCache.touch(visitedGroups, key)
+                        lastKey = key
                         shown = true
-                        updateState { it.copy(entries = visitedXtreamEntries()) }
                         continue
                     }
                     val cached = try { repository.cachedXtreamCategory(source, group) }
                         catch (e: CancellationException) { throw e }
                         catch (_: Exception) { null }
                     if (cached != null) {
-                        visitedGroups[key] = cached.value.entries
+                        play.ott.nativeapp.data.VisitedXtreamCache.touch(visitedGroups, key, cached.value.entries)
+                        lastKey = key
                         shown = true
-                        updateState { it.copy(entries = visitedXtreamEntries()) }
-                        if (cached.ageMillis < 30 * 60_000L) continue
+                        if (cached.ageMillis >= 30 * 60_000L) groupsToFetch += group
+                    } else {
+                        groupsToFetch += group
                     }
-                    val catalog = try { repository.xtreamCategory(source, group) }
-                        catch (e: CancellationException) { throw e }
-                        catch (e: Exception) {
-                            if (firstFailure == null) firstFailure = e
-                            continue
+                }
+                if (shown) {
+                    updateState { it.copy(entries = visitedXtreamEntries(protectedKey = lastKey)) }
+                }
+                if (groupsToFetch.isEmpty()) {
+                    updateState { it.copy(isBusy = false) }
+                    return@launch
+                }
+                // Pass 2: fetch missing/stale groups in bounded parallel batches.
+                val semaphore = Semaphore(4)
+                val failureLock = Any()
+                val fetched = coroutineScope {
+                    groupsToFetch.map { group ->
+                        async {
+                            semaphore.withPermit {
+                                try {
+                                    group to repository.xtreamCategory(source, group)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    synchronized(failureLock) {
+                                        if (firstFailure == null) firstFailure = e
+                                    }
+                                    null
+                                }
+                            }
                         }
-                    ensureActive()
-                    if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
-                    visitedGroups[key] = catalog.entries
+                    }.awaitAll()
+                }
+                ensureActive()
+                if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
+                var anyFetched = false
+                for (pair in fetched) {
+                    if (pair == null) continue
+                    val (group, catalog) = pair
+                    val key = id + ":" + group.kind + ":" + group.id
+                    play.ott.nativeapp.data.VisitedXtreamCache.touch(visitedGroups, key, catalog.entries)
+                    lastKey = key
                     shown = true
-                    updateState { it.copy(entries = visitedXtreamEntries()) }
+                    anyFetched = true
                     pendingWrites += group to catalog
                 }
-                if (!shown) firstFailure?.let { showError(it) }
-                // Finish loading before saving encrypted cached blocks.
-                updateState { it.copy(isBusy = false) }
-                for ((group, catalog) in pendingWrites) {
-                    try { repository.saveXtreamCategory(source, group, catalog) }
-                    catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { /* Cache is optional; streams are already visible. */ }
+                if (anyFetched) {
+                    updateState { it.copy(entries = visitedXtreamEntries(protectedKey = lastKey), isBusy = false) }
+                } else {
+                    if (!shown) firstFailure?.let { showError(it) }
+                    updateState { it.copy(isBusy = false) }
+                }
+                // Persist encrypted SQLite blocks asynchronously so rapid chip switching stays unobstructed.
+                if (pendingWrites.isNotEmpty()) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        for ((group, catalog) in pendingWrites) {
+                            runCatching { repository.saveXtreamCategory(source, group, catalog) }
+                        }
+                    }
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { showError(e) }
@@ -597,7 +635,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun load(id: String, refresh: Boolean) {
+    private fun load(id: String, refresh: Boolean, skipAuthenticate: Boolean = false) {
         loadingResource = R.string.message_loading_catalog
         errorText = null
         loadJob?.cancel()
@@ -621,7 +659,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         updateState { it.copy(xtreamGroups = cached.value, entries = emptyList(), isBusy = false) }
                         if (!refresh && cached.ageMillis < 30 * 60_000L) return@launch
                     }
-                    val groups = repository.xtreamCategories(source)
+                    val groups = repository.xtreamCategories(source, skipAuthenticate = skipAuthenticate)
                     ensureActive()
                     if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
                     updateState { it.copy(xtreamGroups = groups, entries = emptyList(), isBusy = false) }

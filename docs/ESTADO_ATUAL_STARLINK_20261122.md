@@ -7,11 +7,11 @@
 | Verificação | Resultado | Detalhes |
 |---|---|---|
 | `:core:test` | ✅ PASS | **86 testes** em 19 suítes (0 falhas, 0 erros, 0 ignorados) |
-| `:app:testLayoutUnitTest` | ✅ PASS | **226 testes** em 41 suítes (0 falhas, 0 erros, 0 ignorados) |
-| **Total de testes unitários** | ✅ **312/312** | Inclui novos testes de persistência criptografada, recuperação de sessão e troca de conta M81 |
+| `:app:testLayoutUnitTest` | ✅ PASS | **230 testes** em 42 suítes (0 falhas, 0 erros, 0 ignorados) |
+| **Total de testes unitários** | ✅ **316/316** | `86 core + 230 app` (inclui `VisitedXtreamCacheTest`, categoria padrão em `EveryCineVisualPlanTest`, persistência criptografada e sessão M81) |
 | `:app:lintLayout` | ✅ PASS | **0 erros** (corrigidos 14 erros `MissingTranslation` em strings específicas STARLINK) |
-| `:app:assembleEveryCineQa` | ✅ PASS | Pacote `br.starlink.iptv.everycineqa` (`0.3.2-everycine-visual-qa`), `apksigner verify` OK |
-| `:app:assembleOfficial` | ✅ PASS | Pacote `br.starlink.iptv` (`0.3.2`), minificação **R8** + `lintVitalOfficial` OK |
+| `:app:assembleEveryCineQa` | ✅ PASS | Pacote `br.starlink.iptv.everycineqa` (`0.3.2-everycine-visual-qa`, `24.102.600` bytes, SHA-256 `f3cb8883b132fbbcf12912022c8400397c5586828ef418aff621b67ad9749d87`), `apksigner verify` OK |
+| `:app:assembleOfficial` | ✅ PASS | Pacote `br.starlink.iptv` (`0.3.2`), minificação **R8** + `lintVitalOfficial` OK (`app-official-unsigned.apk`, `6.440.050` bytes, aguardando assinatura release) |
 
 ## 2. Entregas Aplicadas nesta Rodada
 
@@ -31,6 +31,12 @@
 5. **Limpeza do repositório e consolidação de variantes:**
    - Removidos 8 APKs antigos de QA (`QA` a `QA8`, ~177 MB) de `dist/`, preservando `dist/STARLINK-IPTV-layout.apk` (referenciado por `starlink-android-apk.yml`).
    - Removido o `buildType` obsoleto `qaM81Test` em `native/app/build.gradle.kts`, preservando `paraVoceTest` (usado por `starlink-para-voce.yml`, `starlink-032-para-voce-integrated.yml` e `consolidation-qa.init.gradle`) e `everyCineQa`.
+6. **Otimização de performance, cache e carregamento paralelo Xtream (Rodadas 1 e 2):**
+   - `VisitedXtreamCache` (`VisitedXtreamCache.kt` + `VisitedXtreamCacheTest.kt`): cache LRU em memória (`MAX_GROUPS=16`, `MAX_ENTRIES=35.000`) preservando ao menos uma categoria por `MediaKind`.
+   - Auto-carregamento da primeira categoria válida (`everyCineDefaultRemoteGroup`, pulando `"Filmes"` deslocado em `SERIES`) em `HOME`, `CATALOG` e `LIVE`, com indicador `CircularProgressIndicator` e fallback de monograma nos pôsteres (`EveryCineVisual.kt`, `EveryCineVisualPlan.kt`, `OttNativeApp.kt`).
+   - `NativeRepository.kt`: cache em memória de `sources()` (evita leitura de `sources.enc` e descriptografia no `AndroidKeyStore` a cada toque) e escrita de cache SQLite (`saveXtreamCategories`/`saveXtreamCategory`) fora de `sourceMutex`.
+   - `PlayerViewModel.kt`, `XtreamProvider.kt`, `ProviderRepository.kt`: parâmetro `skipAuthenticate` para evitar segunda autenticação no login (`SaveSource`); busca concorrente de categorias mescladas em `openXtreamGroups` (`Semaphore(4)`) com `1` único `updateState` consolidado e persistência SQLite assíncrona em coroutine separada.
+   - `OttplayApplication.kt` + `EveryCineVisual.kt`: Coil configurado com `MemoryCache` (25%), `DiskCache` (64 MB em `cacheDir/image_cache`), timeouts curtos (`5s`/`8s`/`12s`), `respectCacheHeaders(false)`, `crossfade(150)` e downsampling `ImageRequest.size(268, 372)` nos pôsteres; botão `▶ Reproduzir` em `EveryCineMovieDetail` liberado imediatamente sem esperar `get_vod_info`.
 
 ## 3. Pendências Conhecidas para Próxima Fase (Homologação Final)
 

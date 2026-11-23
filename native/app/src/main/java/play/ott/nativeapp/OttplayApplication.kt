@@ -6,6 +6,10 @@ import android.os.Handler
 import android.os.Looper
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
@@ -47,7 +51,20 @@ class OttplayApplication : Application(), ImageLoaderFactory {
         EpgRefreshWorker.schedule(this)
     }
 
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient(AppTransportPolicy.current.secure(OkHttpClient()))
-        .build()
+    override fun newImageLoader(): ImageLoader {
+        val client = AppTransportPolicy.current.secure(
+            OkHttpClient.Builder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(8, TimeUnit.SECONDS)
+                .callTimeout(12, TimeUnit.SECONDS)
+                .build()
+        )
+        return ImageLoader.Builder(this)
+            .okHttpClient(client)
+            .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.25).build() }
+            .diskCache { DiskCache.Builder().directory(File(cacheDir, "image_cache")).maxSizeBytes(64L * 1024 * 1024).build() }
+            .respectCacheHeaders(false)
+            .crossfade(150)
+            .build()
+    }
 }

@@ -3,7 +3,9 @@ package play.ott.nativeapp.ui
 import kotlin.test.*
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
+import play.ott.nativeapp.core.XtreamGroup
 import play.ott.nativeapp.data.RecentPlayback
+import play.ott.nativeapp.data.XtreamDisplayGroup
 
 /** Visual behavior comes from inspected Every Cine XML, not from its protected app code. */
 class EveryCineVisualPlanTest {
@@ -79,5 +81,18 @@ class EveryCineVisualPlanTest {
         assertEquals(movie, everyCineFeatured(listOf(channel, movie), emptyList()))
         assertEquals(movie, everyCineFeatured(emptyList(), listOf(RecentPlayback(movie, 1200))))
         assertNull(everyCineFeatured(emptyList(), emptyList()))
+    }
+
+    @Test fun defaultRemoteGroupSkipsMisplacedFilmesInsideSeriesWhenRealCategoriesExist() {
+        val seriesFilmes = XtreamDisplayGroup(MediaKind.SERIES, "Filmes", listOf(XtreamGroup("1", "Filmes", MediaKind.SERIES)))
+        val seriesNetflix = XtreamDisplayGroup(MediaKind.SERIES, "Netflix", listOf(XtreamGroup("2", "Netflix", MediaKind.SERIES)))
+        val movieAcao = XtreamDisplayGroup(MediaKind.MOVIE, "Ação", listOf(XtreamGroup("3", "Ação", MediaKind.MOVIE)))
+        val liveAbertos = XtreamDisplayGroup(MediaKind.LIVE, "Abertos", listOf(XtreamGroup("4", "Abertos", MediaKind.LIVE)))
+
+        assertEquals(seriesNetflix, everyCineDefaultRemoteGroup(listOf(movieAcao, seriesFilmes, seriesNetflix, liveAbertos), MediaKind.SERIES))
+        assertEquals(seriesFilmes, everyCineDefaultRemoteGroup(listOf(movieAcao, seriesFilmes), MediaKind.SERIES))
+        assertEquals(movieAcao, everyCineDefaultRemoteGroup(listOf(seriesFilmes, movieAcao, liveAbertos), MediaKind.MOVIE))
+        assertEquals(liveAbertos, everyCineDefaultRemoteGroup(listOf(seriesFilmes, movieAcao, liveAbertos), MediaKind.LIVE))
+        assertNull(everyCineDefaultRemoteGroup(listOf(movieAcao), MediaKind.SERIES))
     }
 }

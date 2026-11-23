@@ -64,6 +64,9 @@ class NativeRepository(
     private val db = CatalogDatabase(context, vault)
     private val sourceMutex = Mutex()
     private val refreshMutex = Mutex()
+    @Volatile private var cachedSources: List<SourceConfig>? = null
+    private fun readSourcesLocked(): List<SourceConfig> =
+        cachedSources ?: vault.read().also { cachedSources = it }
     val preferences = PreferencesStore(context)
     private val recentState = kotlinx.coroutines.flow.MutableStateFlow<List<RecentPlayback>>(emptyList())
     val recent: kotlinx.coroutines.flow.StateFlow<List<RecentPlayback>> = recentState
@@ -79,19 +82,20 @@ class NativeRepository(
     internal val progressWriter by lazy { ResumePositionWriter(preferences::saveResumePosition, persistRecent = { value ->
         // Source removal and late player callbacks must not resurrect deleted credentials.
         sourceMutex.withLock {
-            if (vault.read().any { it.id == value.entry.sourceId })
+            if (readSourcesLocked().any { it.id == value.entry.sourceId })
                 db.saveRecent(value, preferences.data.first().activeForYouProfileId)
             refreshRecentState()
         }
     }) }
     suspend fun loadRecent() = withContext(Dispatchers.IO) { sourceMutex.withLock {
-        val ids = vault.read().map { it.id }.toSet()
+        val ids = readSourcesLocked().map { it.id }.toSet()
         refreshRecentState(ids)
     } }
     val providers = ProviderRepository(transportPolicy = transportPolicy)
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
-    suspend fun sources(): List<SourceConfig> = withContext(Dispatchers.IO) { sourceMutex.withLock { vault.read() } }
+    suspend fun sources(): List<SourceConfig> =
+        cachedSources ?: withContext(Dispatchers.IO) { sourceMutex.withLock { readSourcesLocked() } }
 
     suspend fun save(source: SourceConfig) = withContext(Dispatchers.IO) {
         require(source.nameMessage?.isValidSourceName() != false) { "Invalid generated source name metadata" }
@@ -103,10 +107,12 @@ class NativeRepository(
             nameIsUserDefined = source.nameIsUserDefined || (source.nameMessage != null && generatedName == null))
         validateSource(saved)
         refreshMutex.withLock { sourceMutex.withLock {
-            val sources = vault.read()
+            val sources = readSourcesLocked()
             val previous = sources.firstOrNull { it.id == source.id }
             if (previous != null && previous != saved) db.delete(source.id)
-            vault.write(sources.filterNot { it.id == source.id } + saved)
+            val updated = sources.filterNot { it.id == source.id } + saved
+            vault.write(updated)
+            cachedSources = updated
             refreshRecentState()
         }}
     }
@@ -132,7 +138,11 @@ class NativeRepository(
 
     suspend fun remove(id: String) = withContext(Dispatchers.IO) {
         refreshMutex.withLock {
-            sourceMutex.withLock { vault.write(vault.read().filterNot { it.id == id }) }
+            sourceMutex.withLock {
+                val updated = readSourcesLocked().filterNot { it.id == id }
+                vault.write(updated)
+                cachedSources = updated
+            }
             db.delete(id)
             refreshRecentState()
         }
@@ -161,7 +171,7 @@ class NativeRepository(
         val cached = db.read(id)
         if (cached.entries.none { isBundledDemoEntry(it, id) && it.url != bundledDemoUrl }) return@withContext cached
         refreshMutex.withLock {
-            val source = sourceMutex.withLock { vault.read().firstOrNull { it.id == id } }
+            val source = sourceMutex.withLock { readSourcesLocked().firstOrNull { it.id == id } }
             // Re-read under the refresh lock so source edits or refreshes cannot be overwritten.
             val current = db.read(id)
             if (source?.kind != SourceKind.M3U || source.url != DEMO_URL) return@withLock current
@@ -180,8 +190,8 @@ class NativeRepository(
     internal suspend fun cachedXtreamCategory(source: SourceConfig, group: XtreamGroup): XtreamCached<Catalog>? =
         withContext(Dispatchers.IO) { db.cachedXtreamGroup(source.id, group) }
 
-    suspend fun xtreamCategories(source: SourceConfig): List<XtreamGroup> =
-        providers.xtreamCategories(source)
+    suspend fun xtreamCategories(source: SourceConfig, skipAuthenticate: Boolean = false): List<XtreamGroup> =
+        providers.xtreamCategories(source, skipAuthenticate = skipAuthenticate)
 
     suspend fun xtreamCategory(source: SourceConfig, group: XtreamGroup): Catalog =
         providers.xtreamCategory(source, group)
@@ -189,18 +199,24 @@ class NativeRepository(
     /** Persist only after the UI has received the network response. */
     suspend fun saveXtreamCategories(source: SourceConfig, groups: List<XtreamGroup>) =
         withContext(Dispatchers.IO) {
-            refreshMutex.withLock { sourceMutex.withLock {
-                if (vault.read().firstOrNull { it.id == source.id } == source)
+            val current = cachedSources ?: sourceMutex.withLock { readSourcesLocked() }
+            if (current.firstOrNull { it.id == source.id } != source) return@withContext
+            refreshMutex.withLock {
+                val verified = cachedSources ?: sourceMutex.withLock { readSourcesLocked() }
+                if (verified.firstOrNull { it.id == source.id } == source)
                     db.storeXtreamGroups(source.id, groups)
-            }}
+            }
         }
 
     suspend fun saveXtreamCategory(source: SourceConfig, group: XtreamGroup, catalog: Catalog) =
         withContext(Dispatchers.IO) {
-            refreshMutex.withLock { sourceMutex.withLock {
-                if (vault.read().firstOrNull { it.id == source.id } == source)
+            val current = cachedSources ?: sourceMutex.withLock { readSourcesLocked() }
+            if (current.firstOrNull { it.id == source.id } != source) return@withContext
+            refreshMutex.withLock {
+                val verified = cachedSources ?: sourceMutex.withLock { readSourcesLocked() }
+                if (verified.firstOrNull { it.id == source.id } == source)
                     db.storeXtreamGroup(source.id, group, catalog)
-            }}
+            }
         }
 
     suspend fun refresh(source: SourceConfig): Catalog = withContext(Dispatchers.IO) {
@@ -218,7 +234,7 @@ class NativeRepository(
                 else -> providers.load(source)
             }
             // Editing/removing a source while a refresh is in flight must not resurrect stale data.
-            val current = sourceMutex.withLock { vault.read().firstOrNull { it.id == source.id } }
+            val current = sourceMutex.withLock { readSourcesLocked().firstOrNull { it.id == source.id } }
             if (current != source) error(message(R.string.message_source_changed))
             db.replace(source.id, catalog)
             catalog
@@ -294,13 +310,17 @@ class NativeRepository(
         }
         // Validate the complete import before writing any credentials.
         val sourceIds = withContext(Dispatchers.IO) { refreshMutex.withLock { sourceMutex.withLock {
-            val merged = vault.read().associateBy { it.id }.toMutableMap()
+            val merged = readSourcesLocked().associateBy { it.id }.toMutableMap()
             require((merged.keys + importedSources.map { it.id }).size <= 100) { message(R.string.message_too_many_sources) }
             importedSources.forEach { source ->
                 if (merged[source.id] != source) db.delete(source.id)
                 merged[source.id] = source
             }
-            if (importedSources.isNotEmpty()) vault.write(merged.values.toList())
+            if (importedSources.isNotEmpty()) {
+                val updated = merged.values.toList()
+                vault.write(updated)
+                cachedSources = updated
+            }
             merged.keys.toSet()
         }}}
         if (legacy == null) preferences.update { old -> mergeBackupPreferences(old, backup.preferences, sourceIds) }

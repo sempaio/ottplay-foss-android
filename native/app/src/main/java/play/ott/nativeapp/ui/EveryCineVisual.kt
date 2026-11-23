@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.pager.HorizontalPager
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.session.MediaController
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -138,6 +141,29 @@ internal fun EveryCineVisualApp(
         if (hasRemoteCategories && category.isNotBlank()) {
             mergedGroups.firstOrNull { it.kind == kind && it.label == category }?.let { group ->
                 onAction(AppAction.OpenXtreamGroups(kind, group.sources.map { it.id }))
+            }
+        }
+    }
+    var autoLoadedKinds by remember(state.selectedSourceId) { mutableStateOf(emptySet<MediaKind>()) }
+    LaunchedEffect(page, catalogKind, hasRemoteCategories, mergedGroups, selectedCategory, search, state.selectedSourceId, state.entries.isEmpty()) {
+        if (!hasRemoteCategories || search.isNotBlank()) return@LaunchedEffect
+        if (page == EveryCinePage.HOME && state.entries.isEmpty() && MediaKind.MOVIE !in autoLoadedKinds) {
+            everyCineDefaultRemoteGroup(mergedGroups, MediaKind.MOVIE)?.let { group ->
+                autoLoadedKinds = autoLoadedKinds + MediaKind.MOVIE
+                onAction(AppAction.OpenXtreamGroups(MediaKind.MOVIE, group.sources.map { it.id }))
+            }
+            return@LaunchedEffect
+        }
+        if (selectedCategory.isNotBlank()) return@LaunchedEffect
+        val activeKind = when (page) {
+            EveryCinePage.CATALOG -> catalogKind
+            EveryCinePage.LIVE -> MediaKind.LIVE
+            else -> null
+        } ?: return@LaunchedEffect
+        if (activeKind !in autoLoadedKinds && state.entries.none { it.kind == activeKind }) {
+            everyCineDefaultRemoteGroup(mergedGroups, activeKind)?.let { group ->
+                autoLoadedKinds = autoLoadedKinds + activeKind
+                browse(activeKind, group.label)
             }
         }
     }
@@ -552,17 +578,33 @@ private fun EveryCinePoster(entry: MediaEntry, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .testTag("everycine-poster-" + entry.id),
     ) {
+        var imageLoaded by remember(entry.logo) { mutableStateOf(false) }
         Box(
             Modifier.size(width = 134.dp, height = 186.dp)
                 .clip(shape)
                 .background(cinemaPanel, shape)
                 .border(if (focused) 2.dp else 0.dp, if (focused) cinemaAccent else Color.Transparent, shape),
         ) {
-            if (entry.logo.isNotBlank()) AsyncImage(
-                entry.logo, contentDescription = entry.name, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            ) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(entry.name.take(2).uppercase(), color = cinemaGrey, fontSize = 26.sp)
+            if (entry.logo.isBlank() || !imageLoaded) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(entry.name.take(2).uppercase(), color = cinemaGrey, fontSize = 26.sp)
+                }
+            }
+            if (entry.logo.isNotBlank()) {
+                val context = LocalContext.current
+                val imageRequest = remember(entry.logo, context) {
+                    ImageRequest.Builder(context)
+                        .data(entry.logo)
+                        .size(268, 372)
+                        .crossfade(150)
+                        .build()
+                }
+                AsyncImage(
+                    model = imageRequest, contentDescription = entry.name, contentScale = ContentScale.Crop,
+                    onSuccess = { imageLoaded = true },
+                    onError = { imageLoaded = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
             if (entry.kind == MediaKind.SERIES) Text(
                 "SÉRIE", color = cinemaAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold,
@@ -813,6 +855,16 @@ private fun EveryCineChannelRows(
             }
             HorizontalDivider(color = Color(0xFF222225), thickness = .5.dp)
         }
+        if (state.isBusy && cards.isEmpty()) item(key = "live-loading") {
+            Column(
+                Modifier.fillMaxWidth().padding(vertical = 48.dp).testTag("everycine-live-loading"),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(color = cinemaAccent)
+                Text("Carregando canais...", color = cinemaGrey, fontSize = 14.sp)
+            }
+        }
         if (ready && cards.isEmpty() && !state.isBusy) item {
             Text("Selecione uma categoria para carregar os canais.",
                 color = cinemaGrey, modifier = Modifier.padding(20.dp))
@@ -872,7 +924,7 @@ private fun EveryCineCatalog(
             }
         }
         Spacer(Modifier.height(10.dp))
-        if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent)
         LazyVerticalGrid(
             columns = GridCells.Adaptive(134.dp),
             modifier = Modifier.fillMaxSize().testTag("everycine-catalog-posters"),
@@ -883,8 +935,32 @@ private fun EveryCineCatalog(
             gridItems(visible, key = { it.sourceId + ":" + it.id }) { entry ->
                 EveryCinePoster(entry) { openContent(entry, onAction) }
             }
-            if (visibleState.ready && visible.isEmpty() && !state.isBusy) item {
-                Text("Escolha uma categoria para carregar o catálogo.", color = cinemaGrey)
+            if (state.isBusy && visible.isEmpty()) item(key = "catalog-loading", span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    Modifier.fillMaxWidth().padding(vertical = 48.dp).testTag("everycine-catalog-loading"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(color = cinemaAccent)
+                    Text(
+                        if (kind == MediaKind.SERIES) "Carregando séries..." else "Carregando filmes...",
+                        color = cinemaGrey, fontSize = 14.sp,
+                    )
+                }
+            }
+            if (visibleState.ready && visible.isEmpty() && !state.isBusy) item(key = "catalog-empty", span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    Modifier.fillMaxWidth().padding(vertical = 36.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("Escolha uma categoria acima para carregar o catálogo.", color = cinemaGrey)
+                    if (hasRemoteCategories) {
+                        everyCineDefaultRemoteGroup(kindGroups, kind)?.let { defaultGroup ->
+                            ActionButton("Carregar catálogo", { onCategory(defaultGroup.label) }, compact = true)
+                        }
+                    }
+                }
             }
         }
     }
@@ -1007,7 +1083,7 @@ private fun EveryCineMovieDetail(
                         verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         ActionButton("▶  Reproduzir", {
                             onAction(AppAction.Play(entry)); onAction(AppAction.CloseMovie)
-                        }, Modifier.fillMaxWidth(), selected = true, enabled = !loading)
+                        }, Modifier.fillMaxWidth(), selected = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(entry.group, color = cinemaGrey, fontSize = 13.sp,
                                 modifier = Modifier.weight(1f))

@@ -220,6 +220,18 @@ fun OttNativeApp(
         }
     }
     val groups = if (lazyXtream && remoteKind != null) remoteDisplayGroups.map { it.label } else loadedGroups
+    var autoLoadedKinds by remember(state.selectedSourceId) { mutableStateOf(emptySet<MediaKind>()) }
+    LaunchedEffect(lazyXtream, remoteKind, remoteDisplayGroups, group, search, state.selectedSourceId) {
+        if (lazyXtream && remoteKind != null && group.isBlank() && search.isBlank() &&
+            remoteKind !in autoLoadedKinds && tabEntries.isEmpty()
+        ) {
+            everyCineDefaultRemoteGroup(remoteDisplayGroups, remoteKind)?.let { defaultGroup ->
+                autoLoadedKinds = autoLoadedKinds + remoteKind
+                group = defaultGroup.label
+                onAction(AppAction.OpenXtreamGroups(remoteKind, defaultGroup.sources.map { it.id }))
+            }
+        }
+    }
     LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream, availableLiveLabels) {
         if (!lazyXtream && !state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
             val exists = withContext(Dispatchers.Default) { tabEntries.any { entry ->

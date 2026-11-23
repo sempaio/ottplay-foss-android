@@ -3,6 +3,7 @@ package play.ott.nativeapp.ui
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.data.RecentPlayback
+import play.ott.nativeapp.data.XtreamDisplayGroup
 
 /** Every Cine has four persistent bottom pages; games are deliberately out of scope. */
 internal enum class EveryCinePage { HOME, LIVE, CATALOG, PROFILE }
@@ -84,3 +85,12 @@ internal fun everyCineVisible(
         (category.isBlank() || it.group.equals(category, ignoreCase = true)) &&
         (query.isBlank() || it.name.contains(query, ignoreCase = true) || it.group.contains(query, ignoreCase = true))
 }
+
+/** Prefer the first real category for a kind, skipping a misplaced "Filmes" bucket inside Séries when alternatives exist. */
+internal fun everyCineDefaultRemoteGroup(
+    groups: List<XtreamDisplayGroup>,
+    kind: MediaKind,
+): XtreamDisplayGroup? =
+    groups.firstOrNull {
+        it.kind == kind && !(kind == MediaKind.SERIES && it.label.equals("Filmes", ignoreCase = true))
+    } ?: groups.firstOrNull { it.kind == kind }

@@ -39,10 +39,10 @@ class ProviderRepository(
     }
 
     /** Metadata-first navigation for the operator-owned STARLINK account. */
-    suspend fun xtreamCategories(config: SourceConfig): List<XtreamGroup> = withContext(Dispatchers.IO) {
+    suspend fun xtreamCategories(config: SourceConfig, skipAuthenticate: Boolean = false): List<XtreamGroup> = withContext(Dispatchers.IO) {
         validate(config)
         require(config.kind == SourceKind.XTREAM)
-        xtream.categories(config)
+        xtream.categories(config, skipAuthenticate = skipAuthenticate)
     }
 
     suspend fun xtreamCategory(config: SourceConfig, group: XtreamGroup): Catalog = withContext(Dispatchers.IO) {

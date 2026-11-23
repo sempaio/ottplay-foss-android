@@ -1,4 +1,4 @@
-> **Atualização documental de 22/11/2026:** o estado mais recente verificado (branch `feature/starlink-everycine-fluxo-visual-20261117`, 312 testes unitários, lint zerado, R8 oficial validado e sessão M81 de 3 dispositivos) está em [docs/ESTADO_ATUAL_STARLINK_20261122.md](docs/ESTADO_ATUAL_STARLINK_20261122.md).
+> **Atualização documental de 22/11/2026:** o estado mais recente verificado (branch `feature/starlink-everycine-fluxo-visual-20261117`, **316 testes unitários**, lint zerado, R8 oficial validado, sessão M81 de 3 dispositivos e otimizações Xtream/Coil/cache em memória) está em [docs/ESTADO_ATUAL_STARLINK_20261122.md](docs/ESTADO_ATUAL_STARLINK_20261122.md).
 
 > **Atualização documental de 30/10/2026:** o estado mais recente verificado para a candidata Android 0.3.2/Para Você está em [docs/ESTADO_GITHUB_STARLINK_032_20261030.md](docs/ESTADO_GITHUB_STARLINK_032_20261030.md). O restante deste arquivo é registro histórico e não constitui aprovação da candidata atual.
 

@@ -39,8 +39,8 @@ internal class XtreamProvider(private val http: ProviderHttp) {
     }
 
     /** Fetch only the three compact category lists; no complete streams request. */
-    suspend fun categories(config: SourceConfig): List<XtreamGroup> = translateFailure {
-        authenticate(config)
+    suspend fun categories(config: SourceConfig, skipAuthenticate: Boolean = false): List<XtreamGroup> = translateFailure {
+        if (!skipAuthenticate) authenticate(config)
         val types = listOf(
             MediaKind.LIVE to "get_live_categories",
             MediaKind.MOVIE to "get_vod_categories",
