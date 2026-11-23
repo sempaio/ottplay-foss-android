@@ -10,7 +10,9 @@ import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -67,8 +69,21 @@ class PlaybackService : MediaSessionService() {
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
         httpClient = client
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 50_000,
+                /* bufferForPlaybackMs = */ 1_000,
+                /* bufferForPlaybackAfterRebufferMs = */ 2_000,
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .setBackBuffer(10_000, true)
+            .build()
         val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(ItemMediaSourceFactory(this, client))
+            .setLoadControl(loadControl)
+            .setSeekBackIncrementMs(15_000L)
+            .setSeekForwardIncrementMs(15_000L)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
                 true,
@@ -76,6 +91,48 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        var stallJob: kotlinx.coroutines.Job? = null
+        var autoRetryCount = 0
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                stallJob?.cancel()
+                stallJob = null
+                if (playbackState == Player.STATE_READY) {
+                    autoRetryCount = 0
+                } else if (playbackState == Player.STATE_BUFFERING) {
+                    val isLive = exoPlayer.isCurrentMediaItemLive || exoPlayer.duration == C.TIME_UNSET
+                    if (isLive && exoPlayer.playWhenReady) {
+                        stallJob = serviceScope.launch {
+                            kotlinx.coroutines.delay(6_000L)
+                            if (exoPlayer.playbackState == Player.STATE_BUFFERING && exoPlayer.playWhenReady) {
+                                exoPlayer.seekToDefaultPosition()
+                                exoPlayer.prepare()
+                                exoPlayer.play()
+                            }
+                        }
+                    }
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                stallJob?.cancel()
+                stallJob = null
+                val isLive = exoPlayer.isCurrentMediaItemLive || exoPlayer.duration == C.TIME_UNSET
+                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                    exoPlayer.seekToDefaultPosition()
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                } else if (isLive && autoRetryCount < 5) {
+                    autoRetryCount++
+                    serviceScope.launch {
+                        kotlinx.coroutines.delay(1_200L * autoRetryCount)
+                        exoPlayer.seekToDefaultPosition()
+                        exoPlayer.prepare()
+                        exoPlayer.play()
+                    }
+                }
+            }
+        })
         player = exoPlayer
         val app = application as OttplayApplication
         val repository = app.repository

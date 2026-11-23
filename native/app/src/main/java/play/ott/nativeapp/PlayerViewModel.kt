@@ -46,6 +46,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             next.copy(sources = if (forceLocalization || next.sources !== old.sources) next.sources.map(repository::displaySource) else old.sources,
                 entries = if (forceLocalization || next.entries !== old.entries) next.entries.map(repository::displayEntry) else old.entries,
                 episodes = if (forceLocalization || next.episodes !== old.episodes) next.episodes.map(repository::displayEntry) else old.episodes,
+                playbackEpisodes = if (forceLocalization || next.playbackEpisodes !== old.playbackEpisodes) next.playbackEpisodes.map(repository::displayEntry) else old.playbackEpisodes,
                 playingEntry = if (forceLocalization || next.playingEntry !== old.playingEntry) next.playingEntry?.let(repository::displayEntry) else old.playingEntry,
                 epgEntry = if (forceLocalization || next.epgEntry !== old.epgEntry) next.epgEntry?.let(repository::displayEntry) else old.epgEntry,
                 seriesEntry = if (forceLocalization || next.seriesEntry !== old.seriesEntry) next.seriesEntry?.let(repository::displayEntry) else old.seriesEntry)
@@ -450,6 +451,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 repository.preferences.update { it.copy(activeForYouProfileId = action.id) }
             }
             is AppAction.Play -> play(action.entry)
+            is AppAction.PlayAdjacent -> playAdjacent(action.direction)
             is AppAction.OpenEpg -> {
                 detailJob?.cancel()
                 updateState { it.copy(epgEntry = action.entry, epgLoading = true, programmes = emptyList()) }
@@ -496,9 +498,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     else action.entry to emptyList()
                     updateState { current ->
                         if (current.seriesEntry?.id == action.entry.id) {
+                            val sortedEpisodes = episodes.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.name }))
                             current.copy(
                                 seriesEntry = enrichedSeries,
                                 episodes = episodes,
+                                playbackEpisodes = sortedEpisodes.ifEmpty { current.playbackEpisodes },
                                 isBusy = false,
                             )
                         } else current
@@ -703,12 +707,48 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun playAdjacent(direction: Int) {
+        if (direction == 0) return
+        val current = state.value.playingEntry ?: return
+        val candidates: List<MediaEntry> = when {
+            state.value.playbackEpisodes.any { it.id == current.id && it.sourceId == current.sourceId } ->
+                state.value.playbackEpisodes
+            current.kind == MediaKind.LIVE ->
+                state.value.entries.filter { it.kind == MediaKind.LIVE && it.sourceId == current.sourceId }
+            current.kind == MediaKind.MOVIE -> {
+                val sameGroup = state.value.entries.filter {
+                    it.kind == MediaKind.MOVIE && it.sourceId == current.sourceId &&
+                        (current.group.isBlank() || it.group.equals(current.group, ignoreCase = true))
+                }
+                if (sameGroup.size > 1) sameGroup
+                else state.value.entries.filter { it.kind == MediaKind.MOVIE && it.sourceId == current.sourceId }
+            }
+            else -> emptyList()
+        }
+        if (candidates.size <= 1) return
+        val index = candidates.indexOfFirst { it.id == current.id && it.sourceId == current.sourceId }
+        if (index < 0) return
+        val nextIndex = if (current.kind == MediaKind.LIVE) {
+            (index + direction).mod(candidates.size)
+        } else {
+            index + direction
+        }
+        val target = candidates.getOrNull(nextIndex) ?: return
+        play(target)
+    }
+
     private fun play(entry: MediaEntry, resolved: PlaybackStream? = null) {
         if (entry.playbackUnsupportedReason != null) {
             setErrorText { message(R.string.message_unsupported_playback) }
             return
         }
         if (entry.kind == MediaKind.SERIES) { dispatch(AppAction.OpenSeries(entry)); return }
+        if (state.value.episodes.any { it.id == entry.id && it.sourceId == entry.sourceId }) {
+            val sortedEpisodes = state.value.episodes.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.name }))
+            updateState { it.copy(playbackEpisodes = sortedEpisodes) }
+        } else if (state.value.playbackEpisodes.none { it.id == entry.id && it.sourceId == entry.sourceId }) {
+            updateState { it.copy(playbackEpisodes = emptyList()) }
+        }
         // MovieDialog has already fetched Xtream get_vod_info and passes that exact entry.
         // Capture this before CloseMovie clears the dialog state on the next UI action.
         val movieDetailsLoaded = entry.kind == MediaKind.MOVIE && !state.value.isBusy &&

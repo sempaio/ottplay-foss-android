@@ -20,6 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.stringResource
 import play.ott.nativeapp.R
+import android.content.Intent
+import android.widget.Toast
+import play.ott.nativeapp.core.MediaKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +65,7 @@ internal fun NativePlayerPane(
     onTrackPreference: (Boolean, TrackPreference) -> Unit,
     modifier: Modifier = Modifier,
     inPictureInPicture: Boolean = false,
+    onPlayAdjacent: ((Int) -> Unit)? = null,
 ) {
     var resizeMode by rememberSaveable { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var buffering by remember(controller) { mutableStateOf(controller == null || controller.playbackState == Player.STATE_BUFFERING) }
@@ -125,18 +129,57 @@ internal fun NativePlayerPane(
     }
     Column(modifier.testTag("player-container").background(Color.Black)) {
         if (!inPictureInPicture) Row(
-            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NeonEmblem(Modifier.size(32.dp))
+            NeonEmblem(Modifier.size(28.dp))
             Text(
                 entry.name,
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(vertical = 12.dp),
+                modifier = Modifier.weight(1f).padding(vertical = 8.dp),
             )
+            if (onPlayAdjacent != null) {
+                ActionButton("⏮ Ant", { onPlayAdjacent(-1) }, compact = true)
+                ActionButton("Próx ⏭", { onPlayAdjacent(1) }, compact = true)
+            }
+            val aspectLabel = when (resizeMode) {
+                AspectRatioFrameLayout.RESIZE_MODE_FIT -> "Ajustar"
+                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
+                AspectRatioFrameLayout.RESIZE_MODE_FILL -> "Esticar"
+                else -> "Tela"
+            }
+            ActionButton("📺 $aspectLabel", {
+                resizeMode = when (resizeMode) {
+                    AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+            }, compact = true)
+            ActionButton("📡 Cast", {
+                val streamUri = controller?.currentMediaItem?.localConfiguration?.uri
+                    ?: controller?.currentMediaItem?.requestMetadata?.mediaUri
+                if (streamUri != null) {
+                    val castIntent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(streamUri, if (entry.kind == MediaKind.LIVE) "application/x-mpegURL" else "video/*")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    val chooser = Intent.createChooser(castIntent, "Transmitir / Espelhar reprodução")
+                    chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    try {
+                        context.startActivity(chooser)
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "Nenhum aplicativo de transmissão encontrado", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "URL de transmissão indisponível", Toast.LENGTH_SHORT).show()
+                }
+            }, compact = true)
+            ActionButton(if (controlsVisible) "Ocultar" else "Controles", {
+                if (controlsVisible) nativeView?.hideController() else nativeView?.showController()
+            }, compact = true)
             ActionButton(if (fullscreen) stringResource(R.string.dialog_back) else stringResource(R.string.dialog_fullscreen), onFullscreen, compact = true)
             ActionButton(stringResource(R.string.dialog_more), { optionsOpen = true }, Modifier.testTag("player-options"), compact = true)
         }
@@ -145,13 +188,14 @@ internal fun NativePlayerPane(
                 factory = { context ->
                     RemotePlayerView(context).apply {
                         nativeView = this
+                        this.onPlayAdjacent = onPlayAdjacent
                         openOptions = { optionsOpen = true }
                         tag = "ott-native-video"
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         player = controller
                         useController = true
                         controllerAutoShow = true
-                        controllerShowTimeoutMs = 4000
+                        controllerShowTimeoutMs = 3500
                         if (isTv) setControllerAnimationEnabled(false)
                         setShowSubtitleButton(!isTv)
                         if (isTv) {
@@ -163,6 +207,15 @@ internal fun NativePlayerPane(
                         setShowRewindButton(true)
                         setShowPreviousButton(true)
                         setShowNextButton(true)
+                        findViewById<View>(androidx.media3.ui.R.id.exo_next)?.setOnClickListener {
+                            onPlayAdjacent?.invoke(1)
+                        }
+                        findViewById<View>(androidx.media3.ui.R.id.exo_prev)?.setOnClickListener {
+                            onPlayAdjacent?.invoke(-1)
+                        }
+                        setOnClickListener {
+                            if (isControllerFullyVisible) hideController() else showController()
+                        }
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         setKeepContentOnPlayerReset(true)
                         isFocusable = true
@@ -180,6 +233,7 @@ internal fun NativePlayerPane(
                 },
                 update = { view ->
                     view.contentDescription = playerDescription
+                    view.onPlayAdjacent = onPlayAdjacent
                     if (view.player !== controller) view.player = controller
                     view.resizeMode = resizeMode
                     view.useController = !inPictureInPicture
@@ -207,6 +261,7 @@ internal fun NativePlayerPane(
 @androidx.annotation.OptIn(UnstableApi::class)
 private class RemotePlayerView(context: Context) : PlayerView(context) {
     var openOptions: () -> Unit = {}
+    var onPlayAdjacent: ((Int) -> Unit)? = null
     private val remoteInput = TvRemoteInput()
 
     override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean =
@@ -286,10 +341,17 @@ private class RemotePlayerView(context: Context) : PlayerView(context) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) openOptions()
             return true
         }
-        val currentPlayer = player ?: return super.dispatchKeyEvent(event)
-        val forward = event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP
-        val backward = event.keyCode == KeyEvent.KEYCODE_CHANNEL_DOWN
+        val forward = event.keyCode == KeyEvent.KEYCODE_CHANNEL_UP || event.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT
+        val backward = event.keyCode == KeyEvent.KEYCODE_CHANNEL_DOWN || event.keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS
         if (!forward && !backward) return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            val adjacent = onPlayAdjacent
+            if (adjacent != null) {
+                adjacent(if (forward) 1 else -1)
+                return true
+            }
+        }
+        val currentPlayer = player ?: return super.dispatchKeyEvent(event)
         val itemCommand = if (forward) Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM else Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
         val generalCommand = if (forward) Player.COMMAND_SEEK_TO_NEXT else Player.COMMAND_SEEK_TO_PREVIOUS
         if (!currentPlayer.isCommandAvailable(itemCommand) && !currentPlayer.isCommandAvailable(generalCommand)) return super.dispatchKeyEvent(event)

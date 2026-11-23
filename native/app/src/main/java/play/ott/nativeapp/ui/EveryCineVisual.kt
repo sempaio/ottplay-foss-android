@@ -200,6 +200,7 @@ internal fun EveryCineVisualApp(
                 onRetry = { onAction(AppAction.Play(state.playingEntry)) },
                 onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
                 modifier = Modifier.fillMaxSize(), inPictureInPicture = inPictureInPicture,
+                onPlayAdjacent = { dir -> onAction(AppAction.PlayAdjacent(dir)) },
             )
         } else {
             Column(Modifier.fillMaxSize()) {
@@ -758,6 +759,7 @@ private fun EveryCineInlinePlayer(
             onRetry = { onAction(AppAction.Play(playing)) },
             onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
             modifier = Modifier.fillMaxSize(),
+            onPlayAdjacent = { dir -> onAction(AppAction.PlayAdjacent(dir)) },
         )
     }
 }

@@ -332,7 +332,8 @@ fun OttNativeApp(
                 if ((fullscreen || inPictureInPicture) && state.playingEntry != null) {
                     NativePlayerPane(state.playingEntry, controller, true, { onAction(AppAction.StopPlayback) }, onPictureInPicture,
                         { onAction(AppAction.StopPlayback) }, { onAction(AppAction.Play(state.playingEntry)) },
-                        { audio, preference -> onAction(AppAction.SetTrackPreference(audio, preference)) }, Modifier.fillMaxSize(), inPictureInPicture)
+                        { audio, preference -> onAction(AppAction.SetTrackPreference(audio, preference)) }, Modifier.fillMaxSize(), inPictureInPicture,
+                        onPlayAdjacent = { dir -> onAction(AppAction.PlayAdjacent(dir)) })
                 } else {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val wide = isTv || maxWidth >= 840.dp
