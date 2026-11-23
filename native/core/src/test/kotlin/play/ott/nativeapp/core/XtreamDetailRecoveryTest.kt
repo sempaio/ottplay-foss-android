@@ -19,6 +19,16 @@ class XtreamDetailRecoveryTest {
     private val series = MediaEntry("series-8", source.id, "Fixture series", kind = MediaKind.SERIES, providerId = "8")
     private val live = MediaEntry("live-9", source.id, "Fixture live", kind = MediaKind.LIVE, providerId = "9")
 
+    @Test fun `shared source artwork is hidden only for different titles`() {
+        val same = "https://fixture.invalid/shared.jpg"
+        val entries = listOf(movie.copy(logo = same), movie.copy(id = "movie-8", name = "Other", logo = same),
+            movie.copy(id = "movie-9", logo = "https://fixture.invalid/unique.jpg"))
+        val result = XtreamProvider(ProviderHttp(OkHttpClient(), RemoteTransportPolicy(false))).withoutSharedArtwork(entries)
+        assertEquals("", result[0].logo)
+        assertEquals("", result[1].logo)
+        assertEquals("https://fixture.invalid/unique.jpg", result[2].logo)
+    }
+
     private fun exercise(operation: String, failures: Int = 1, status: Int? = null,
         tls: Boolean = false, block: suspend (ProviderRepository, AtomicInteger) -> Unit) = runBlocking {
         val calls = AtomicInteger()
@@ -53,6 +63,39 @@ class XtreamDetailRecoveryTest {
         assertEquals(movie.id, result.id)
         assertEquals(movie.url, result.url)
         assertEquals(2, calls.get())
+    }
+
+    @Test fun `pending TMDB detail is fetched again and preserves playback`() = runBlocking {
+        val calls = AtomicInteger()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val attempt = calls.incrementAndGet()
+            val body = if (attempt == 1)
+                """{"info":{"metadata_pending":true,"description":"","movie_image":""},"movie_data":{"container_extension":"mp4"}}"""
+            else """{"info":{"metadata_pending":false,"description":"TMDB synopsis","movie_image":"https://image.tmdb.org/t/p/w500/poster.jpg","poster_source":"tmdb"},"movie_data":{"container_extension":"mp4"}}"""
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("Fixture").body(body.toResponseBody()).build()
+        }.build()
+        try {
+            val result = ProviderRepository(client).loadMovieInfo(source, movie.copy(logo = ""))
+            assertEquals(2, calls.get())
+            assertEquals("TMDB synopsis", result.description)
+            assertEquals("https://image.tmdb.org/t/p/w500/poster.jpg", result.logo)
+            assertEquals(movie.url, result.url)
+        } finally { client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
+    }
+
+    @Test fun `series detail brings synopsis and TMDB cover to dialog`() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val body = """{"info":{"plot":"Series synopsis","cover":"https://image.tmdb.org/t/p/w500/series.jpg","poster_source":"tmdb"}}"""
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("Fixture").body(body.toResponseBody()).build()
+        }.build()
+        try {
+            val result = ProviderRepository(client).loadSeriesInfo(source, series)
+            assertEquals("Series synopsis", result.description)
+            assertEquals("https://image.tmdb.org/t/p/w500/series.jpg", result.logo)
+            assertEquals(series.id, result.id)
+        } finally { client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
     }
 
     @Test fun `movie playback resolution recovers without fetching the video`() = exercise("get_vod_info") { repository, calls ->

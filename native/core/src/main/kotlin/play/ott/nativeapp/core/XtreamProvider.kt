@@ -96,7 +96,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
                 headerOrigins = headerOrigins(config.headers, config.url),
             )
         }
-        Catalog(entries, listOf(config.epgUrl.ifBlank { routes.epg() }))
+        Catalog(withoutSharedArtwork(entries), listOf(config.epgUrl.ifBlank { routes.epg() }))
     }
 
     suspend fun episodes(config: SourceConfig, series: MediaEntry): List<MediaEntry> = translateFailure {
@@ -119,11 +119,19 @@ internal class XtreamProvider(private val http: ProviderHttp) {
 
     /** VOD detail is lazy: one request only when the user starts a movie. */
     suspend fun vod(config: SourceConfig, entry: MediaEntry): MediaEntry {
-        val data = try { api(config, "get_vod_info", "vod_id", entry.providerId) as? JsonObject }
-            catch (error: ProviderException) { if (error.statusCode in listOf(404, 405, 501)) return entry else throw error }
-            ?: return entry
-        val info = data["info"] as? JsonObject
-        val movie = data["movie_data"] as? JsonObject
+        var data: JsonObject? = null
+        // M81 returns quickly while its bounded TMDB lookup continues in the background.
+        // Poll only when the server explicitly says that metadata is still pending.
+        for (attempt in 0..3) {
+            data = try { api(config, "get_vod_info", "vod_id", entry.providerId) as? JsonObject }
+                catch (error: ProviderException) { if (error.statusCode in listOf(404, 405, 501)) return entry else throw error }
+            val pending = (data?.get("info") as? JsonObject)?.get("metadata_pending")?.jsonPrimitive?.booleanOrNull == true
+            if (!pending || attempt == 3) break
+            delay(1000)
+        }
+        val result = data ?: return entry
+        val info = result["info"] as? JsonObject
+        val movie = result["movie_data"] as? JsonObject
         val extension = movie?.string("container_extension").orEmpty()
         // Never assume a server transcodes: use the advertised container, if valid.
         val url = if (extension.matches(Regex("[A-Za-z0-9]{1,10}"))) {
@@ -132,8 +140,33 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             segments[segments.lastIndex] = segments.last().substringBeforeLast('.') + "." + extension
             parsed.newBuilder().encodedPath("/").apply { segments.forEach { addPathSegment(it) } }.build().toString()
         } else entry.url
+        val image = info?.string("movie_image").orEmpty()
+        val trustedImage = if (entry.logo.isBlank() && info?.string("poster_source") != "tmdb") "" else image
         return entry.copy(url = url, description = info?.string("description").orEmpty().ifBlank { entry.description },
-            logo = info?.string("movie_image").orEmpty().ifBlank { entry.logo })
+            logo = trustedImage.ifBlank { entry.logo })
+    }
+
+    suspend fun seriesInfo(config: SourceConfig, entry: MediaEntry): MediaEntry {
+        var data: JsonObject? = null
+        for (attempt in 0..3) {
+            data = api(config, "get_series_info", "series_id", entry.providerId) as? JsonObject
+            val pending = (data?.get("info") as? JsonObject)?.get("metadata_pending")?.jsonPrimitive?.booleanOrNull == true
+            if (!pending || attempt == 3) break
+            delay(1000)
+        }
+        val info = data?.get("info") as? JsonObject ?: return entry
+        val image = info.string("cover")
+        val trustedImage = if (entry.logo.isBlank() && info.string("poster_source") != "tmdb") "" else image
+        return entry.copy(description = info.string("plot").ifBlank { info.string("description") }.ifBlank { entry.description },
+            logo = trustedImage.ifBlank { entry.logo })
+    }
+
+    /** A source logo reused for distinct titles is not a trustworthy poster. */
+    internal fun withoutSharedArtwork(entries: List<MediaEntry>): List<MediaEntry> {
+        val titlesByLogo = entries.asSequence().filter { it.logo.isNotBlank() }
+            .groupBy({ it.logo }, { it.name.trim().lowercase() })
+        val shared = titlesByLogo.filterValues { names -> names.distinct().size > 1 }.keys
+        return entries.map { if (it.logo in shared) it.copy(logo = "") else it }
     }
 
     suspend fun shortEpg(config: SourceConfig, entry: MediaEntry): List<Programme> {

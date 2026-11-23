@@ -408,7 +408,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val episodes = if (SeriesRecovery.needsEpisodeLookup(source.kind, action.entry))
                         repository.providers.loadEpisodes(source, action.entry)
                     else emptyList()
-                    updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
+                    val series = if (source.kind == SourceKind.XTREAM)
+                        repository.providers.loadSeriesInfo(source, action.entry) else action.entry
+                    updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(seriesEntry = series, episodes = episodes, isBusy = false) else it }
                 }
             }
             AppAction.CloseEpg -> { detailJob?.cancel(); updateState { it.copy(epgEntry = null, epgLoading = false, programmes = emptyList()) } }
