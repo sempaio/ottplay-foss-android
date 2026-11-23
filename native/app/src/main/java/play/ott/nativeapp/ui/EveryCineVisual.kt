@@ -677,7 +677,8 @@ private fun EveryCineLive(
                 everyCineVisibleRemote(state.entries, MediaKind.LIVE, remoteGroupNames, search)
             else everyCineVisible(state.entries, MediaKind.LIVE,
                 if (remoteCategories.isNotEmpty()) "" else selectedCategory, search)
-            EveryCineListState(liveQualityCards(SmartLiveCatalog.prominentFirst(visible)), ready = true)
+            val cards = liveQualityCards(SmartLiveCatalog.prominentFirst(visible))
+            EveryCineListState(LiveSeasonGroups.join(cards), ready = true)
         }
     }
     val channelCards = channelCardsState.items

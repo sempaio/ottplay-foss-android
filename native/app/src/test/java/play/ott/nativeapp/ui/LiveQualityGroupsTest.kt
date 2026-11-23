@@ -81,10 +81,33 @@ class LiveQualityGroupsTest {
         assertEquals(4, cards.size)
     }
 
-    @Test fun unknownQualityOrRepeatedNameIsNotSilentlyMerged() {
+    @Test fun unknownQualityOrRepeatedNameIsConsolidated() {
         val cards = liveQualityCards(listOf(entry("Canal Local"), entry("Canal Local"),
             entry("HD TV Brasil"), entry("TV Brasil HD")))
-        assertEquals(4, cards.size)
+        assertEquals(3, cards.size)
+    }
+
+    @Test fun sameQualityWithServerNumbersOrMissingQualitySuffixAreMerged() {
+        val cards = liveQualityCards(listOf(
+            entry("COMBATE"),
+            entry("COMBATE HD ¹"),
+            entry("COMBATE HD ²")
+        ))
+        assertEquals(1, cards.size)
+        assertEquals("COMBATE", cards.single().displayName)
+        assertEquals(3, cards.single().options.size)
+    }
+
+    @Test fun sbtServerDuplicatesAreMerged() {
+        val cards = liveQualityCards(listOf(
+            entry("SBT FHD"),
+            entry("SBT FHD ¹"),
+            entry("SBT FHD ²"),
+            entry("SBT HD ¹")
+        ))
+        assertEquals(1, cards.size)
+        assertEquals("SBT", cards.single().displayName)
+        assertEquals(4, cards.single().options.size)
     }
 
     @Test fun originalEntriesAreUnchangedForPlaybackAndFavorite() {
