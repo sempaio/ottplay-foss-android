@@ -11,7 +11,7 @@
 | **Total de testes unitários** | ✅ **316/316** | `86 core + 230 app` (inclui `VisitedXtreamCacheTest`, categoria padrão em `EveryCineVisualPlanTest`, persistência criptografada e sessão M81) |
 | `:app:lintLayout` | ✅ PASS | **0 erros** (corrigidos 14 erros `MissingTranslation` em strings específicas STARLINK) |
 | `:app:assembleEveryCineQa` | ✅ PASS | Pacote `br.starlink.iptv.everycineqa` (`0.3.2-everycine-visual-qa`, `24.102.600` bytes, SHA-256 `f3cb8883b132fbbcf12912022c8400397c5586828ef418aff621b67ad9749d87`), `apksigner verify` OK |
-| `:app:assembleOfficial` | ✅ PASS | Pacote `br.starlink.iptv` (`0.3.2`), minificação **R8** + `lintVitalOfficial` OK (`app-official-unsigned.apk`, `6.440.050` bytes, aguardando assinatura release) |
+| `:app:assembleOfficial` | ✅ PASS | Pacote `br.starlink.iptv` (`0.3.2`, `versionCode 10`), minificação **R8** + `lintVitalOfficial` OK; assinado com `starlink_iptv_release.keystore` (`STARLINK-EveryCine-Official-20261122.apk`, `6.489.065` bytes, SHA-256 `13d628229ce3d7b8b5b9e092fcafbca05e50c5b03894915645855580c636ded1`, cert `21:61:B6:BE:...`, `apksigner verify` v2/v3 OK) |
 
 ## 2. Entregas Aplicadas nesta Rodada
 
@@ -42,4 +42,4 @@
 
 - Executar testes instrumentados em dispositivo físico / TV Box e emulador API compatível para validar `EveryCineSeriesDetail`, swipe entre abas, PiP e navegação D-Pad ponta a ponta.
 - Internacionalizar rótulos restantes em `EveryCineVisual.kt` (atualmente em PT-BR) caso o cliente final opere fora do idioma português.
-- Decidir o momento de promoção do fluxo visual Every Cine para assinatura oficial (`official`) e merge na branch principal após aprovação manual do APK `STARLINK-EVERYCINE-VISUAL-TESTE`.
+- Fluxo visual Every Cine **promovido e publicado** como APK oficial assinado (`br.starlink.iptv`, `0.3.2` / `versionCode 10`, `STARLINK-EveryCine-Official-20261122.apk`) na entrega padrão `starlink-iptv` do painel M81 em 22/11/2026; resta apenas o merge planejado na branch principal quando autorizado.
