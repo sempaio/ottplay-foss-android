@@ -72,15 +72,15 @@ android {
             matchingFallbacks += "debug"
             resValue("string", "app_name", "STARLINK Para Você Teste")
         }
-        // Instalable review APK: unique application ID, never overwrites QA 9.1.
-        create("qaM81Test") {
+        // Visual prototype installs separately from QA 9.1 and previous M81 test builds.
+        create("everyCineQa") {
             initWith(getByName("debug"))
             signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "CUSTOMER_MODE", "true")
-            applicationIdSuffix = ".qam81test"
-            versionNameSuffix = "-m81-review"
+            applicationIdSuffix = ".everycineqa"
+            versionNameSuffix = "-everycine-visual-qa"
             matchingFallbacks += "debug"
-            resValue("string", "app_name", "STARLINK M81 Teste")
+            resValue("string", "app_name", "STARLINK Visual Teste")
         }
         release {
             isMinifyEnabled = true
@@ -93,6 +93,8 @@ android {
         create("official") {
             initWith(getByName("release"))
             buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
+            manifestPlaceholders["allowCleartextTraffic"] = "true"
             matchingFallbacks += "release"
             resValue("string", "app_name", "STARLINK IPTV")
         }

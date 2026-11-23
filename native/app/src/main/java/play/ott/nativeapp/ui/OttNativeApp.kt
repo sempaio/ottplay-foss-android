@@ -134,6 +134,24 @@ fun OttNativeApp(
         }
         return
     }
+    // Visual contract from the user's Every Cine navigation and layout resources.
+    // Only the STARLINK customer variant uses this shell; original OTT screen remains
+    // available for internal comparison and the QA 9.1 installed app is untouched.
+    if (customerMode) {
+        OttTheme {
+            EveryCineVisualApp(
+                state, onAction, controller,
+                onPictureInPicture = onPictureInPicture,
+                onFullscreenChanged = onFullscreenChanged,
+                inPictureInPicture = inPictureInPicture,
+            )
+            if (state.playingEntry == null) {
+                StarlinkUpdatePrompt(state, onAction)
+                StarlinkWelcomePrompt(state, onAction)
+            }
+        }
+        return
+    }
     val keyToCatalog = if (LocalLayoutDirection.current == LayoutDirection.Rtl) Key.DirectionLeft else Key.DirectionRight
     var tab by rememberSaveable { mutableStateOf(LibraryTab.HOME) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -202,6 +220,18 @@ fun OttNativeApp(
         }
     }
     val groups = if (lazyXtream && remoteKind != null) remoteDisplayGroups.map { it.label } else loadedGroups
+    var autoLoadedKinds by remember(state.selectedSourceId) { mutableStateOf(emptySet<MediaKind>()) }
+    LaunchedEffect(lazyXtream, remoteKind, remoteDisplayGroups, group, search, state.selectedSourceId) {
+        if (lazyXtream && remoteKind != null && group.isBlank() && search.isBlank() &&
+            remoteKind !in autoLoadedKinds && tabEntries.isEmpty()
+        ) {
+            everyCineDefaultRemoteGroup(remoteDisplayGroups, remoteKind)?.let { defaultGroup ->
+                autoLoadedKinds = autoLoadedKinds + remoteKind
+                group = defaultGroup.label
+                onAction(AppAction.OpenXtreamGroups(remoteKind, defaultGroup.sources.map { it.id }))
+            }
+        }
+    }
     LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream, availableLiveLabels) {
         if (!lazyXtream && !state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
             val exists = withContext(Dispatchers.Default) { tabEntries.any { entry ->
@@ -302,7 +332,8 @@ fun OttNativeApp(
                 if ((fullscreen || inPictureInPicture) && state.playingEntry != null) {
                     NativePlayerPane(state.playingEntry, controller, true, { onAction(AppAction.StopPlayback) }, onPictureInPicture,
                         { onAction(AppAction.StopPlayback) }, { onAction(AppAction.Play(state.playingEntry)) },
-                        { audio, preference -> onAction(AppAction.SetTrackPreference(audio, preference)) }, Modifier.fillMaxSize(), inPictureInPicture)
+                        { audio, preference -> onAction(AppAction.SetTrackPreference(audio, preference)) }, Modifier.fillMaxSize(), inPictureInPicture,
+                        onPlayAdjacent = { dir -> onAction(AppAction.PlayAdjacent(dir)) })
                 } else {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val wide = isTv || maxWidth >= 840.dp
@@ -755,7 +786,7 @@ private fun SourcesDialog(state: AppUiState, onAction: (AppAction) -> Unit, onDi
 }
 
 @Composable
-private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onForYou: () -> Unit, onDismiss: () -> Unit) {
+internal fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, customerMode: Boolean, onGuide: () -> Unit, onFavorites: () -> Unit, onSources: () -> Unit, onPrivacy: () -> Unit, onForYou: () -> Unit, onDismiss: () -> Unit) {
     val configuration = LocalConfiguration.current
     val isTv = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     var languageTag by remember(configuration) { mutableStateOf(AppLanguages.currentTag()) }
@@ -808,7 +839,7 @@ private fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, cus
                 SupportButton()
                 ActionButton(stringResource(R.string.neon_updates), { onAction(AppAction.CheckUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
                 if (state.updateAvailable) ActionButton(stringResource(R.string.neon_update_install), { onAction(AppAction.InstallUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
-                Text("STARLINK IPTV Prévia · " + play.ott.nativeapp.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.app_name) + " · " + play.ott.nativeapp.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
                 Text(stringResource(R.string.library_language), style = MaterialTheme.typography.titleSmall)
                 ActionButton(languageName, { showLanguages = true },
                     Modifier.fillMaxWidth().focusRequester(languageFocus).testTag("settings-language"))

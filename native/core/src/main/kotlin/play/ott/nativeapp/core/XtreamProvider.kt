@@ -39,8 +39,8 @@ internal class XtreamProvider(private val http: ProviderHttp) {
     }
 
     /** Fetch only the three compact category lists; no complete streams request. */
-    suspend fun categories(config: SourceConfig): List<XtreamGroup> = translateFailure {
-        authenticate(config)
+    suspend fun categories(config: SourceConfig, skipAuthenticate: Boolean = false): List<XtreamGroup> = translateFailure {
+        if (!skipAuthenticate) authenticate(config)
         val types = listOf(
             MediaKind.LIVE to "get_live_categories",
             MediaKind.MOVIE to "get_vod_categories",
@@ -99,14 +99,23 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         Catalog(entries, listOf(config.epgUrl.ifBlank { routes.epg() }))
     }
 
-    suspend fun episodes(config: SourceConfig, series: MediaEntry): List<MediaEntry> = translateFailure {
+    suspend fun episodes(config: SourceConfig, series: MediaEntry): List<MediaEntry> =
+        seriesDetails(config, series).second
+
+    suspend fun seriesDetails(config: SourceConfig, series: MediaEntry): Pair<MediaEntry, List<MediaEntry>> = translateFailure {
         val id = series.providerId
         val addresses = addresses(config)
         val request = XtreamCatalogs.seriesRequest(ProviderValue.text(id), "", XtreamFormat.ANDROID)
-        val data = parseProviderJson(getWithTimeoutRecovery(addresses.api(request), config.headers).text()).toProviderValue()
-        XtreamCatalogs.episodes(data, XtreamFormat.ANDROID, source(config), addresses,
+        val json = parseProviderJson(getWithTimeoutRecovery(addresses.api(request), config.headers).text())
+        val info = (json as? JsonObject)?.get("info") as? JsonObject
+        val seriesPlot = info?.string("plot")?.ifBlank { info.string("description") }.orEmpty().ifBlank { series.description }
+        val seriesCover = info?.string("cover").orEmpty()
+            .takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty().ifBlank { series.logo }
+        val data = json.toProviderValue()
+        val list = XtreamCatalogs.episodes(data, XtreamFormat.ANDROID, source(config), addresses,
             XtreamSeriesParent(id, series.name, series.logo), { resolveHttp(config.url, it) }, { it },
             { stableId(*it.toTypedArray()) }).entries.map { item(it, config, "UTC") }
+        series.copy(description = seriesPlot, logo = seriesCover) to list
     }
 
     suspend fun authenticate(config: SourceConfig) {
@@ -132,8 +141,10 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             segments[segments.lastIndex] = segments.last().substringBeforeLast('.') + "." + extension
             parsed.newBuilder().encodedPath("/").apply { segments.forEach { addPathSegment(it) } }.build().toString()
         } else entry.url
-        return entry.copy(url = url, description = info?.string("description").orEmpty().ifBlank { entry.description },
-            logo = info?.string("movie_image").orEmpty().ifBlank { entry.logo })
+        val description = info?.string("description")?.ifBlank { info.string("plot") }.orEmpty().ifBlank { entry.description }
+        val poster = info?.string("movie_image")?.ifBlank { info.string("poster_url") }.orEmpty()
+            .takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty().ifBlank { entry.logo }
+        return entry.copy(url = url, description = description, logo = poster)
     }
 
     suspend fun shortEpg(config: SourceConfig, entry: MediaEntry): List<Programme> {

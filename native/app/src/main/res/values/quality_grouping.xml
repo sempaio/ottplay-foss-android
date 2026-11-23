@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="starlink_quality_choose">Choose stream quality</string>
     <string name="starlink_quality_cancel">Close</string>
     <string name="starlink_quality_variants_count">%1$d quality options</string>

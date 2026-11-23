@@ -24,6 +24,7 @@ data class AppUiState(
     val welcomeTitle: String = "",
     val welcomeMessage: String = "",
     val dismissedWelcomeId: Long? = null,
+    val accountName: String = "",
     val recent: List<play.ott.nativeapp.data.RecentPlayback> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
     val forYouProfile: ForYouProfile = ForYouProfile(),
@@ -35,6 +36,7 @@ data class AppUiState(
     val movieEntry: MediaEntry? = null,
     val seriesEntry: MediaEntry? = null,
     val episodes: List<MediaEntry> = emptyList(),
+    val playbackEpisodes: List<MediaEntry> = emptyList(),
     val playingEntry: MediaEntry? = null,
     val isBusy: Boolean = false,
     val loadingMessage: String = "",
@@ -62,6 +64,7 @@ sealed interface AppAction {
     data object ResetForYou : AppAction
     data class SwitchForYouProfile(val id: String) : AppAction
     data class Play(val entry: MediaEntry) : AppAction
+    data class PlayAdjacent(val direction: Int) : AppAction
     data class OpenEpg(val entry: MediaEntry) : AppAction
     data class PlayProgramme(val entry: MediaEntry, val programme: Programme) : AppAction
     data class OpenMovie(val entry: MediaEntry) : AppAction

@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="customer_login_title">Welcome</string>
     <string name="customer_username">Username</string>
     <string name="customer_password">Password</string>
@@ -13,6 +13,8 @@
     <string name="customer_access_error">Your access is unavailable. Please contact support.</string>
     <string name="customer_auth_error">Check your username and password and try again.</string>
     <string name="customer_service_error">Temporarily unavailable. Please try again shortly.</string>
+    <string name="customer_device_limit_error" tools:ignore="MissingTranslation">This device session ended because another device signed in or the 3-device limit was reached. Sign in again to continue.</string>
+    <string name="customer_rate_limit_error" tools:ignore="MissingTranslation">Too many attempts. Wait a few minutes and try again.</string>
     <string name="customer_account">My account</string>
     <string name="customer_logout">Sign out</string>
 </resources>

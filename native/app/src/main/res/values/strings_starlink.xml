@@ -1,8 +1,8 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="starlink_login_denied">The server rejected this username or password (HTTP 401).</string>
     <string name="starlink_access_denied">The server refused access (HTTP 403). Check whether the account is active, expired or blocked. This response alone does not mean the server address is wrong.</string>
     <string name="starlink_server_unavailable">The server is temporarily unavailable (HTTP 5xx). Try again later.</string>
-    <string name="starlink_live_movie_channels">Movie TV channels</string>
-    <string name="starlink_live_series_channels">Series TV channels</string>
-    <string name="starlink_live_cartoon_channels">Cartoon TV channels</string>
+    <string name="starlink_live_movie_channels" tools:ignore="MissingTranslation">Movie TV channels</string>
+    <string name="starlink_live_series_channels" tools:ignore="MissingTranslation">Series TV channels</string>
+    <string name="starlink_live_cartoon_channels" tools:ignore="MissingTranslation">Cartoon TV channels</string>
 </resources>

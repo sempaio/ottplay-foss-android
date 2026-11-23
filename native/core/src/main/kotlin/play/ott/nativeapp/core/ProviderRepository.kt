@@ -39,10 +39,10 @@ class ProviderRepository(
     }
 
     /** Metadata-first navigation for the operator-owned STARLINK account. */
-    suspend fun xtreamCategories(config: SourceConfig): List<XtreamGroup> = withContext(Dispatchers.IO) {
+    suspend fun xtreamCategories(config: SourceConfig, skipAuthenticate: Boolean = false): List<XtreamGroup> = withContext(Dispatchers.IO) {
         validate(config)
         require(config.kind == SourceKind.XTREAM)
-        xtream.categories(config)
+        xtream.categories(config, skipAuthenticate = skipAuthenticate)
     }
 
     suspend fun xtreamCategory(config: SourceConfig, group: XtreamGroup): Catalog = withContext(Dispatchers.IO) {
@@ -79,6 +79,13 @@ class ProviderRepository(
         if (OperatorSources.relationship("android-episodes", config.kind.name.lowercase(), config.id, series.kind.name.lowercase(), series.sourceId).isNotEmpty())
             throw ProviderException("Episode lists require a series from this Xtream source")
         xtream.episodes(config, series)
+    }
+
+    suspend fun loadSeriesDetails(config: SourceConfig, series: MediaEntry): Pair<MediaEntry, List<MediaEntry>> = withContext(Dispatchers.IO) {
+        validate(config)
+        if (OperatorSources.relationship("android-episodes", config.kind.name.lowercase(), config.id, series.kind.name.lowercase(), series.sourceId).isNotEmpty())
+            throw ProviderException("Episode lists require a series from this Xtream source")
+        xtream.seriesDetails(config, series)
     }
 
     fun epgSources(config: SourceConfig, catalog: Catalog): List<String> =

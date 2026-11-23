@@ -37,7 +37,9 @@ internal class ItemMediaSourceFactory(
         val resolved = PlaybackItems.resolve(mediaItem)
         PlaybackItems.requireSupported(context, resolved)
         val http = httpFactoryFor(resolved)
+        val defaultErrorPolicy = androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(4)
         val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+            .setLoadErrorHandlingPolicy(errorPolicy ?: defaultErrorPolicy)
         val config = PlaybackItems.drm(resolved)
         if (drmProvider != null) {
             factory.setDrmSessionManagerProvider(requireNotNull(drmProvider))

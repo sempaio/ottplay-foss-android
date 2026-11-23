@@ -13,6 +13,8 @@
     <string name="customer_access_error">Seu acesso está indisponível. Fale com o suporte.</string>
     <string name="customer_auth_error">Confira seu usuário e senha e tente novamente.</string>
     <string name="customer_service_error">Serviço temporariamente indisponível. Tente novamente em instantes.</string>
+    <string name="customer_device_limit_error">A sessão deste aparelho foi encerrada porque outro aparelho entrou ou o limite de 3 dispositivos foi atingido. Entre novamente para continuar.</string>
+    <string name="customer_rate_limit_error">Muitas tentativas. Aguarde alguns minutos e tente novamente.</string>
     <string name="customer_account">Minha conta</string>
     <string name="customer_logout">Sair da conta</string>
 </resources>

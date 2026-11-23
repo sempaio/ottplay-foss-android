@@ -12,6 +12,8 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import play.ott.nativeapp.core.*
@@ -27,6 +29,7 @@ import play.ott.nativeapp.ui.AppUiState
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val updates = play.ott.nativeapp.data.UpdateClient(application)
     private val announcements = play.ott.nativeapp.data.AnnouncementClient()
+    private val deviceSessions = play.ott.nativeapp.data.M81DeviceSessionClient()
     private var latestUpdate: play.ott.nativeapp.data.AppUpdate? = null
     private var updateJob: Job? = null
     private val repository = (application as OttplayApplication).repository
@@ -43,6 +46,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             next.copy(sources = if (forceLocalization || next.sources !== old.sources) next.sources.map(repository::displaySource) else old.sources,
                 entries = if (forceLocalization || next.entries !== old.entries) next.entries.map(repository::displayEntry) else old.entries,
                 episodes = if (forceLocalization || next.episodes !== old.episodes) next.episodes.map(repository::displayEntry) else old.episodes,
+                playbackEpisodes = if (forceLocalization || next.playbackEpisodes !== old.playbackEpisodes) next.playbackEpisodes.map(repository::displayEntry) else old.playbackEpisodes,
                 playingEntry = if (forceLocalization || next.playingEntry !== old.playingEntry) next.playingEntry?.let(repository::displayEntry) else old.playingEntry,
                 epgEntry = if (forceLocalization || next.epgEntry !== old.epgEntry) next.epgEntry?.let(repository::displayEntry) else old.epgEntry,
                 seriesEntry = if (forceLocalization || next.seriesEntry !== old.seriesEntry) next.seriesEntry?.let(repository::displayEntry) else old.seriesEntry)
@@ -137,13 +141,62 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val sources = availableSources()
                 val selected = repository.preferences.data.first().selectedSourceId
                     ?.takeIf { id -> sources.any { it.id == id } } ?: sources.firstOrNull()?.id
-                updateState { it.copy(sources = sources, selectedSourceId = selected, isBusy = false) }
-                if (selected != null) load(selected, refresh = false)
+                val cachedAccountName = if (BuildConfig.CUSTOMER_MODE) {
+                    runCatching { repository.deviceSessionStore.readOrCreate().clientName }.getOrDefault("")
+                } else ""
+                updateState { it.copy(sources = sources, selectedSourceId = selected, accountName = cachedAccountName, isBusy = false) }
+                if (selected != null) {
+                    load(selected, refresh = false)
+                    val selectedSource = sources.firstOrNull { it.id == selected }
+                    if (BuildConfig.CUSTOMER_MODE && selectedSource != null && StarlinkConfig.isStarlinkAccount(selectedSource)) {
+                        validateDeviceSession(selectedSource)
+                    }
+                }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) {
                 updateState { it.copy(isBusy = false) }; setErrorText { message(R.string.message_saved_sources_unreadable) }
             }
         }
+    }
+
+    private fun validateDeviceSession(source: SourceConfig) {
+        if (!BuildConfig.CUSTOMER_MODE) return
+        viewModelScope.launch {
+            try {
+                when (val outcome = play.ott.nativeapp.data.syncM81DeviceSession(
+                    api = deviceSessions,
+                    store = repository.deviceSessionStore,
+                    username = source.username,
+                    password = source.password,
+                )) {
+                    is play.ott.nativeapp.data.M81SessionSyncOutcome.Active -> {
+                        if (outcome.clientName.isNotBlank()) {
+                            updateState { it.copy(accountName = outcome.clientName) }
+                        }
+                    }
+                    play.ott.nativeapp.data.M81SessionSyncOutcome.Revoked -> {
+                        revokeLocalSession(R.string.customer_device_limit_error)
+                    }
+                    is play.ott.nativeapp.data.M81SessionSyncOutcome.Denied -> {
+                        val errorRes = if (outcome.code == "invalid_credentials") R.string.customer_auth_error
+                        else R.string.customer_access_error
+                        revokeLocalSession(errorRes)
+                    }
+                    play.ott.nativeapp.data.M81SessionSyncOutcome.Deferred -> Unit
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Offline access and playback remain available. */ }
+        }
+    }
+
+    private suspend fun revokeLocalSession(errorResId: Int) {
+        if (saveInFlight) return
+        loadJob?.cancelAndJoin(); detailJob?.cancel(); stop()
+        withContext(Dispatchers.IO) { runCatching { repository.deviceSessionStore.clearToken() } }
+        availableSources().forEach { repository.remove(it.id) }
+        repository.preferences.update { it.copy(selectedSourceId = null) }
+        updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
+        setErrorText { message(errorResId) }
     }
 
     private fun loadAnnouncement() {
@@ -257,6 +310,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.Logout -> operation {
                 if (saveInFlight) return@operation
                 loadJob?.cancelAndJoin(); detailJob?.cancel(); stop()
+                if (BuildConfig.CUSTOMER_MODE) {
+                    val stored = withContext(Dispatchers.IO) { runCatching { repository.deviceSessionStore.readOrCreate() }.getOrNull() }
+                    if (stored?.sessionToken != null) {
+                        deviceSessions.logout(stored.sessionToken, stored.deviceId)
+                    }
+                    withContext(Dispatchers.IO) { runCatching { repository.deviceSessionStore.clearToken() } }
+                }
                 availableSources().forEach { repository.remove(it.id) }
                 repository.preferences.update { it.copy(selectedSourceId = null) }
                 updateState { AppUiState(backgroundPlayback = it.backgroundPlayback, favoriteIds = it.favoriteIds) }
@@ -287,12 +347,39 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 retirePendingSource(action.source.id)
                 loadJob?.cancelAndJoin()
                 if (action.source.kind == SourceKind.XTREAM) repository.providers.authenticate(action.source)
+                val previousAccount = state.value.sources.firstOrNull { StarlinkConfig.isStarlinkAccount(it) }
+                val accountChanged = previousAccount != null &&
+                    !previousAccount.username.trim().equals(action.source.username.trim(), ignoreCase = true)
+                var accountName = if (accountChanged) "" else state.value.accountName
+                if (BuildConfig.CUSTOMER_MODE && StarlinkConfig.isStarlinkAccount(action.source)) {
+                    when (val result = play.ott.nativeapp.data.loginM81DeviceSession(
+                        api = deviceSessions,
+                        store = repository.deviceSessionStore,
+                        previousUsername = previousAccount?.username,
+                        username = action.source.username,
+                        password = action.source.password,
+                    )) {
+                        is play.ott.nativeapp.data.M81SessionResult.Authorized -> {
+                            accountName = result.clientName
+                        }
+                        is play.ott.nativeapp.data.M81SessionResult.Denied -> {
+                            val failure = if (result.code == "invalid_credentials") ProviderFailure.AUTHENTICATION
+                                else ProviderFailure.ACCOUNT_INACTIVE
+                            throw ProviderException("M81 session denied", failure = failure)
+                        }
+                        play.ott.nativeapp.data.M81SessionResult.RateLimited -> {
+                            throw ProviderException("M81 rate limited", statusCode = 429)
+                        }
+                        play.ott.nativeapp.data.M81SessionResult.RevokedOrExpired,
+                        play.ott.nativeapp.data.M81SessionResult.Unavailable -> Unit
+                    }
+                }
                 repository.save(action.source)
                 // Do not add a redundant full M3U source for our Xtream account.
                 // Existing installed sources are not deleted during this transition.
                 val sources = availableSources()
-                updateState { it.copy(sources = sources, sourceSaveRevision = it.sourceSaveRevision + 1) }
-                load(action.source.id, true)
+                updateState { it.copy(sources = sources, accountName = accountName, sourceSaveRevision = it.sourceSaveRevision + 1) }
+                load(action.source.id, true, skipAuthenticate = action.source.kind == SourceKind.XTREAM)
                 } finally { saveInFlight = false } }
             }
             is AppAction.DeleteSource -> operation {
@@ -364,6 +451,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 repository.preferences.update { it.copy(activeForYouProfileId = action.id) }
             }
             is AppAction.Play -> play(action.entry)
+            is AppAction.PlayAdjacent -> playAdjacent(action.direction)
             is AppAction.OpenEpg -> {
                 detailJob?.cancel()
                 updateState { it.copy(epgEntry = action.entry, epgLoading = true, programmes = emptyList()) }
@@ -405,10 +493,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val source = availableSources().first { it.id == action.entry.sourceId }
                     // M3U series can have a direct video URL. Never send them to Xtream
                     // get_series_info, which would fail even if that URL plays normally.
-                    val episodes = if (SeriesRecovery.needsEpisodeLookup(source.kind, action.entry))
-                        repository.providers.loadEpisodes(source, action.entry)
-                    else emptyList()
-                    updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
+                    val (enrichedSeries, episodes) = if (SeriesRecovery.needsEpisodeLookup(source.kind, action.entry))
+                        repository.providers.loadSeriesDetails(source, action.entry)
+                    else action.entry to emptyList()
+                    updateState { current ->
+                        if (current.seriesEntry?.id == action.entry.id) {
+                            val sortedEpisodes = episodes.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.name }))
+                            current.copy(
+                                seriesEntry = enrichedSeries,
+                                episodes = episodes,
+                                playbackEpisodes = sortedEpisodes.ifEmpty { current.playbackEpisodes },
+                                isBusy = false,
+                            )
+                        } else current
+                    }
                 }
             }
             AppAction.CloseEpg -> { detailJob?.cancel(); updateState { it.copy(epgEntry = null, epgLoading = false, programmes = emptyList()) } }
@@ -435,12 +533,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun visitedXtreamEntries(): List<MediaEntry> {
-        // Limit cumulative memory, but never silently truncate an opened category.
-        while (visitedGroups.size > 8 ||
-            (visitedGroups.size > 1 && visitedGroups.values.sumOf { it.size } > 20_000)) {
-            visitedGroups.remove(visitedGroups.keys.first())
-        }
+    private fun visitedXtreamEntries(protectedKey: String? = null): List<MediaEntry> {
+        // Limit cumulative memory, keeping at least one category per MediaKind when possible.
+        play.ott.nativeapp.data.VisitedXtreamCache.prune(visitedGroups, protectedKey = protectedKey)
         // The same stream may be listed under two provider categories.
         // Never emit duplicate Compose card keys or delete the original stream IDs.
         return visitedGroups.values.flatten().distinctBy { it.sourceId to it.id }
@@ -463,46 +558,85 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             var shown = false
             try {
                 val source = availableSources().firstOrNull { it.id == id } ?: return@launch
-                // Read only the original category IDs behind the visible chip.
-                // Fetch sequentially to avoid flooding the server with duplicate requests.
+                val groupsToFetch = ArrayList<play.ott.nativeapp.core.XtreamGroup>()
+                var lastKey: String? = null
+                // Pass 1: serve in-memory and local SQLite cache hits in a single UI update.
                 for (group in groups) {
                     ensureActive()
                     if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
                     val key = id + ":" + group.kind + ":" + group.id
                     if (visitedGroups.containsKey(key)) {
+                        play.ott.nativeapp.data.VisitedXtreamCache.touch(visitedGroups, key)
+                        lastKey = key
                         shown = true
-                        updateState { it.copy(entries = visitedXtreamEntries()) }
                         continue
                     }
                     val cached = try { repository.cachedXtreamCategory(source, group) }
                         catch (e: CancellationException) { throw e }
                         catch (_: Exception) { null }
                     if (cached != null) {
-                        visitedGroups[key] = cached.value.entries
+                        play.ott.nativeapp.data.VisitedXtreamCache.touch(visitedGroups, key, cached.value.entries)
+                        lastKey = key
                         shown = true
-                        updateState { it.copy(entries = visitedXtreamEntries()) }
-                        if (cached.ageMillis < 30 * 60_000L) continue
+                        if (cached.ageMillis >= 30 * 60_000L) groupsToFetch += group
+                    } else {
+                        groupsToFetch += group
                     }
-                    val catalog = try { repository.xtreamCategory(source, group) }
-                        catch (e: CancellationException) { throw e }
-                        catch (e: Exception) {
-                            if (firstFailure == null) firstFailure = e
-                            continue
+                }
+                if (shown) {
+                    updateState { it.copy(entries = visitedXtreamEntries(protectedKey = lastKey)) }
+                }
+                if (groupsToFetch.isEmpty()) {
+                    updateState { it.copy(isBusy = false) }
+                    return@launch
+                }
+                // Pass 2: fetch missing/stale groups in bounded parallel batches.
+                val semaphore = Semaphore(4)
+                val failureLock = Any()
+                val fetched = coroutineScope {
+                    groupsToFetch.map { group ->
+                        async {
+                            semaphore.withPermit {
+                                try {
+                                    group to repository.xtreamCategory(source, group)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    synchronized(failureLock) {
+                                        if (firstFailure == null) firstFailure = e
+                                    }
+                                    null
+                                }
+                            }
                         }
-                    ensureActive()
-                    if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
-                    visitedGroups[key] = catalog.entries
+                    }.awaitAll()
+                }
+                ensureActive()
+                if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
+                var anyFetched = false
+                for (pair in fetched) {
+                    if (pair == null) continue
+                    val (group, catalog) = pair
+                    val key = id + ":" + group.kind + ":" + group.id
+                    play.ott.nativeapp.data.VisitedXtreamCache.touch(visitedGroups, key, catalog.entries)
+                    lastKey = key
                     shown = true
-                    updateState { it.copy(entries = visitedXtreamEntries()) }
+                    anyFetched = true
                     pendingWrites += group to catalog
                 }
-                if (!shown) firstFailure?.let { showError(it) }
-                // Finish loading before saving encrypted cached blocks.
-                updateState { it.copy(isBusy = false) }
-                for ((group, catalog) in pendingWrites) {
-                    try { repository.saveXtreamCategory(source, group, catalog) }
-                    catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { /* Cache is optional; streams are already visible. */ }
+                if (anyFetched) {
+                    updateState { it.copy(entries = visitedXtreamEntries(protectedKey = lastKey), isBusy = false) }
+                } else {
+                    if (!shown) firstFailure?.let { showError(it) }
+                    updateState { it.copy(isBusy = false) }
+                }
+                // Persist encrypted SQLite blocks asynchronously so rapid chip switching stays unobstructed.
+                if (pendingWrites.isNotEmpty()) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        for ((group, catalog) in pendingWrites) {
+                            runCatching { repository.saveXtreamCategory(source, group, catalog) }
+                        }
+                    }
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { showError(e) }
@@ -513,7 +647,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun load(id: String, refresh: Boolean) {
+    private fun load(id: String, refresh: Boolean, skipAuthenticate: Boolean = false) {
         loadingResource = R.string.message_loading_catalog
         errorText = null
         loadJob?.cancel()
@@ -537,7 +671,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         updateState { it.copy(xtreamGroups = cached.value, entries = emptyList(), isBusy = false) }
                         if (!refresh && cached.ageMillis < 30 * 60_000L) return@launch
                     }
-                    val groups = repository.xtreamCategories(source)
+                    val groups = repository.xtreamCategories(source, skipAuthenticate = skipAuthenticate)
                     ensureActive()
                     if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
                     updateState { it.copy(xtreamGroups = groups, entries = emptyList(), isBusy = false) }
@@ -573,12 +707,48 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun playAdjacent(direction: Int) {
+        if (direction == 0) return
+        val current = state.value.playingEntry ?: return
+        val candidates: List<MediaEntry> = when {
+            state.value.playbackEpisodes.any { it.id == current.id && it.sourceId == current.sourceId } ->
+                state.value.playbackEpisodes
+            current.kind == MediaKind.LIVE ->
+                state.value.entries.filter { it.kind == MediaKind.LIVE && it.sourceId == current.sourceId }
+            current.kind == MediaKind.MOVIE -> {
+                val sameGroup = state.value.entries.filter {
+                    it.kind == MediaKind.MOVIE && it.sourceId == current.sourceId &&
+                        (current.group.isBlank() || it.group.equals(current.group, ignoreCase = true))
+                }
+                if (sameGroup.size > 1) sameGroup
+                else state.value.entries.filter { it.kind == MediaKind.MOVIE && it.sourceId == current.sourceId }
+            }
+            else -> emptyList()
+        }
+        if (candidates.size <= 1) return
+        val index = candidates.indexOfFirst { it.id == current.id && it.sourceId == current.sourceId }
+        if (index < 0) return
+        val nextIndex = if (current.kind == MediaKind.LIVE) {
+            (index + direction).mod(candidates.size)
+        } else {
+            index + direction
+        }
+        val target = candidates.getOrNull(nextIndex) ?: return
+        play(target)
+    }
+
     private fun play(entry: MediaEntry, resolved: PlaybackStream? = null) {
         if (entry.playbackUnsupportedReason != null) {
             setErrorText { message(R.string.message_unsupported_playback) }
             return
         }
         if (entry.kind == MediaKind.SERIES) { dispatch(AppAction.OpenSeries(entry)); return }
+        if (state.value.episodes.any { it.id == entry.id && it.sourceId == entry.sourceId }) {
+            val sortedEpisodes = state.value.episodes.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.name }))
+            updateState { it.copy(playbackEpisodes = sortedEpisodes) }
+        } else if (state.value.playbackEpisodes.none { it.id == entry.id && it.sourceId == entry.sourceId }) {
+            updateState { it.copy(playbackEpisodes = emptyList()) }
+        }
         // MovieDialog has already fetched Xtream get_vod_info and passes that exact entry.
         // Capture this before CloseMovie clears the dialog state on the next UI action.
         val movieDetailsLoaded = entry.kind == MediaKind.MOVIE && !state.value.isBusy &&
