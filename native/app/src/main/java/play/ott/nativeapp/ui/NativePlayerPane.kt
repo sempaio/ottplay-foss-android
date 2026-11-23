@@ -162,16 +162,29 @@ internal fun NativePlayerPane(
                 val streamUri = controller?.currentMediaItem?.localConfiguration?.uri
                     ?: controller?.currentMediaItem?.requestMetadata?.mediaUri
                 if (streamUri != null) {
+                    val uriString = streamUri.toString()
+                    val mimeType = if (uriString.contains(".m3u8", ignoreCase = true)) "application/x-mpegURL" else "video/*"
                     val castIntent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(streamUri, if (entry.kind == MediaKind.LIVE) "application/x-mpegURL" else "video/*")
+                        setDataAndType(streamUri, mimeType)
+                        putExtra(Intent.EXTRA_TITLE, entry.name)
+                        putExtra("title", entry.name)
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
-                    val chooser = Intent.createChooser(castIntent, "Transmitir / Espelhar reprodução")
+                    val chooser = Intent.createChooser(castIntent, "Transmitir / Espelhar: ${entry.name}")
                     chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     try {
                         context.startActivity(chooser)
                     } catch (_: Exception) {
-                        Toast.makeText(context, "Nenhum aplicativo de transmissão encontrado", Toast.LENGTH_SHORT).show()
+                        try {
+                            val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(streamUri, "video/*")
+                                putExtra(Intent.EXTRA_TITLE, entry.name)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(Intent.createChooser(fallbackIntent, "Transmitir: ${entry.name}"))
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Nenhum aplicativo de transmissão encontrado", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 } else {
                     Toast.makeText(context, "URL de transmissão indisponível", Toast.LENGTH_SHORT).show()
