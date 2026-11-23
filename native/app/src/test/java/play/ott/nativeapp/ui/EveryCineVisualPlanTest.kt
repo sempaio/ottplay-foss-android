@@ -95,4 +95,13 @@ class EveryCineVisualPlanTest {
         assertEquals(liveAbertos, everyCineDefaultRemoteGroup(listOf(seriesFilmes, movieAcao, liveAbertos), MediaKind.LIVE))
         assertNull(everyCineDefaultRemoteGroup(listOf(movieAcao), MediaKind.SERIES))
     }
+
+    @Test fun duplicateTitlesAndCoversAreSuppressedInCatalogViews() {
+        val movie1 = MediaEntry(id = "m1", sourceId = "m81", name = "Matriz", kind = MediaKind.MOVIE, group = "Acao", logo = "https://img.test/poster1.jpg")
+        val movieDupTitle = MediaEntry(id = "m2", sourceId = "m81", name = " matriz ", kind = MediaKind.MOVIE, group = "Acao", logo = "https://img.test/poster2.jpg")
+        val movieDupCover = MediaEntry(id = "m3", sourceId = "m81", name = "Outro Filme", kind = MediaKind.MOVIE, group = "Acao", logo = "https://img.test/poster1.jpg")
+        val movieUnique = MediaEntry(id = "m4", sourceId = "m81", name = "Inédito", kind = MediaKind.MOVIE, group = "Acao", logo = "https://img.test/poster4.jpg")
+        val visible = everyCineVisibleRemote(listOf(movie1, movieDupTitle, movieDupCover, movieUnique), MediaKind.MOVIE, setOf("Acao"), "")
+        assertEquals(listOf(movie1, movieUnique), visible)
+    }
 }

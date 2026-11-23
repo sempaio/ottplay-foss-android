@@ -1092,6 +1092,7 @@ private fun EveryCineMovieDetail(
                                     onAction(AppAction.ToggleFavorite(entry))
                                 })
                         }
+                        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = cinemaAccent)
                         if (entry.description.isNotBlank()) Text(entry.description,
                             color = cinemaWhite, fontSize = 14.sp)
                     }
@@ -1207,7 +1208,7 @@ private fun EveryCineSeriesDetail(
                             }
                             Text(episode.name, color = cinemaWhite, fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            if (episode.description.isNotBlank()) Text(episode.description,
+                            if (episode.description.isNotBlank() && episode.description != entry.description) Text(episode.description,
                                 color = cinemaGrey, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         Text("▶", color = cinemaAccent, fontSize = 18.sp)

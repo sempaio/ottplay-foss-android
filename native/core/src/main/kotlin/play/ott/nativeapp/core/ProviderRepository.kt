@@ -81,6 +81,13 @@ class ProviderRepository(
         xtream.episodes(config, series)
     }
 
+    suspend fun loadSeriesDetails(config: SourceConfig, series: MediaEntry): Pair<MediaEntry, List<MediaEntry>> = withContext(Dispatchers.IO) {
+        validate(config)
+        if (OperatorSources.relationship("android-episodes", config.kind.name.lowercase(), config.id, series.kind.name.lowercase(), series.sourceId).isNotEmpty())
+            throw ProviderException("Episode lists require a series from this Xtream source")
+        xtream.seriesDetails(config, series)
+    }
+
     fun epgSources(config: SourceConfig, catalog: Catalog): List<String> =
         play.ott.core.NativeGuideSources.urls(catalog.epgUrls, config.epgUrl, false, play.ott.core.NativeSourceFormat.ANDROID_RAW)
 

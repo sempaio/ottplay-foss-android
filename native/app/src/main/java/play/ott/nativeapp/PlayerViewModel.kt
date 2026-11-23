@@ -491,10 +491,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val source = availableSources().first { it.id == action.entry.sourceId }
                     // M3U series can have a direct video URL. Never send them to Xtream
                     // get_series_info, which would fail even if that URL plays normally.
-                    val episodes = if (SeriesRecovery.needsEpisodeLookup(source.kind, action.entry))
-                        repository.providers.loadEpisodes(source, action.entry)
-                    else emptyList()
-                    updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(episodes = episodes, isBusy = false) else it }
+                    val (enrichedSeries, episodes) = if (SeriesRecovery.needsEpisodeLookup(source.kind, action.entry))
+                        repository.providers.loadSeriesDetails(source, action.entry)
+                    else action.entry to emptyList()
+                    updateState { current ->
+                        if (current.seriesEntry?.id == action.entry.id) {
+                            current.copy(
+                                seriesEntry = enrichedSeries,
+                                episodes = episodes,
+                                isBusy = false,
+                            )
+                        } else current
+                    }
                 }
             }
             AppAction.CloseEpg -> { detailJob?.cancel(); updateState { it.copy(epgEntry = null, epgLoading = false, programmes = emptyList()) } }
