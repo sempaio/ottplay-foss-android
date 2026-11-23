@@ -93,6 +93,8 @@ android {
         create("official") {
             initWith(getByName("release"))
             buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
+            manifestPlaceholders["allowCleartextTraffic"] = "true"
             matchingFallbacks += "release"
             resValue("string", "app_name", "STARLINK IPTV")
         }
