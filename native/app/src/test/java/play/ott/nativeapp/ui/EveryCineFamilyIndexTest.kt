@@ -71,4 +71,32 @@ class EveryCineFamilyIndexTest {
         assertEquals("Abertos", EveryCineFamilyIndex.category("TV Cultura HD", "Abertos"))
         assertEquals("Cultura", EveryCineFamilyIndex.family("TV Cultura HD", "Abertos"))
     }
+
+    @Test fun subcategoriesPreserveNumberedChannelsAndFilterCorrectly() {
+        assertEquals("Chapolin", EveryCineFamilyIndex.subcategory("Chapolin 24h 1", "24 HORAS"))
+        assertEquals("Chapolin", EveryCineFamilyIndex.subcategory("Chapolin 24h 2", "24 HORAS"))
+        assertEquals("Chapolin", EveryCineFamilyIndex.subcategory("Chapolin 24h 3", "24 HORAS"))
+        assertEquals("Chapolin", EveryCineFamilyIndex.subcategory("Chapolin 24h 4", "24 HORAS"))
+
+        assertEquals("Chaves", EveryCineFamilyIndex.subcategory("Chaves 24h 1", "24 HORAS"))
+        assertEquals("Chaves", EveryCineFamilyIndex.subcategory("Chaves 24h 2", "24 HORAS"))
+        assertEquals("Chaves", EveryCineFamilyIndex.subcategory("Chaves 24h 3", "24 HORAS"))
+
+        assertEquals("Bleach", EveryCineFamilyIndex.subcategory("Bleach 24h 1", "24 HORAS"))
+        assertEquals("Bleach", EveryCineFamilyIndex.subcategory("Bleach 24h 2", "24 HORAS"))
+        assertEquals("Bleach", EveryCineFamilyIndex.subcategory("Bleach 24h 3", "24 HORAS"))
+        assertEquals("Bleach", EveryCineFamilyIndex.subcategory("Bleach 24h 4", "24 HORAS"))
+
+        assertEquals("Dragon Ball", EveryCineFamilyIndex.subcategory("Dragon Ball 1", "24 HORAS"))
+        assertEquals("Dragon Ball", EveryCineFamilyIndex.subcategory("Dragon Ball GT", "24 HORAS"))
+        assertEquals("Dragon Ball", EveryCineFamilyIndex.subcategory("Dragon Ball Super", "24 HORAS"))
+        assertEquals("Dragon Ball", EveryCineFamilyIndex.subcategory("Dragon Ball Z", "24 HORAS"))
+
+        assertEquals("HBO", EveryCineFamilyIndex.subcategory("HBO 2 FHD H.265", "CANAIS: HBO"))
+        assertEquals("HBO", EveryCineFamilyIndex.subcategory("HBO 2 HD 1", "CANAIS: HBO"))
+        assertEquals("HBO", EveryCineFamilyIndex.subcategory("HBO 2 HD 2", "CANAIS: HBO"))
+        assertEquals("Telecine", EveryCineFamilyIndex.subcategory("TELECINE ACTION FHD", "CANAIS: TELECINE"))
+        assertEquals("Telecine", EveryCineFamilyIndex.subcategory("TELECINE ACTION HD 1", "CANAIS: TELECINE"))
+        assertEquals("Telecine", EveryCineFamilyIndex.subcategory("TELECINE ACTION HD 2", "CANAIS: TELECINE"))
+    }
 }

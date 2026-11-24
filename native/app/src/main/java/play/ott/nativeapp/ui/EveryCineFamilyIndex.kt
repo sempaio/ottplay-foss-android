@@ -158,6 +158,50 @@ internal object EveryCineFamilyIndex {
         return cleaned.ifBlank { name.trim().ifBlank { "Canais" } }
     }
 
+    /** Subcategory name used for filter pills, preserving every individual channel. */
+    fun subcategory(name: String, providerGroup: String): String {
+        val title = fold(name).removePrefix("24h ").trim()
+        val group = fold(providerGroup)
+
+        // Specific series / animes / channels requested by user
+        if (begins(title, "chapolin")) return "Chapolin"
+        if (begins(title, "chaves")) return "Chaves"
+        if (begins(title, "bleach")) return "Bleach"
+        if (begins(title, "dragon ball")) return "Dragon Ball"
+        if (begins(title, "naruto") || begins(title, "boruto")) return "Naruto"
+        if (begins(title, "cavaleiros do zodiaco")) return "Cavaleiros do Zodíaco"
+        if (begins(title, "pokemon")) return "Pokémon"
+        if (begins(title, "one piece")) return "One Piece"
+        if (begins(title, "desencanto")) return "Desencanto"
+        if (begins(title, "desenhos biblicos")) return "Desenhos Bíblicos"
+        if (begins(title, "dora aventureira")) return "Dora Aventureira"
+        if (begins(title, "doug")) return "Doug"
+        if (begins(title, "dragoes corrida")) return "Como Treinar Seu Dragão"
+        if (begins(title, "dois homens") || begins(title, "two and a half")) return "Dois Homens e Meio"
+        if (begins(title, "todo mundo odeia o chris")) return "Todo Mundo Odeia o Chris"
+        if (begins(title, "familia dinossauro")) return "Família Dinossauros"
+
+        // Filmes subcategories
+        if (begins(title, "cine sky") || begins(group, "cine sky")) return "CINE SKY"
+        if (begins(title, "prime video") || begins(group, "prime video")) return "PRIME VIDEO"
+        if (begins(title, "telecine") || begins(group, "telecine")) return "Telecine"
+        if (begins(title, "hbo") || begins(group, "hbo")) return "HBO"
+        if (begins(title, "megapix")) return "Megapix"
+        if (begins(title, "paramount")) return "Paramount"
+        if (begins(title, "cinemax")) return "Cinemax"
+        if (begins(title, "space") || begins(title, "canal space")) return "Space"
+
+        val fam = family(name, providerGroup)
+        if (fam != "Canais" && fam != "Outros esportes" && fam != "Outros canais abertos" && fam != "Desenhos" && fam != "Animes") {
+            return fam
+        }
+        val cleaned = variant(name)
+            .replace(Regex("(?i)\\s+(?:temporada|season|t)\\s*\\d{1,3}\\s*$"), "")
+            .replace(Regex("(?i)\\s*\\d+$"), "")
+            .trim()
+        return cleaned.ifBlank { providerGroup.ifBlank { "Geral" } }
+    }
+
     /** Same region + different quality are selectable variants; different regions stay distinct. */
     fun variant(name: String): String {
         var value = name.trim()

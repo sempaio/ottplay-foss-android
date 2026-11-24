@@ -471,120 +471,154 @@ private fun EveryCineLive(
     val categories = remember(state.entries, state.xtreamGroups) {
         EveryCineFamilyIndex.available(state.entries, state.xtreamGroups)
     }
-    val cards = remember(state.entries, state.xtreamGroups, selected, search) {
-        EveryCineFamilyIndex.cards(state.entries, state.xtreamGroups, selected, search)
-    }
-    var openedCard by rememberSaveable { mutableStateOf("") }
-    var openedChild by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(selected) { openedCard = ""; openedChild = "" }
-    val card = cards.firstOrNull { it.key == openedCard }
+    var selectedSubcategory by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(selected) { selectedSubcategory = "" }
 
-    val sourceGroups = remember(state.xtreamGroups, card?.key) {
-        val ids = card?.remoteIds.orEmpty().toSet()
-        state.xtreamGroups.filter { it.kind == MediaKind.LIVE && it.id in ids }
-            .map { it.name.trim().lowercase() }.toSet()
-    }
-    val loaded = remember(state.entries, sourceGroups) {
-        if (sourceGroups.isEmpty()) emptyList() else state.entries.filter { entry ->
-            entry.kind == MediaKind.LIVE && entry.group.trim().lowercase() in sourceGroups
+    // Identify remote groups for this category and trigger on-demand load if needed
+    val categoryRemoteGroups = remember(state.xtreamGroups, selected) {
+        state.xtreamGroups.filter { group ->
+            group.kind == MediaKind.LIVE &&
+                (selected == EveryCineFamilyIndex.ALL || EveryCineFamilyIndex.category("", group.name) == selected)
         }
     }
-    val members = remember(card, loaded) {
-        (card?.entries.orEmpty() + loaded).distinctBy { it.sourceId to it.id }
+    LaunchedEffect(selected) {
+        if (selected != EveryCineFamilyIndex.ALL && categoryRemoteGroups.isNotEmpty()) {
+            val neededIds = categoryRemoteGroups.map { it.id }
+            onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, neededIds))
+        }
     }
-    val nested = remember(card, members) {
-        // An unnamed provider bucket (e.g. "ESPORTES HD") expands to the
-        // *actual* families found after lazy Xtream download (ESPN, Premiere...).
-        if (card != null && card.remoteIds.isNotEmpty() && members.isNotEmpty()) {
-            val loadedCards = EveryCineFamilyIndex.cards(
-                members, emptyList(), EveryCineFamilyIndex.ALL, "")
-            if (loadedCards.size > 1) loadedCards else emptyList()
-        } else emptyList()
-    }
-    val channels = nested.firstOrNull { it.key == openedChild }?.entries
-        ?: if (nested.isNotEmpty()) emptyList() else members
 
-    BackHandler(enabled = openedCard.isNotBlank()) {
-        if (openedChild.isNotEmpty()) openedChild = "" else openedCard = ""
+    // Channels matching category and search (preserves ALL channels: 1, 2, 3, 4, FHD, HD, etc.)
+    val categoryChannels = remember(state.entries, selected, search) {
+        state.entries.filter { entry ->
+            entry.kind == MediaKind.LIVE &&
+                (selected == EveryCineFamilyIndex.ALL || EveryCineFamilyIndex.category(entry.name, entry.group) == selected) &&
+                (search.isBlank() || entry.name.contains(search, ignoreCase = true) || entry.group.contains(search, ignoreCase = true))
+        }
     }
+
+    // Available subcategories pills for this category
+    val subcategories = remember(categoryChannels, categoryRemoteGroups, selected) {
+        val found = LinkedHashSet<String>()
+        for (channel in categoryChannels) {
+            val sub = EveryCineFamilyIndex.subcategory(channel.name, channel.group)
+            if (sub.isNotBlank()) found.add(sub)
+        }
+        for (grp in categoryRemoteGroups) {
+            val sub = EveryCineFamilyIndex.subcategory(grp.name, grp.name)
+            if (sub.isNotBlank()) found.add(sub)
+        }
+        found.toList().sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    // Channels filtered by selected subcategory pill
+    val filteredChannels = remember(categoryChannels, selectedSubcategory) {
+        if (selectedSubcategory.isBlank() || selectedSubcategory == "Todos os grupos") {
+            categoryChannels
+        } else {
+            categoryChannels.filter { entry ->
+                EveryCineFamilyIndex.subcategory(entry.name, entry.group).equals(selectedSubcategory, ignoreCase = true)
+            }
+        }
+    }
+
     @Composable fun familyBrowser(modifier: Modifier) {
         Column(modifier) {
+            // Level 1: Category Pills
             LazyRow(
                 Modifier.fillMaxWidth().testTag("everycine-live-categories")
-                    .padding(vertical = 8.dp),
+                    .padding(top = 8.dp, bottom = 4.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { EveryCineCategoryChip("Todos", selected == EveryCineFamilyIndex.ALL) {
-                    openedCard = ""; openedChild = ""; onSelectCategory("")
-                } }
+                item {
+                    EveryCineCategoryChip("Todos", selected == EveryCineFamilyIndex.ALL) {
+                        selectedSubcategory = ""
+                        onSelectCategory("")
+                    }
+                }
                 items(categories, key = { it }) { name ->
                     EveryCineCategoryChip(name, selected == name) {
-                        openedCard = ""; openedChild = ""; onSelectCategory(name)
+                        selectedSubcategory = ""
+                        onSelectCategory(name)
                     }
                 }
             }
             if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
 
-            if (card == null) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(136.dp),
-                    modifier = Modifier.fillMaxSize().testTag("everycine-family-grid"),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(15.dp),
+            // Level 2: Subcategorias Section
+            Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp)) {
+                Text(
+                    "Subcategorias",
+                    color = cinemaWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+                LazyRow(
+                    Modifier.fillMaxWidth().testTag("everycine-live-subcategories")
+                        .padding(bottom = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    gridItems(cards, key = { it.key }) { family ->
-                        EveryCineFamilyCard(
-                            title = family.title,
-                            logo = family.entries.firstOrNull { it.logo.isNotBlank() }?.logo.orEmpty(),
-                            count = family.entries.size.takeIf { it > 0 },
+                    item {
+                        EveryCineCategoryChip(
+                            "Todos os grupos",
+                            selectedSubcategory.isBlank() || selectedSubcategory == "Todos os grupos"
                         ) {
-                            openedCard = family.key
-                            openedChild = ""
-                            if (family.remoteIds.isNotEmpty()) {
-                                onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, family.remoteIds))
-                            }
+                            selectedSubcategory = ""
                         }
                     }
-                    if (cards.isEmpty() && !state.isBusy) item {
-                        Text("Nenhuma família disponível nesta categoria.",
-                            color = cinemaGrey, modifier = Modifier.padding(12.dp))
+                    items(subcategories, key = { it }) { subcat ->
+                        EveryCineCategoryChip(
+                            subcat,
+                            selectedSubcategory.equals(subcat, ignoreCase = true)
+                        ) {
+                            selectedSubcategory = subcat
+                        }
                     }
                 }
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("‹ Voltar", color = cinemaAccent, modifier = Modifier
-                        .clickable { if (openedChild.isNotEmpty()) openedChild = "" else openedCard = "" }
-                        .padding(end = 14.dp), fontSize = 16.sp)
-                    Text(
-                        nested.firstOrNull { it.key == openedChild }?.title ?: card.title,
-                        color = cinemaWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                        maxLines = 1, modifier = Modifier.weight(1f),
+            }
+
+            // Level 3: Item count
+            Text(
+                "${filteredChannels.size} itens",
+                color = cinemaGrey,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+
+            // Level 4: Grid of Individual Channels (All individual options, qualities, regions)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxSize().testTag("everycine-channel-grid"),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                gridItems(filteredChannels, key = { it.sourceId + ":" + it.id }) { channel ->
+                    EveryCineChannelCard(
+                        channel = channel,
+                        isPlaying = state.playingEntry?.id == channel.id,
+                        isFavorite = channel.id in state.favoriteIds,
+                        onPlay = {
+                            if (state.playingEntry?.id == channel.id) {
+                                onFullscreen()
+                            } else {
+                                onAction(AppAction.Play(channel))
+                            }
+                        },
+                        onToggleFavorite = {
+                            onAction(AppAction.ToggleFavorite(channel))
+                        }
                     )
                 }
-                if (nested.isNotEmpty() && openedChild.isEmpty()) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(136.dp),
-                        modifier = Modifier.fillMaxSize().testTag("everycine-subfamily-grid"),
-                        contentPadding = PaddingValues(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        gridItems(nested, key = { it.key }) { family ->
-                            EveryCineFamilyCard(family.title,
-                                family.entries.firstOrNull { it.logo.isNotBlank() }?.logo.orEmpty(),
-                                family.entries.size) {
-                                openedChild = family.key
-                            }
-                        }
-                    }
-                } else {
-                    EveryCineChannelRows(channels, state, onAction, onFullscreen,
-                        Modifier.weight(1f))
+                if (filteredChannels.isEmpty() && !state.isBusy) item {
+                    Text(
+                        "Nenhum canal disponível nesta seleção.",
+                        color = cinemaGrey,
+                        modifier = Modifier.padding(16.dp)
+                    )
                 }
             }
         }
@@ -607,35 +641,74 @@ private fun EveryCineLive(
 }
 
 @Composable
-private fun EveryCineFamilyCard(
-    title: String,
-    logo: String,
-    count: Int?,
-    onClick: () -> Unit,
+private fun EveryCineChannelCard(
+    channel: MediaEntry,
+    isPlaying: Boolean,
+    isFavorite: Boolean,
+    onPlay: () -> Unit,
+    onToggleFavorite: () -> Unit,
 ) {
-    Column(
-        Modifier.width(135.dp).clickable(onClick = onClick).testTag("everycine-family-" + title),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(134.dp)
+            .background(Color(0xFF1B1B22), RoundedCornerShape(12.dp))
+            .clickable(onClick = onPlay)
+            .padding(8.dp)
+            .testTag("everycine-channel-card-" + channel.id)
     ) {
-        Box(
-            Modifier.fillMaxWidth().height(118.dp)
-                .background(cinemaPanel, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (logo.isNotBlank()) {
-                AsyncImage(
-                    logo, contentDescription = title, contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(10.dp),
-                )
-            } else {
-                Text(title.take(2).uppercase(), color = cinemaAccent, fontSize = 36.sp,
-                    fontWeight = FontWeight.Black)
+        Column(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .background(cinemaPanel, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (channel.logo.isNotBlank()) {
+                    AsyncImage(
+                        channel.logo,
+                        contentDescription = channel.name,
+                        modifier = Modifier.fillMaxSize().padding(4.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text(
+                        channel.name.take(2).uppercase(),
+                        color = Color(0xFFA5B4FC),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                channel.name,
+                color = if (isPlaying) cinemaAccent else cinemaWhite,
+                fontSize = 11.sp,
+                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 13.sp
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                channel.group.ifBlank { "CANAIS" }.uppercase(),
+                color = cinemaGrey,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        Text(title, color = cinemaWhite, maxLines = 2,
-            overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Text(if (count != null) "$count opções" else "Abrir canais",
-            color = cinemaGrey, fontSize = 11.sp)
+        Text(
+            text = if (isFavorite) "♥" else "♡",
+            color = if (isFavorite) Color(0xFFEF4444) else cinemaWhite.copy(alpha = 0.8f),
+            fontSize = 18.sp,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .clickable(onClick = onToggleFavorite)
+                .padding(2.dp)
+        )
     }
 }
 
