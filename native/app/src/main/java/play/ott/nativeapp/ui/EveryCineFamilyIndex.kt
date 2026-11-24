@@ -180,10 +180,11 @@ internal object EveryCineFamilyIndex {
         if (begins(title, "dois homens") || begins(title, "two and a half")) return "Dois Homens e Meio"
         if (begins(title, "todo mundo odeia o chris")) return "Todo Mundo Odeia o Chris"
         if (begins(title, "familia dinossauro")) return "Família Dinossauros"
+        if (begins(title, "os simpsons") || begins(title, "simpsons")) return "Os Simpsons"
 
         // Filmes subcategories
-        if (begins(title, "cine sky") || begins(group, "cine sky")) return "CINE SKY"
-        if (begins(title, "prime video") || begins(group, "prime video")) return "PRIME VIDEO"
+        if (begins(title, "cine sky") || begins(group, "cine sky")) return "Cine Sky"
+        if (begins(title, "prime video") || begins(group, "prime video")) return "Prime Video"
         if (begins(title, "telecine") || begins(group, "telecine")) return "Telecine"
         if (begins(title, "hbo") || begins(group, "hbo")) return "HBO"
         if (begins(title, "megapix")) return "Megapix"
@@ -191,15 +192,28 @@ internal object EveryCineFamilyIndex {
         if (begins(title, "cinemax")) return "Cinemax"
         if (begins(title, "space") || begins(title, "canal space")) return "Space"
 
+        // Esportes subcategories
+        if (begins(title, "bandsports") || begins(title, "band sports")) return "Band Sports"
+        if (begins(title, "sportv")) return "SporTV"
+        if (begins(title, "espn")) return "ESPN"
+        if (begins(title, "premiere")) return "Premiere"
+        if (begins(title, "combate")) return "Combate"
+        if (begins(title, "tnt sports")) return "TNT Sports"
+        if (begins(title, "dazn")) return "DAZN"
+
+        // Abertos subcategories
+        if (begins(title, "globo")) return "Globo"
+        if (begins(title, "sbt")) return "SBT"
+        if (begins(title, "band")) return "Band"
+        if (begins(title, "record")) return "Record"
+        if (begins(title, "redetv") || begins(title, "rede tv")) return "RedeTV"
+        if (begins(title, "cultura")) return "Cultura"
+
         val fam = family(name, providerGroup)
-        if (fam != "Canais" && fam != "Outros esportes" && fam != "Outros canais abertos" && fam != "Desenhos" && fam != "Animes") {
+        if (fam != "Canais" && fam != "Outros esportes" && fam != "Outros canais abertos" && fam != "Desenhos" && fam != "Animes" && fam != "Outros") {
             return fam
         }
-        val cleaned = variant(name)
-            .replace(Regex("(?i)\\s+(?:temporada|season|t)\\s*\\d{1,3}\\s*$"), "")
-            .replace(Regex("(?i)\\s*\\d+$"), "")
-            .trim()
-        return cleaned.ifBlank { providerGroup.ifBlank { "Geral" } }
+        return ""
     }
 
     /** Same region + different quality are selectable variants; different regions stay distinct. */

@@ -13,6 +13,9 @@ data class AppUiState(
     val selectedSourceId: String? = null,
     val entries: List<MediaEntry> = emptyList(),
     val xtreamGroups: List<play.ott.nativeapp.core.XtreamGroup> = emptyList(),
+    val searchQuery: String = "",
+    val searchResults: List<MediaEntry> = emptyList(),
+    val searchBusy: Boolean = false,
     val updateAvailable: Boolean = false,
     val checkingUpdate: Boolean = false,
     val updateVersionCode: Long? = null,
@@ -47,6 +50,7 @@ sealed interface AppAction {
     data class SelectSource(val sourceId: String) : AppAction
     data class OpenXtreamGroup(val kind: play.ott.nativeapp.core.MediaKind, val categoryId: String) : AppAction
     data class OpenXtreamGroups(val kind: play.ott.nativeapp.core.MediaKind, val categoryIds: List<String>) : AppAction
+    data class SearchCatalog(val query: String) : AppAction
     data class SaveSource(val source: SourceConfig) : AppAction
     data class DeleteSource(val sourceId: String) : AppAction
     data object Logout : AppAction

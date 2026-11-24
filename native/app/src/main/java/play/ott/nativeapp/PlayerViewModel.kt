@@ -86,6 +86,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var saveInFlight = false
     private var loadJob: Job? = null
     private var groupJob: Job? = null
+    private var searchJob: Job? = null
+    private var searchSequence = 0L
     private var groupSequence = 0L
     // Only visited categories are kept, bounded in memory; never prefetch all.
     private val visitedGroups = LinkedHashMap<String, List<MediaEntry>>()
@@ -308,6 +310,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.Refresh -> state.value.selectedSourceId?.let { load(it, true) }
             is AppAction.OpenXtreamGroup -> openXtreamGroups(action.kind, listOf(action.categoryId))
             is AppAction.OpenXtreamGroups -> openXtreamGroups(action.kind, action.categoryIds)
+            is AppAction.SearchCatalog -> searchCatalog(action.query)
             is AppAction.ToggleFavorite -> operation {
                 repository.preferences.update { previous ->
                     val id = previous.activeForYouProfileId
@@ -439,13 +442,56 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun visitedXtreamEntries(): List<MediaEntry> {
         // Limit cumulative memory, but never silently truncate an opened category.
-        while (visitedGroups.size > 8 ||
+        while (visitedGroups.size > 32 ||
             (visitedGroups.size > 1 && visitedGroups.values.sumOf { it.size } > 20_000)) {
             visitedGroups.remove(visitedGroups.keys.first())
         }
         // The same stream may be listed under two provider categories.
         // Never emit duplicate Compose card keys or delete the original stream IDs.
         return visitedGroups.values.flatten().distinctBy { it.sourceId to it.id }
+    }
+
+    private fun searchCatalog(rawQuery: String) {
+        val query = rawQuery.trim()
+        searchJob?.cancel()
+        val sequence = ++searchSequence
+        if (query.length < 2) {
+            updateState { it.copy(searchQuery = query, searchResults = emptyList(), searchBusy = false) }
+            return
+        }
+        val id = state.value.selectedSourceId
+        val generation = loadGeneration
+        val localImmediate = state.value.entries.filter {
+            it.name.contains(query, ignoreCase = true) || it.group.contains(query, ignoreCase = true)
+        }
+        updateState { it.copy(searchQuery = query, searchResults = localImmediate, searchBusy = true) }
+        searchJob = viewModelScope.launch {
+            try {
+                delay(220)
+                ensureActive()
+                if (sequence != searchSequence || generation != loadGeneration) return@launch
+                val source = availableSources().firstOrNull { it.id == id }
+                val remote = if (source != null && source.kind == SourceKind.XTREAM) {
+                    try {
+                        repository.searchXtreamCatalog(source, query, limitPerKind = 60)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                } else emptyList()
+                ensureActive()
+                if (sequence != searchSequence || generation != loadGeneration) return@launch
+                val merged = (remote + localImmediate).distinctBy { it.sourceId to it.id }
+                updateState { it.copy(searchQuery = query, searchResults = merged, searchBusy = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (sequence == searchSequence && generation == loadGeneration) {
+                    updateState { it.copy(searchBusy = false) }
+                }
+            }
+        }
     }
 
     private fun openXtreamGroups(kind: MediaKind, categoryIds: List<String>) {
@@ -520,11 +566,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         errorText = null
         loadJob?.cancel()
         groupJob?.cancel()
+        searchJob?.cancel()
+        searchSequence++
         groupSequence++
         visitedGroups.clear()
         val generation = ++loadGeneration
         detailJob?.cancel()
-        updateState { it.copy(selectedSourceId = id, entries = emptyList(), xtreamGroups = emptyList(), epgEntry = null,
+        updateState { it.copy(selectedSourceId = id, entries = emptyList(), xtreamGroups = emptyList(),
+            searchQuery = "", searchResults = emptyList(), searchBusy = false, epgEntry = null,
             movieEntry = null, seriesEntry = null, isBusy = true, loadingMessage = message(loadingResource), error = null) }
         loadJob = viewModelScope.launch {
             try {

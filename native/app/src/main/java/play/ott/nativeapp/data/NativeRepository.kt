@@ -185,6 +185,9 @@ class NativeRepository(
     suspend fun xtreamCategory(source: SourceConfig, group: XtreamGroup): Catalog =
         providers.xtreamCategory(source, group)
 
+    suspend fun searchXtreamCatalog(source: SourceConfig, query: String, limitPerKind: Int = 60): List<MediaEntry> =
+        providers.searchXtreamCatalog(source, query, limitPerKind)
+
     /** Persist only after the UI has received the network response. */
     suspend fun saveXtreamCategories(source: SourceConfig, groups: List<XtreamGroup>) =
         withContext(Dispatchers.IO) {

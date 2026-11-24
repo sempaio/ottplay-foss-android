@@ -99,6 +99,69 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         Catalog(withoutSharedArtwork(entries), listOf(config.epgUrl.ifBlank { routes.epg() }))
     }
 
+    /** Full-catalog remote search across live channels, movies and series in a single request. */
+    suspend fun search(config: SourceConfig, query: String, limitPerKind: Int = 60): List<MediaEntry> = translateFailure {
+        val cleaned = query.trim()
+        if (cleaned.length < 2) return@translateFailure emptyList()
+        val input = httpUrl(config.url)
+        val url = input.newBuilder().encodedPath("/").query(null).fragment(null)
+            .apply { XtreamAddresses.nativeBaseSegments(input.pathSegments).forEach { addPathSegment(it) } }
+            .addPathSegment("player_api.php")
+            .addQueryParameter("username", config.username)
+            .addQueryParameter("password", config.password)
+            .addQueryParameter("action", "search_catalog")
+            .addQueryParameter("q", cleaned)
+            .addQueryParameter("limit", limitPerKind.coerceIn(1, 200).toString())
+            .build().toString()
+        val root = parseProviderJson(getWithTimeoutRecovery(url, config.headers).text()) as? JsonObject
+            ?: return@translateFailure emptyList()
+        val routes = addresses(config)
+        val categoriesObj = root["categories"] as? JsonObject
+
+        fun parseBucket(key: String, kind: MediaKind, pathKind: String): List<MediaEntry> {
+            val rows = root[key] as? JsonArray ?: return emptyList()
+            val catMap = (categoriesObj?.get(key) as? JsonObject)
+                ?.mapValues { (_, v) -> (v as? JsonPrimitive)?.content.orEmpty() }
+                .orEmpty()
+            return rows.objects().mapNotNull { row ->
+                val providerId = row.string(if (kind == MediaKind.SERIES) "series_id" else "stream_id")
+                if (providerId.isBlank() || !providerId.all(Char::isDigit)) return@mapNotNull null
+                val name = row.string("name").ifBlank { "Conteudo $providerId" }
+                val extension = row.string("container_extension").lowercase().takeIf {
+                    it.matches(Regex("[a-z0-9]{1,10}"))
+                } ?: if (kind == MediaKind.MOVIE) "mp4" else "ts"
+                val streamUrl = if (kind == MediaKind.SERIES) "" else routes.stream(pathKind, providerId, extension)
+                val catId = row.string("category_id")
+                val groupName = catMap[catId].orEmpty().ifBlank {
+                    when (kind) {
+                        MediaKind.LIVE -> "Ao vivo"
+                        MediaKind.MOVIE -> "Filmes"
+                        else -> "Séries"
+                    }
+                }
+                MediaEntry(
+                    id = stableId(config.id, "xtream", pathKind, providerId),
+                    sourceId = config.id,
+                    name = name,
+                    url = streamUrl,
+                    kind = kind,
+                    group = groupName,
+                    logo = row.string(if (kind == MediaKind.SERIES) "cover" else "stream_icon")
+                        .takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
+                    epgId = row.string("epg_channel_id"),
+                    providerId = providerId,
+                    headers = config.headers,
+                    headerOrigins = headerOrigins(config.headers, config.url),
+                )
+            }
+        }
+
+        val live = parseBucket("live", MediaKind.LIVE, "live")
+        val movies = withoutSharedArtwork(parseBucket("vod", MediaKind.MOVIE, "movie"))
+        val series = withoutSharedArtwork(parseBucket("series", MediaKind.SERIES, "series"))
+        (live + movies + series).distinctBy { it.sourceId to it.id }
+    }
+
     suspend fun episodes(config: SourceConfig, series: MediaEntry): List<MediaEntry> = translateFailure {
         val id = series.providerId
         val addresses = addresses(config)

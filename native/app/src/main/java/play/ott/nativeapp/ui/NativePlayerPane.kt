@@ -7,18 +7,28 @@ import android.view.View
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import play.ott.nativeapp.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -62,14 +72,25 @@ internal fun NativePlayerPane(
     onTrackPreference: (Boolean, TrackPreference) -> Unit,
     modifier: Modifier = Modifier,
     inPictureInPicture: Boolean = false,
+    showHeaderBar: Boolean = true,
+    externalResizeMode: Int? = null,
+    onResizeModeChange: ((Int) -> Unit)? = null,
+    onPrevious: (() -> Unit)? = null,
+    onNext: (() -> Unit)? = null,
+    onCast: (() -> Unit)? = null,
 ) {
-    var resizeMode by rememberSaveable { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var internalResizeMode by rememberSaveable { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    val resizeMode = externalResizeMode ?: internalResizeMode
+    val setResizeMode: (Int) -> Unit = { next ->
+        internalResizeMode = next
+        onResizeModeChange?.invoke(next)
+    }
     var buffering by remember(controller) { mutableStateOf(controller == null || controller.playbackState == Player.STATE_BUFFERING) }
     var playbackError by remember(controller, entry.id) { mutableStateOf(controller?.playerError?.errorCodeName) }
     var optionsOpen by remember { mutableStateOf(false) }
     var trackType by remember { mutableStateOf<Int?>(null) }
     var nativeView by remember { mutableStateOf<RemotePlayerView?>(null) }
-    var controlsVisible by remember { mutableStateOf(false) }
+    var controlsVisible by remember { mutableStateOf(true) }
     val isTv = LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val context = LocalContext.current
     val audioTitle = stringResource(R.string.dialog_audio)
@@ -80,7 +101,7 @@ internal fun NativePlayerPane(
     }
     if (optionsOpen && !inPictureInPicture) PlaybackOptionsDialog(
         controller, resizeMode,
-        onResize = { resizeMode = it },
+        onResize = setResizeMode,
         onTracks = { optionsOpen = false; trackType = it },
         onPictureInPicture, onStop,
         onDismiss = { optionsOpen = false; if (isTv) nativeView?.focusPlaybackControl() },
@@ -124,7 +145,7 @@ internal fun NativePlayerPane(
         onDispose { controller?.removeListener(listener) }
     }
     Column(modifier.testTag("player-container").background(Color.Black)) {
-        if (!inPictureInPicture) Row(
+        if (!inPictureInPicture && showHeaderBar && !fullscreen) Row(
             modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -137,7 +158,7 @@ internal fun NativePlayerPane(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(vertical = 12.dp),
             )
-            ActionButton(if (fullscreen) stringResource(R.string.dialog_back) else stringResource(R.string.dialog_fullscreen), onFullscreen, compact = true)
+            ActionButton(stringResource(R.string.dialog_fullscreen), onFullscreen, compact = true)
             ActionButton(stringResource(R.string.dialog_more), { optionsOpen = true }, Modifier.testTag("player-options"), compact = true)
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -187,19 +208,118 @@ internal fun NativePlayerPane(
                 onRelease = { it.player = null; if (nativeView === it) nativeView = null },
                 modifier = Modifier.fillMaxSize(),
             )
+            if (!inPictureInPicture && fullscreen && (controlsVisible || playbackError != null || isTv)) {
+                val aspectLabel = when (resizeMode) {
+                    AspectRatioFrameLayout.RESIZE_MODE_FIT -> "Ajustar"
+                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
+                    else -> "Preencher"
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Black.copy(alpha = 0.82f), Color.Black.copy(alpha = 0.35f), Color.Transparent)
+                            )
+                        )
+                        .statusBarsPadding()
+                        .displayCutoutPadding()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FullscreenOverlayPill("← ${stringResource(R.string.dialog_back)}", onFullscreen)
+                        Text(
+                            entry.name,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (onPrevious != null) FullscreenOverlayPill("⏮ Ant", onPrevious)
+                            if (onNext != null) FullscreenOverlayPill("Próx ⏭", onNext)
+                            FullscreenOverlayPill(
+                                label = "📺 $aspectLabel",
+                                onClick = {
+                                    setResizeMode(
+                                        when (resizeMode) {
+                                            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                        }
+                                    )
+                                },
+                            )
+                            if (onCast != null) FullscreenOverlayPill("📡 Cast", onCast)
+                            FullscreenOverlayPill(
+                                stringResource(R.string.dialog_more),
+                                { optionsOpen = true },
+                                modifier = Modifier.testTag("player-options"),
+                            )
+                        }
+                    }
+                }
+            }
             if (!inPictureInPicture && (controller == null || buffering)) CircularProgressIndicator()
             playbackError?.takeUnless { inPictureInPicture }?.let {
                 Column(
-                    Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = .96f)).padding(24.dp),
+                    Modifier
+                        .background(Color(0xEE141720), RoundedCornerShape(14.dp))
+                        .padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(stringResource(R.string.dialog_playback_failed), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.dialog_playback_error, it), style = MaterialTheme.typography.bodySmall, maxLines = 3)
+                    Text(
+                        stringResource(R.string.dialog_playback_failed),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                    Text(
+                        stringResource(R.string.dialog_playback_error, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFD0D4DC),
+                        maxLines = 3,
+                    )
                     ActionButton(stringResource(R.string.dialog_retry), onRetry, selected = true)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FullscreenOverlayPill(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .background(Color(0xCC1B1F2A), RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 

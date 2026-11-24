@@ -51,6 +51,12 @@ class ProviderRepository(
         xtream.category(config, group)
     }
 
+    suspend fun searchXtreamCatalog(config: SourceConfig, query: String, limitPerKind: Int = 60): List<MediaEntry> = withContext(Dispatchers.IO) {
+        validate(config)
+        require(config.kind == SourceKind.XTREAM)
+        xtream.search(config, query, limitPerKind)
+    }
+
     /** Reuse VOD details already loaded by the movie dialog; a second metadata GET can stall playback. */
     suspend fun resolve(config: SourceConfig, entry: MediaEntry, movieDetailsLoaded: Boolean = false): PlaybackStream = withContext(Dispatchers.IO) {
         // A locally imported M3U has a content:// configuration URL; its individual streams

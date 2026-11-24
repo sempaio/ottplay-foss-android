@@ -1,10 +1,16 @@
 package play.ott.nativeapp.ui
 
+import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -14,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -138,11 +146,20 @@ internal fun EveryCineVisualApp(
     BackHandler(enabled = fullscreen && state.playingEntry != null && !inPictureInPicture) {
         if (state.playingEntry?.kind == MediaKind.LIVE) fullscreen = false else onAction(AppAction.StopPlayback)
     }
+    BackHandler(enabled = searchOpened) {
+        searchOpened = false
+        search = ""
+    }
     BackHandler(enabled = !fullscreen && page != EveryCinePage.HOME && !showSettings && !showSource && !showGuide && !showForYou && !searchOpened && !inPictureInPicture) {
         pageName = EveryCinePage.HOME.name
     }
+    val rootContext = LocalContext.current
+    val liveChannelsForZap = remember(state.entries) { state.entries.filter { it.kind == MediaKind.LIVE } }
     Box(Modifier.fillMaxSize().background(cinemaBlack).testTag("everycine-visual-shell")) {
         if ((fullscreen || inPictureInPicture) && state.playingEntry != null) {
+            val currentLiveIndex = if (state.playingEntry.kind == MediaKind.LIVE) {
+                liveChannelsForZap.indexOfFirst { it.id == state.playingEntry.id }
+            } else -1
             NativePlayerPane(
                 state.playingEntry, controller, true,
                 onFullscreen = {
@@ -154,58 +171,105 @@ internal fun EveryCineVisualApp(
                 onRetry = { onAction(AppAction.Play(state.playingEntry)) },
                 onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
                 modifier = Modifier.fillMaxSize(), inPictureInPicture = inPictureInPicture,
+                onPrevious = if (state.playingEntry.kind == MediaKind.LIVE && liveChannelsForZap.size > 1) {
+                    {
+                        val prevIdx = if (currentLiveIndex > 0) currentLiveIndex - 1 else liveChannelsForZap.lastIndex
+                        onAction(AppAction.Play(liveChannelsForZap[prevIdx]))
+                    }
+                } else null,
+                onNext = if (state.playingEntry.kind == MediaKind.LIVE && liveChannelsForZap.size > 1) {
+                    {
+                        val nextIdx = if (currentLiveIndex in 0 until liveChannelsForZap.lastIndex) currentLiveIndex + 1 else 0
+                        onAction(AppAction.Play(liveChannelsForZap[nextIdx]))
+                    }
+                } else null,
+                onCast = { openCastOrMirroring(rootContext, state.playingEntry) },
             )
         } else {
-            Column(Modifier.fillMaxSize()) {
-                EveryCineHeader(onSearch = { searchOpened = !searchOpened; if (!searchOpened) search = "" })
-                if (searchOpened) {
-                    OutlinedTextField(
-                        value = search, onValueChange = { search = it },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("everycine-search"),
-                        placeholder = { Text("Buscar no STARLINK") }, singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+            ) {
+                EveryCineHeader(
+                    search = search,
+                    searchOpened = searchOpened,
+                    onSearchToggle = {
+                        searchOpened = !searchOpened
+                        if (!searchOpened) search = ""
+                    },
+                    onSearchChange = { search = it },
+                )
+                if (searchOpened && search.isNotBlank()) {
+                    EveryCineGlobalSearchResults(
+                        search = search,
+                        state = state,
+                        onAction = onAction,
+                        onFullscreen = { fullscreen = true },
+                        onSelectEntry = { entry ->
+                            when (entry.kind) {
+                                MediaKind.LIVE -> {
+                                    onAction(AppAction.Play(entry))
+                                    pageName = EveryCinePage.LIVE.name
+                                }
+                                MediaKind.MOVIE -> onAction(AppAction.OpenMovie(entry))
+                                MediaKind.SERIES -> onAction(AppAction.OpenSeries(entry))
+                                else -> onAction(AppAction.Play(entry))
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
                     )
-                }
-                HorizontalPager(
-                    state = pagePager, modifier = Modifier.weight(1f)
-                        .testTag("everycine-main-pager"),
-                ) { pageIndex ->
-                    val pane = EveryCinePage.entries[pageIndex]
-                    savedPages.SaveableStateProvider(pane.name) {
-                        when (pane) {
-                            EveryCinePage.HOME -> EveryCineHome(
-                                state, recent, onAction, search,
-                                onBrowse = ::browse,
-                            )
-                            EveryCinePage.LIVE -> EveryCineLive(
-                                state, controller, onAction, search, selectedCategory,
-                                onSelectCategory = { browse(MediaKind.LIVE, it) },
-                                onFullscreen = { fullscreen = true },
-                            )
-                            EveryCinePage.CATALOG -> EveryCineCatalog(
-                                state, onAction, search, catalogKind, selectedCategory,
-                                mergedGroups.filter { it.kind == catalogKind }.map { it.label },
-                                onKind = { catalogKindName = it.name; selectedCategory = "" },
-                                onCategory = { browse(catalogKind, it) },
-                                hasRemoteCategories = hasRemoteCategories,
-                            )
-                            EveryCinePage.PROFILE -> EveryCineProfile(
-                                state, recent, onAction,
-                                onSettings = { showSettings = true },
-                                onBrowse = ::browse,
-                            )
+                } else {
+                    HorizontalPager(
+                        state = pagePager, modifier = Modifier.weight(1f)
+                            .testTag("everycine-main-pager"),
+                    ) { pageIndex ->
+                        val pane = EveryCinePage.entries[pageIndex]
+                        savedPages.SaveableStateProvider(pane.name) {
+                            when (pane) {
+                                EveryCinePage.HOME -> EveryCineHome(
+                                    state, recent, onAction, search,
+                                    onBrowse = ::browse,
+                                )
+                                EveryCinePage.LIVE -> EveryCineLive(
+                                    state, controller, onAction, search, selectedCategory,
+                                    onSelectCategory = { browse(MediaKind.LIVE, it) },
+                                    onFullscreen = { fullscreen = true },
+                                )
+                                EveryCinePage.CATALOG -> EveryCineCatalog(
+                                    state, onAction, search, catalogKind, selectedCategory,
+                                    mergedGroups.filter { it.kind == catalogKind }.map { it.label },
+                                    onKind = { catalogKindName = it.name; selectedCategory = "" },
+                                    onCategory = { browse(catalogKind, it) },
+                                    hasRemoteCategories = hasRemoteCategories,
+                                )
+                                EveryCinePage.PROFILE -> EveryCineProfile(
+                                    state, recent, onAction,
+                                    onSettings = { showSettings = true },
+                                    onBrowse = ::browse,
+                                )
+                            }
                         }
                     }
                 }
-                EveryCineBottomNavigation(page, onSelect = {
-                    pageName = it.name
-                    search = ""
-                    searchOpened = false
-                    selectedCategory = ""
-                })
+                EveryCineBottomNavigation(
+                    page = page,
+                    onSelect = {
+                        pageName = it.name
+                        search = ""
+                        searchOpened = false
+                        selectedCategory = ""
+                    },
+                )
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+        SnackbarHost(
+            snackbar,
+            Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 64.dp),
+        )
     }
 
     state.epgEntry?.let { GuideDialog(it, state.programmes, state.epgLoading, onAction) }
@@ -252,44 +316,113 @@ internal fun EveryCineVisualApp(
 }
 
 @Composable
-private fun EveryCineHeader(onSearch: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().height(52.dp).background(cinemaBlack).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun EveryCineHeader(
+    search: String,
+    searchOpened: Boolean,
+    onSearchToggle: () -> Unit,
+    onSearchChange: (String) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(cinemaBlack)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
-        NeonEmblem(Modifier.size(42.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("STARLINK", color = cinemaWhite, fontWeight = FontWeight.Black, fontSize = 20.sp,
-            modifier = Modifier.weight(1f), letterSpacing = 1.sp)
-        Text("⌕", color = cinemaWhite, fontSize = 32.sp, modifier = Modifier
-            .size(44.dp).clickable(onClick = onSearch).testTag("everycine-search-entry"),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Row(
+            Modifier.fillMaxWidth().height(48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NeonEmblem(Modifier.size(38.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "STARLINK",
+                color = cinemaWhite,
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp,
+                modifier = Modifier.weight(1f),
+                letterSpacing = 1.sp
+            )
+            Text(
+                if (searchOpened) "✕" else "⌕",
+                color = cinemaWhite,
+                fontSize = 26.sp,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable(onClick = onSearchToggle)
+                    .testTag("everycine-search-entry")
+                    .padding(4.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
+        if (searchOpened) {
+            OutlinedTextField(
+                value = search,
+                onValueChange = onSearchChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .testTag("everycine-search"),
+                placeholder = { Text("Pesquisar canais, filmes e séries no catálogo...", fontSize = 13.sp) },
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = cinemaAccent,
+                    unfocusedBorderColor = Color(0xFF2C2C35),
+                    focusedContainerColor = Color(0xFF141418),
+                    unfocusedContainerColor = Color(0xFF141418),
+                    focusedTextColor = cinemaWhite,
+                    unfocusedTextColor = cinemaWhite,
+                ),
+                trailingIcon = {
+                    if (search.isNotBlank()) {
+                        Text(
+                            "✕",
+                            color = cinemaGrey,
+                            modifier = Modifier
+                                .clickable { onSearchChange("") }
+                                .padding(8.dp)
+                        )
+                    }
+                }
+            )
+        }
     }
 }
 
 @Composable
-private fun EveryCineBottomNavigation(page: EveryCinePage, onSelect: (EveryCinePage) -> Unit) {
+private fun EveryCineBottomNavigation(
+    page: EveryCinePage,
+    onSelect: (EveryCinePage) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val items = listOf(
         Triple(EveryCinePage.HOME, "Início", "⌂"),
         Triple(EveryCinePage.LIVE, "Ao vivo", "▣"),
         Triple(EveryCinePage.CATALOG, "Catálogo", "▤"),
         Triple(EveryCinePage.PROFILE, "Perfil", "◉"),
     )
-    Row(
-        Modifier.fillMaxWidth().height(56.dp).background(Color(0xFF111115))
-            .testTag("everycine-bottom-navigation"),
+    Surface(
+        color = Color(0xFF111115),
+        modifier = modifier.fillMaxWidth().testTag("everycine-bottom-navigation"),
     ) {
-        items.forEach { (destination, label, symbol) ->
-            val selected = page == destination
-            Column(
-                Modifier.weight(1f).fillMaxHeight().clickable { onSelect(destination) }
-                    .testTag("everycine-tab-" + destination.name),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(symbol, fontSize = 23.sp, color = if (selected) cinemaWhite else cinemaGrey)
-                Text(label, fontSize = 11.sp, color = if (selected) cinemaWhite else cinemaGrey,
-                    maxLines = 1)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(56.dp),
+        ) {
+            items.forEach { (destination, label, symbol) ->
+                val selected = page == destination
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().clickable { onSelect(destination) }
+                        .testTag("everycine-tab-" + destination.name),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(symbol, fontSize = 23.sp, color = if (selected) cinemaAccent else cinemaGrey)
+                    Text(label, fontSize = 11.sp, color = if (selected) cinemaAccent else cinemaGrey,
+                        maxLines = 1, softWrap = false)
+                }
             }
         }
     }
@@ -458,6 +591,203 @@ private fun EveryCineCategoryChip(label: String, selected: Boolean, onClick: () 
 }
 
 @Composable
+private fun EveryCineGlobalSearchResults(
+    search: String,
+    state: AppUiState,
+    onAction: (AppAction) -> Unit,
+    onFullscreen: () -> Unit,
+    onSelectEntry: (MediaEntry) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val query = search.trim()
+
+    // Execute full-catalog search across ALL live channels, movies, and series via ViewModel/CoreAPI
+    LaunchedEffect(query) {
+        onAction(AppAction.SearchCatalog(query))
+    }
+
+    val allMatches = remember(state.searchResults, state.searchQuery, state.entries, query) {
+        val local = state.entries.filter {
+            it.name.contains(query, ignoreCase = true) || it.group.contains(query, ignoreCase = true)
+        }
+        val remote = if (state.searchQuery.equals(query, ignoreCase = true)) state.searchResults else emptyList()
+        (remote + local).distinctBy { it.sourceId to it.id }
+    }
+    val liveMatches = remember(allMatches) { allMatches.filter { it.kind == MediaKind.LIVE } }
+    val movieMatches = remember(allMatches) { allMatches.filter { it.kind == MediaKind.MOVIE } }
+    val seriesMatches = remember(allMatches) { allMatches.filter { it.kind == MediaKind.SERIES } }
+
+    var selectedFilter by rememberSaveable { mutableStateOf("Todos") }
+    LaunchedEffect(query) { selectedFilter = "Todos" }
+
+    val displayedMatches = when (selectedFilter) {
+        "Canais" -> liveMatches
+        "Filmes" -> movieMatches
+        "Séries" -> seriesMatches
+        else -> allMatches
+    }
+
+    Column(modifier.fillMaxSize().background(cinemaBlack)) {
+        if (state.searchBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        // Quick filter pills
+        LazyRow(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item {
+                EveryCineCategoryChip("Todos (${allMatches.size})", selectedFilter == "Todos") {
+                    selectedFilter = "Todos"
+                }
+            }
+            if (liveMatches.isNotEmpty()) item {
+                EveryCineCategoryChip("Canais (${liveMatches.size})", selectedFilter == "Canais") {
+                    selectedFilter = "Canais"
+                }
+            }
+            if (movieMatches.isNotEmpty()) item {
+                EveryCineCategoryChip("Filmes (${movieMatches.size})", selectedFilter == "Filmes") {
+                    selectedFilter = "Filmes"
+                }
+            }
+            if (seriesMatches.isNotEmpty()) item {
+                EveryCineCategoryChip("Séries (${seriesMatches.size})", selectedFilter == "Séries") {
+                    selectedFilter = "Séries"
+                }
+            }
+        }
+
+        if (displayedMatches.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    when {
+                        query.length < 2 -> "Digite pelo menos 2 letras para buscar em todo o catálogo."
+                        state.searchBusy -> "Buscando \"$search\" em canais, filmes e séries..."
+                        else -> "Nenhum resultado para \"$search\" no catálogo."
+                    },
+                    color = cinemaGrey,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(24.dp)
+                )
+            }
+        } else {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp, top = 4.dp),
+            ) {
+                items(displayedMatches, key = { it.sourceId + ":" + it.id }) { item ->
+                    val isPlaying = state.playingEntry?.id == item.id
+                    val isFav = item.id in state.favoriteIds
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectEntry(item) }
+                            .background(if (isPlaying) Color(0xFF0C242E) else Color.Transparent)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        // Badge / Poster (initials shown until logo loads or if URL fails)
+                        var searchLogoLoaded by remember(item.logo) { mutableStateOf(false) }
+                        Box(
+                            Modifier
+                                .size(if (item.kind == MediaKind.LIVE) 50.dp else 45.dp, 50.dp)
+                                .background(Color(0xFF1B1B22), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!searchLogoLoaded) {
+                                val initials = item.name.split(" ")
+                                    .filter { it.isNotBlank() }
+                                    .take(2)
+                                    .map { it.first().uppercaseChar() }
+                                    .joinToString("")
+                                    .ifBlank { "TV" }
+                                Text(
+                                    initials,
+                                    color = Color(0xFFA5B4FC),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (item.logo.isNotBlank()) {
+                                AsyncImage(
+                                    item.logo,
+                                    contentDescription = item.name,
+                                    modifier = Modifier.fillMaxSize().padding(3.dp),
+                                    contentScale = ContentScale.Fit,
+                                    onSuccess = { searchLogoLoaded = true },
+                                    onError = { searchLogoLoaded = false },
+                                )
+                            }
+                        }
+
+                        // Text details
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                item.name,
+                                color = if (isPlaying) cinemaAccent else cinemaWhite,
+                                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val typeLabel = when (item.kind) {
+                                MediaKind.LIVE -> "Canal Ao Vivo"
+                                MediaKind.MOVIE -> "Filme"
+                                MediaKind.SERIES -> "Série"
+                                else -> "Vídeo"
+                            }
+                            Text(
+                                "$typeLabel • ${item.group.ifBlank { "Catálogo" }}",
+                                color = cinemaGrey,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        // Actions for Live vs VOD
+                        if (item.kind == MediaKind.LIVE) {
+                            Box(
+                                Modifier
+                                    .background(Color(0xFF22222A), RoundedCornerShape(12.dp))
+                                    .clickable { onAction(AppAction.OpenEpg(item)) }
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Guia", color = cinemaWhite, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            }
+                            Text(
+                                if (isPlaying) "▶" else "▷",
+                                color = cinemaAccent,
+                                fontSize = 20.sp,
+                                modifier = Modifier.clickable {
+                                    if (isPlaying) onFullscreen() else onAction(AppAction.Play(item))
+                                }
+                            )
+                        } else {
+                            Text("Abrir ›", color = cinemaAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Text(
+                            if (isFav) "♥" else "♡",
+                            color = if (isFav) Color(0xFFEF4444) else cinemaWhite,
+                            fontSize = 20.sp,
+                            modifier = Modifier
+                                .clickable { onAction(AppAction.ToggleFavorite(item)) }
+                                .padding(4.dp)
+                        )
+                    }
+                    HorizontalDivider(color = Color(0xFF1E1E24), thickness = 0.5.dp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun EveryCineLive(
     state: AppUiState,
     controller: MediaController?,
@@ -481,9 +811,13 @@ private fun EveryCineLive(
                 (selected == EveryCineFamilyIndex.ALL || EveryCineFamilyIndex.category("", group.name) == selected)
         }
     }
-    LaunchedEffect(selected) {
-        if (selected != EveryCineFamilyIndex.ALL && categoryRemoteGroups.isNotEmpty()) {
-            val neededIds = categoryRemoteGroups.map { it.id }
+    LaunchedEffect(selected, categoryRemoteGroups.size) {
+        if (categoryRemoteGroups.isNotEmpty()) {
+            val neededIds = if (selected == EveryCineFamilyIndex.ALL) {
+                categoryRemoteGroups.take(16).map { it.id }
+            } else {
+                categoryRemoteGroups.map { it.id }
+            }
             onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, neededIds))
         }
     }
@@ -497,18 +831,18 @@ private fun EveryCineLive(
         }
     }
 
-    // Available subcategories pills for this category
-    val subcategories = remember(categoryChannels, categoryRemoteGroups, selected) {
-        val found = LinkedHashSet<String>()
-        for (channel in categoryChannels) {
-            val sub = EveryCineFamilyIndex.subcategory(channel.name, channel.group)
-            if (sub.isNotBlank()) found.add(sub)
+    // Available subcategories pills for this category (clean franchises only, only for specific categories)
+    val subcategories = remember(categoryChannels, selected) {
+        if (selected == EveryCineFamilyIndex.ALL) {
+            emptyList<String>()
+        } else {
+            val found = LinkedHashSet<String>()
+            for (channel in categoryChannels) {
+                val sub = EveryCineFamilyIndex.subcategory(channel.name, channel.group)
+                if (sub.isNotBlank()) found.add(sub)
+            }
+            found.toList().sortedWith(String.CASE_INSENSITIVE_ORDER)
         }
-        for (grp in categoryRemoteGroups) {
-            val sub = EveryCineFamilyIndex.subcategory(grp.name, grp.name)
-            if (sub.isNotBlank()) found.add(sub)
-        }
-        found.toList().sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
 
     // Channels filtered by selected subcategory pill
@@ -522,12 +856,14 @@ private fun EveryCineLive(
         }
     }
 
-    @Composable fun familyBrowser(modifier: Modifier) {
+    @Composable fun liveChannelBrowser(modifier: Modifier) {
         Column(modifier) {
             // Level 1: Category Pills
             LazyRow(
-                Modifier.fillMaxWidth().testTag("everycine-live-categories")
-                    .padding(top = 8.dp, bottom = 4.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("everycine-live-categories")
+                    .padding(top = 6.dp, bottom = 4.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -546,18 +882,13 @@ private fun EveryCineLive(
             }
             if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
 
-            // Level 2: Subcategorias Section
-            Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp)) {
-                Text(
-                    "Subcategorias",
-                    color = cinemaWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
+            // Level 2: Subcategories (only when available and non-empty)
+            if (subcategories.isNotEmpty()) {
                 LazyRow(
-                    Modifier.fillMaxWidth().testTag("everycine-live-subcategories")
-                        .padding(bottom = 4.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag("everycine-live-subcategories")
+                        .padding(vertical = 4.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -580,135 +911,42 @@ private fun EveryCineLive(
                 }
             }
 
-            // Level 3: Item count
-            Text(
-                "${filteredChannels.size} itens",
-                color = cinemaGrey,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            // Level 3: Channel Rows (vertical list with logo fallback, Guia button, play & fav)
+            EveryCineChannelRows(
+                channels = filteredChannels,
+                state = state,
+                onAction = onAction,
+                onFullscreen = onFullscreen,
+                modifier = Modifier.weight(1f)
             )
-
-            // Level 4: Grid of Individual Channels (All individual options, qualities, regions)
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxSize().testTag("everycine-channel-grid"),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                gridItems(filteredChannels, key = { it.sourceId + ":" + it.id }) { channel ->
-                    EveryCineChannelCard(
-                        channel = channel,
-                        isPlaying = state.playingEntry?.id == channel.id,
-                        isFavorite = channel.id in state.favoriteIds,
-                        onPlay = {
-                            if (state.playingEntry?.id == channel.id) {
-                                onFullscreen()
-                            } else {
-                                onAction(AppAction.Play(channel))
-                            }
-                        },
-                        onToggleFavorite = {
-                            onAction(AppAction.ToggleFavorite(channel))
-                        }
-                    )
-                }
-                if (filteredChannels.isEmpty() && !state.isBusy) item {
-                    Text(
-                        "Nenhum canal disponível nesta seleção.",
-                        color = cinemaGrey,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
         }
     }
 
     val compact = LocalConfiguration.current.screenHeightDp < 420
     if (compact) {
         Row(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
-            EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
-                Modifier.weight(1f).fillMaxHeight())
-            familyBrowser(Modifier.weight(1f).fillMaxHeight())
+            EveryCineInlinePlayer(
+                state = state,
+                controller = controller,
+                channels = filteredChannels,
+                onAction = onAction,
+                onFullscreen = onFullscreen,
+                modifier = Modifier.weight(1f).fillMaxHeight()
+            )
+            liveChannelBrowser(Modifier.weight(1f).fillMaxHeight())
         }
     } else {
         Column(Modifier.fillMaxSize().testTag("everycine-live-screen")) {
-            EveryCineInlinePlayer(state, controller, onAction, onFullscreen,
-                Modifier.fillMaxWidth().height(209.dp))
-            familyBrowser(Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun EveryCineChannelCard(
-    channel: MediaEntry,
-    isPlaying: Boolean,
-    isFavorite: Boolean,
-    onPlay: () -> Unit,
-    onToggleFavorite: () -> Unit,
-) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(134.dp)
-            .background(Color(0xFF1B1B22), RoundedCornerShape(12.dp))
-            .clickable(onClick = onPlay)
-            .padding(8.dp)
-            .testTag("everycine-channel-card-" + channel.id)
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(58.dp)
-                    .background(cinemaPanel, RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (channel.logo.isNotBlank()) {
-                    AsyncImage(
-                        channel.logo,
-                        contentDescription = channel.name,
-                        modifier = Modifier.fillMaxSize().padding(4.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    Text(
-                        channel.name.take(2).uppercase(),
-                        color = Color(0xFFA5B4FC),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                channel.name,
-                color = if (isPlaying) cinemaAccent else cinemaWhite,
-                fontSize = 11.sp,
-                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 13.sp
+            EveryCineInlinePlayer(
+                state = state,
+                controller = controller,
+                channels = filteredChannels,
+                onAction = onAction,
+                onFullscreen = onFullscreen,
+                modifier = Modifier.fillMaxWidth().height(240.dp)
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                channel.group.ifBlank { "CANAIS" }.uppercase(),
-                color = cinemaGrey,
-                fontSize = 9.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            liveChannelBrowser(Modifier.weight(1f))
         }
-        Text(
-            text = if (isFavorite) "♥" else "♡",
-            color = if (isFavorite) Color(0xFFEF4444) else cinemaWhite.copy(alpha = 0.8f),
-            fontSize = 18.sp,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .clickable(onClick = onToggleFavorite)
-                .padding(2.dp)
-        )
     }
 }
 
@@ -716,43 +954,184 @@ private fun EveryCineChannelCard(
 private fun EveryCineInlinePlayer(
     state: AppUiState,
     controller: MediaController?,
+    channels: List<MediaEntry>,
     onAction: (AppAction) -> Unit,
     onFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.background(Color.Black).testTag("everycine-inline-player")) {
-        val playing = state.playingEntry?.takeIf { it.kind == MediaKind.LIVE }
-        if (playing == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                NeonEmblem(Modifier.size(50.dp))
-                Spacer(Modifier.height(8.dp))
-                Text("Selecione um canal", color = cinemaGrey, fontSize = 13.sp)
+    val context = LocalContext.current
+    val playing = state.playingEntry?.takeIf { it.kind == MediaKind.LIVE }
+    var resizeMode by rememberSaveable { mutableIntStateOf(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+
+    Column(modifier.background(Color.Black).testTag("everycine-inline-player")) {
+        // Player Video View
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (playing == null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    NeonEmblem(Modifier.size(46.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("Selecione um canal para reproduzir", color = cinemaGrey, fontSize = 13.sp)
+                }
+            } else {
+                NativePlayerPane(
+                    playing, controller, false,
+                    onFullscreen = onFullscreen,
+                    onPictureInPicture = {},
+                    onStop = { onAction(AppAction.StopPlayback) },
+                    onRetry = { onAction(AppAction.Play(playing)) },
+                    onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
+                    modifier = Modifier.fillMaxSize(),
+                    showHeaderBar = false,
+                    externalResizeMode = resizeMode,
+                    onResizeModeChange = { resizeMode = it },
+                )
             }
-        } else NativePlayerPane(
-            playing, controller, false,
-            onFullscreen = onFullscreen,
-            onPictureInPicture = {},
-            onStop = { onAction(AppAction.StopPlayback) },
-            onRetry = { onAction(AppAction.Play(playing)) },
-            onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
-            modifier = Modifier.fillMaxSize(),
-        )
+        }
+
+        // Top Player Controls Bar (Horizontally scrollable so buttons NEVER get cut off or wrap!)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF0F0F14))
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val currentIndex = remember(channels, playing?.id) {
+                if (playing != null) channels.indexOfFirst { it.id == playing.id } else -1
+            }
+
+            // Ant (Previous Channel)
+            PlayerBarButton(
+                icon = "⏮",
+                label = "Ant",
+                enabled = channels.isNotEmpty(),
+                onClick = {
+                    if (channels.isNotEmpty()) {
+                        val prevIndex = if (currentIndex > 0) currentIndex - 1 else channels.size - 1
+                        onAction(AppAction.Play(channels[prevIndex]))
+                    }
+                }
+            )
+
+            // Próx (Next Channel)
+            PlayerBarButton(
+                icon = "⏭",
+                label = "Próx",
+                enabled = channels.isNotEmpty(),
+                onClick = {
+                    if (channels.isNotEmpty()) {
+                        val nextIndex = if (currentIndex in 0 until channels.size - 1) currentIndex + 1 else 0
+                        onAction(AppAction.Play(channels[nextIndex]))
+                    }
+                }
+            )
+
+            // Ajustar (Aspect Ratio: Fit -> Zoom -> Fill)
+            val aspectLabel = when (resizeMode) {
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "Ajustar"
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
+                else -> "Preencher"
+            }
+            PlayerBarButton(
+                icon = "📺",
+                label = aspectLabel,
+                enabled = playing != null,
+                onClick = {
+                    resizeMode = when (resizeMode) {
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                }
+            )
+
+            // Cast (Native Android Cast Settings or external player, never shows "Nenhum app pode realizar esta ação")
+            PlayerBarButton(
+                icon = "📡",
+                label = "Cast",
+                enabled = playing != null,
+                onClick = {
+                    if (playing != null) openCastOrMirroring(context, playing)
+                }
+            )
+
+            // Fullscreen
+            PlayerBarButton(
+                icon = "⛶",
+                label = "Tela cheia",
+                enabled = playing != null,
+                onClick = onFullscreen
+            )
+        }
     }
 }
 
+private fun openCastOrMirroring(context: Context, entry: MediaEntry) {
+    try {
+        val castSettings = Intent(Settings.ACTION_CAST_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (castSettings.resolveActivity(context.packageManager) != null) {
+            context.startActivity(castSettings)
+            return
+        }
+    } catch (_: Exception) {
+    }
+    if (entry.url.startsWith("http://") || entry.url.startsWith("https://")) {
+        try {
+            val viewVideo = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.parse(entry.url), "video/*")
+                putExtra("title", entry.name)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val externalHandlers = context.packageManager.queryIntentActivities(viewVideo, 0)
+                .filter { it.activityInfo.packageName != context.packageName }
+            if (externalHandlers.isNotEmpty()) {
+                context.startActivity(Intent.createChooser(viewVideo, "Transmitir: ${entry.name}"))
+                return
+            }
+        } catch (_: Exception) {
+        }
+    }
+    Toast.makeText(
+        context,
+        "Use o espelhamento de tela (Transmitir / Smart View) do aparelho para enviar para a TV.",
+        Toast.LENGTH_LONG,
+    ).show()
+}
+
 @Composable
-private fun EveryCineLiveCategories(
-    categories: List<String>, selectedCategory: String, onSelectCategory: (String) -> Unit,
+private fun PlayerBarButton(
+    icon: String,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
 ) {
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().testTag("everycine-live-categories")
-            .padding(top = 8.dp, bottom = 5.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Box(
+        Modifier
+            .background(
+                if (enabled) Color(0xFF1F1F27) else Color(0xFF141418),
+                RoundedCornerShape(8.dp)
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
     ) {
-        item { EveryCineCategoryChip("Todos", selectedCategory.isBlank()) { onSelectCategory("") } }
-        items(categories, key = { it }) { name ->
-            EveryCineCategoryChip(name, name == selectedCategory) { onSelectCategory(name) }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(icon, fontSize = 12.sp, color = if (enabled) cinemaWhite else cinemaGrey, maxLines = 1, softWrap = false)
+            Text(
+                label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) cinemaWhite else cinemaGrey,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }
@@ -771,40 +1150,127 @@ private fun EveryCineChannelRows(
     ) {
         items(channels, key = { it.sourceId + ":" + it.id }) { channel ->
             val selected = state.playingEntry?.id == channel.id
+            val isFavorite = channel.id in state.favoriteIds
+
             Row(
-                Modifier.fillMaxWidth().clickable {
-                    if (selected) onFullscreen() else onAction(AppAction.Play(channel))
-                }.padding(horizontal = 12.dp, vertical = 7.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (selected) onFullscreen() else onAction(AppAction.Play(channel))
+                    }
+                    .background(if (selected) Color(0xFF0C242E) else Color.Transparent)
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(Modifier.size(55.dp).background(cinemaPanel, RoundedCornerShape(6.dp)),
-                    contentAlignment = Alignment.Center) {
-                    if (channel.logo.isNotBlank()) AsyncImage(
-                        channel.logo, contentDescription = null,
-                        modifier = Modifier.fillMaxSize().padding(3.dp),
-                        contentScale = ContentScale.Fit,
-                    ) else Text("TV", color = cinemaGrey, fontSize = 14.sp)
+                // Channel Logo with Fallback Acronym Badge (shown when blank or failed)
+                var channelLogoLoaded by remember(channel.logo) { mutableStateOf(false) }
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .background(Color(0xFF18181E), RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!channelLogoLoaded) {
+                        val initials = channel.name.split(" ")
+                            .filter { it.isNotBlank() }
+                            .take(2)
+                            .map { it.first().uppercaseChar() }
+                            .joinToString("")
+                            .ifBlank { "TV" }
+                        Text(
+                            initials,
+                            color = Color(0xFFA5B4FC),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (channel.logo.isNotBlank()) {
+                        AsyncImage(
+                            channel.logo,
+                            contentDescription = channel.name,
+                            modifier = Modifier.fillMaxSize().padding(4.dp),
+                            contentScale = ContentScale.Fit,
+                            onSuccess = { channelLogoLoaded = true },
+                            onError = { channelLogoLoaded = false },
+                        )
+                    }
                 }
+
+                // Name and Subtitle
                 Column(Modifier.weight(1f)) {
-                    Text(channel.name, color = cinemaWhite,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(channel.group.ifBlank { "Ao vivo" }, color = cinemaGrey,
-                        fontSize = 12.sp, maxLines = 1)
+                    Text(
+                        channel.name,
+                        color = if (selected) cinemaAccent else cinemaWhite,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val groupText = formatChannelGroup(channel.name, channel.group)
+                    Text(
+                        groupText,
+                        color = cinemaGrey,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Text(if (selected) "▶" else "▷", color = cinemaAccent, fontSize = 21.sp)
-                Text(if (channel.id in state.favoriteIds) "♥" else "♡",
-                    color = cinemaWhite, fontSize = 22.sp, modifier = Modifier
+
+                // Guia EPG button
+                Box(
+                    Modifier
+                        .background(Color(0xFF1F1F27), RoundedCornerShape(12.dp))
+                        .clickable { onAction(AppAction.OpenEpg(channel)) }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Guia", color = cinemaWhite, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+
+                // Play / Active indicator
+                Text(
+                    if (selected) "▶" else "▷",
+                    color = cinemaAccent,
+                    fontSize = 20.sp,
+                    modifier = Modifier.clickable {
+                        if (selected) onFullscreen() else onAction(AppAction.Play(channel))
+                    }
+                )
+
+                // Favorite
+                Text(
+                    if (isFavorite) "♥" else "♡",
+                    color = if (isFavorite) Color(0xFFEF4444) else cinemaWhite.copy(alpha = 0.8f),
+                    fontSize = 20.sp,
+                    modifier = Modifier
                         .clickable { onAction(AppAction.ToggleFavorite(channel)) }
-                        .padding(4.dp))
+                        .padding(2.dp)
+                )
             }
-            HorizontalDivider(color = Color(0xFF222225), thickness = .5.dp)
+            HorizontalDivider(color = Color(0xFF1B1B20), thickness = 0.5.dp)
         }
         if (channels.isEmpty() && !state.isBusy) item {
-            Text("Selecione uma categoria para carregar os canais.",
-                color = cinemaGrey, modifier = Modifier.padding(20.dp))
+            Text(
+                "Nenhum canal disponível nesta seleção.",
+                color = cinemaGrey,
+                modifier = Modifier.padding(20.dp)
+            )
         }
+    }
+}
+
+private fun formatChannelGroup(name: String, group: String): String {
+    val lower = (name + " " + group).lowercase()
+    val base = group.ifBlank { "Ao vivo" }.uppercase()
+    return when {
+        lower.contains("esporte") || lower.contains("sport") || lower.contains("premiere") || lower.contains("combate") -> "CANAIS: ESPORTES ⚽"
+        lower.contains("filme") || lower.contains("telecine") || lower.contains("hbo") || lower.contains("cinema") -> "CANAIS: FILMES 🎬"
+        lower.contains("24h") || lower.contains("24 horas") -> "CANAIS: 24 HORAS ✨"
+        lower.contains("desenho") || lower.contains("kids") || lower.contains("anime") -> "CANAIS: DESENHOS 🎨"
+        lower.contains("noticia") || lower.contains("news") -> "CANAIS: NOTÍCIAS 📰"
+        lower.contains("aberto") || lower.contains("globo") || lower.contains("sbt") || lower.contains("band") -> "CANAIS: ABERTOS 📺"
+        else -> "CANAIS: $base"
     }
 }
 
@@ -945,7 +1411,10 @@ private fun EveryCineMovieDetail(
     ) {
         Surface(color = cinemaBlack, modifier = Modifier.fillMaxSize()
             .testTag("everycine-movie-details")) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 22.dp)) {
+            LazyColumn(
+                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+                contentPadding = PaddingValues(bottom = 22.dp),
+            ) {
                 item {
                     Box(Modifier.fillMaxWidth().height(330.dp)) {
                         if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null,
