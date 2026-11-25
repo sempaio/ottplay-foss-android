@@ -92,10 +92,6 @@ import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.SourceConfig
 import play.ott.nativeapp.i18n.AppLanguages
-import play.ott.nativeapp.data.CatalogDisplayGroup
-import play.ott.nativeapp.data.XtreamDisplayGroups
-import play.ott.nativeapp.data.SmartLiveCatalog
-import play.ott.nativeapp.data.LiveNetworkDiscovery
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -181,7 +177,7 @@ fun OttNativeApp(
     }
     val remoteDisplayGroups = remember(state.xtreamGroups, remoteKind, lazyXtream) {
         if (lazyXtream && remoteKind != null)
-            XtreamDisplayGroups.merge(state.xtreamGroups).filter { it.kind == remoteKind }
+            state.xtreamGroups.filter { it.kind == remoteKind }
         else emptyList()
     }
     val tabEntries by produceState<List<MediaEntry>>(emptyList(), state.entries, state.favoriteIds, tab) {
@@ -197,79 +193,36 @@ fun OttNativeApp(
         }
     }
     }
-    val liveProviderGroups by produceState<Set<String>>(emptySet(), state.entries) {
-        value = withContext(Dispatchers.Default) {
-            state.entries.asSequence().filter { it.kind == MediaKind.LIVE }
-                .map { it.group.trim() }.filter { it.isNotEmpty() }.toSet()
-        }
-    }
-    val availableLiveLabels = remember(state.xtreamGroups, liveProviderGroups) {
-        val names = if (state.xtreamGroups.isNotEmpty())
-            XtreamDisplayGroups.merge(state.xtreamGroups).filter { it.kind == MediaKind.LIVE }.map { it.label }
-        else liveProviderGroups.map { XtreamDisplayGroups.label(it, MediaKind.LIVE) }
-        names.toSet()
-    }
     val loadedGroups by produceState<List<String>>(
-        emptyList(), tabEntries, availableLiveLabels, tab
+        emptyList(), tabEntries, tab
     ) {
         value = withContext(Dispatchers.Default) {
-            tabEntries.map { entry ->
-                if (entry.kind == MediaKind.LIVE) SmartLiveCatalog.category(entry, availableLiveLabels)
-                else entry.group.trim()
-            }.filter { it.isNotBlank() }.distinct().sorted()
+            tabEntries.map { it.group.trim() }.filter { it.isNotBlank() }.distinct().sorted()
         }
     }
-    val groups = if (lazyXtream && remoteKind != null) remoteDisplayGroups.map { it.label } else loadedGroups
-    LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream, availableLiveLabels) {
+    val groups = if (lazyXtream && remoteKind != null) remoteDisplayGroups.map { it.name }.distinct() else loadedGroups
+    LaunchedEffect(tabEntries, group, state.isBusy, lazyXtream) {
         if (!lazyXtream && !state.isBusy && state.entries.isNotEmpty() && group.isNotBlank()) {
-            val exists = withContext(Dispatchers.Default) { tabEntries.any { entry ->
-                (if (entry.kind == MediaKind.LIVE) SmartLiveCatalog.category(entry, availableLiveLabels)
-                else entry.group.trim()) == group
-            } }
+            val exists = withContext(Dispatchers.Default) { tabEntries.any { it.group.trim() == group } }
             if (!exists) group = ""
         }
     }
-    val visibleEntries by produceState<List<MediaEntry>>(emptyList(), tabEntries, search, group, liveProviderGroups) {
+    val visibleEntries by produceState<List<MediaEntry>>(emptyList(), tabEntries, search, group) {
         if (search.isNotBlank()) delay(250)
         value = withContext(Dispatchers.Default) {
             tabEntries.filter { entry ->
-                val effectiveGroup = if (entry.kind == MediaKind.LIVE)
-                    SmartLiveCatalog.category(entry, availableLiveLabels) else entry.group.trim()
+                val effectiveGroup = entry.group.trim()
                 (group.isBlank() || effectiveGroup == group) &&
                     (search.isBlank() || entry.name.contains(search, ignoreCase = true) ||
                         effectiveGroup.contains(search, ignoreCase = true))
             }
         }
     }
-    var liveNetwork by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(tab, group) { liveNetwork = "" }
-    // Only when the user explicitly selects an open-TV network, retrieve a few
-    // regional provider groups on demand. Reuse the visited category cache.
-    LaunchedEffect(lazyXtream, state.selectedSourceId, group, liveNetwork) {
-        if (lazyXtream && tab == LibraryTab.LIVE && group == "Abertos" && liveNetwork.isNotBlank()) {
-            val related = LiveNetworkDiscovery.related(state.xtreamGroups, liveNetwork)
-            if (related.isNotEmpty()) {
-                onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, related.map { it.id }))
-            }
-        }
-    }
-    val liveNetworks = remember(visibleEntries, tab, group) {
-        if (tab == LibraryTab.LIVE && group == "Abertos") SmartLiveCatalog.networks(visibleEntries)
-        else emptyList()
-    }
-    // Fold only LIVE quality variants, never original streams or movie/series records.
     val displayCards by produceState<List<LiveQualityCard>>(
-        emptyList(), visibleEntries, tab, liveNetwork, availableLiveLabels
+        emptyList(), visibleEntries, tab
     ) {
         value = withContext(Dispatchers.Default) {
-            if (tab == LibraryTab.LIVE) {
-                val byNetwork = if (liveNetwork.isBlank()) visibleEntries
-                    else visibleEntries.filter { SmartLiveCatalog.network(it) == liveNetwork }
-                val cards = liveQualityCards(SmartLiveCatalog.prominentFirst(byNetwork)) { entry ->
-                    SmartLiveCatalog.category(entry, availableLiveLabels)
-                }
-                if (group == "Séries") LiveSeasonGroups.join(cards) else cards
-            } else visibleEntries.map { LiveQualityCard(it, it.name, listOf(it)) }
+            visibleEntries.map { LiveQualityCard(it, it.name, listOf(it)) }
         }
     }
     LaunchedEffect(tab, group, state.selectedSourceId) { qualityOptions = emptyList() }
@@ -380,9 +333,10 @@ fun OttNativeApp(
                                             tab = when (kind) { MediaKind.LIVE -> LibraryTab.LIVE; MediaKind.SERIES -> LibraryTab.SERIES; else -> LibraryTab.MOVIES }
                                             group = category; search = ""
                                             if (lazyXtream && category.isNotBlank()) {
-                                                XtreamDisplayGroups.merge(state.xtreamGroups)
-                                                    .firstOrNull { it.kind == kind && it.label == category }
-                                                    ?.let { onAction(AppAction.OpenXtreamGroups(kind, it.sources.map { source -> source.id })) }
+                                                val ids = state.xtreamGroups
+                                                    .filter { it.kind == kind && it.name == category }
+                                                    .map { it.id }
+                                                if (ids.isNotEmpty()) onAction(AppAction.OpenXtreamGroups(kind, ids))
                                             }
                                         }, onPreferences = { showForYouPreferences = true },
                                             onFavorites = { tab = LibraryTab.FAVORITES; group = ""; search = "" },
@@ -423,27 +377,12 @@ fun OttNativeApp(
                                                 item { FilterChip(selected = group.isBlank(), onClick = { group = "" }, label = { Text(stringResource(R.string.library_all_groups)) }) }
                                                 items(groups) { name -> FilterChip(selected = group == name, onClick = { group = name }, label = { Text(name) }, modifier = Modifier.testTag("library-group-$name")) }
                                             } else {
-                                                items(remoteDisplayGroups, key = { it.kind.name + ":" + it.label }) { remote ->
-                                                    FilterChip(selected = group == remote.label, onClick = {
-                                                        group = remote.label
-                                                        onAction(AppAction.OpenXtreamGroups(remote.kind, remote.sources.map { source -> source.id }))
-                                                    }, label = { Text(remote.label) }, modifier = Modifier.testTag("library-group-" + remote.label))
+                                                items(remoteDisplayGroups, key = { it.kind.name + ":" + it.id }) { remote ->
+                                                    FilterChip(selected = group == remote.name, onClick = {
+                                                        group = remote.name
+                                                        onAction(AppAction.OpenXtreamGroup(remote.kind, remote.id))
+                                                    }, label = { Text(remote.name) }, modifier = Modifier.testTag("library-group-" + remote.name))
                                                 }
-                                            }
-                                        }
-                                    }
-                                    if (liveNetworks.isNotEmpty()) {
-                                        Text("Emissoras", style = MaterialTheme.typography.titleMedium)
-                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            item(key = "network-all") {
-                                                FilterChip(selected = liveNetwork.isBlank(), onClick = { liveNetwork = "" },
-                                                    label = { Text("Todas") }, modifier = Modifier.testTag("live-network-all"))
-                                            }
-                                            items(liveNetworks, key = { it }) { network ->
-                                                FilterChip(selected = liveNetwork == network,
-                                                    onClick = { liveNetwork = network },
-                                                    label = { Text(network) },
-                                                    modifier = Modifier.testTag("live-network-" + network))
                                             }
                                         }
                                     }
@@ -726,7 +665,7 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
                     "Temporadas e transmissões: $variantCount" else
                     stringResource(R.string.starlink_quality_variants_count, variantCount),
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            Text(CatalogDisplayGroup.group(entry).ifBlank { if (entry.kind == MediaKind.LIVE) stringResource(R.string.library_live_video) else stringResource(R.string.library_video) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry.group.trim().ifBlank { if (entry.kind == MediaKind.LIVE) stringResource(R.string.library_live_video) else stringResource(R.string.library_video) }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             ActionButton(if (favorite) stringResource(R.string.library_favorite_selected) else stringResource(R.string.library_favorite_add), { onAction(AppAction.ToggleFavorite(entry)) }, Modifier.fillMaxWidth().semantics { contentDescription = favoriteDescription }, compact = true, selected = favorite)
             if (entry.kind == MediaKind.LIVE) ActionButton(stringResource(R.string.library_tv_guide), { onAction(AppAction.OpenEpg(entry)) }, Modifier.fillMaxWidth(), compact = true)
         }
@@ -901,7 +840,7 @@ internal fun FeaturedContent(entry: MediaEntry, onAction: (AppAction) -> Unit) {
             Column(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE080B16), Color.Transparent))).padding(20.dp), verticalArrangement = Arrangement.Center) {
                 Text("DESTAQUE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(CatalogDisplayGroup.group(entry), style = MaterialTheme.typography.bodyMedium)
+                Text(entry.group.trim(), style = MaterialTheme.typography.bodyMedium)
                 Text(if (entry.kind == MediaKind.SERIES) "Ver temporadas e episódios" else "Assistir", color = Color.White)
             }
         }

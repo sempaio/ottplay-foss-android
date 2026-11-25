@@ -4,7 +4,7 @@ import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 import play.ott.nativeapp.core.XtreamGroup
 
-/** One real category on the STARLINK home screen, never synthetic catalogue entries. */
+/** One real category on the STARLINK home screen, strictly mirroring the upstream list. */
 data class ShowcaseRow(
     val title: String,
     val kind: MediaKind,
@@ -12,11 +12,7 @@ data class ShowcaseRow(
 )
 
 /**
- * Presentation-only grouping and repeatable browsing batches.
- *
- * Does not change stream IDs, provider URLs, downloaded metadata, playback, EPG,
- * favorites, or the saved catalog. A group only exists if the source catalog
- * actually contains entries that resolve to that group.
+ * Raw upstream category listing and batching without any client-side reclassification.
  */
 object ShowcasePlanner {
     fun categories(
@@ -24,19 +20,13 @@ object ShowcasePlanner {
         kind: MediaKind,
         remoteGroups: List<XtreamGroup> = emptyList(),
     ): List<String> {
-        // Xtream-on-demand has category metadata before the first stream is downloaded.
-        // Never require a full movie/channel catalog just to populate the home selectors.
-        val remoteCategories = XtreamDisplayGroups.merge(remoteGroups)
-            .filter { it.kind == kind }.map { it.label }
+        val remoteCategories = remoteGroups.filter { it.kind == kind }
+            .map { it.name.trim() }.filter { it.isNotEmpty() }.distinct()
         if (remoteCategories.isNotEmpty()) return remoteCategories
         val counts = HashMap<String, Int>()
-        val liveGroups = entries.asSequence().filter { it.kind == MediaKind.LIVE }
-            .map { XtreamDisplayGroups.label(it.group, MediaKind.LIVE) }
-            .filter { it.isNotEmpty() }.toSet()
         entries.forEach { entry ->
             if (entry.kind == kind) {
-                val group = if (kind == MediaKind.LIVE)
-                    SmartLiveCatalog.category(entry, liveGroups) else entry.group.trim()
+                val group = entry.group.trim()
                 if (group.isNotBlank()) counts[group] = (counts[group] ?: 0) + 1
             }
         }
@@ -59,23 +49,9 @@ object ShowcasePlanner {
     ): List<ShowcaseRow> {
         if (maxRows <= 0 || batchSize <= 0) return emptyList()
         val grouped = LinkedHashMap<String, MutableList<MediaEntry>>()
-        val liveGroups = entries.asSequence().filter { it.kind == MediaKind.LIVE }
-            .map { it.group.trim() }.filter { it.isNotEmpty() }.toSet()
-        val validLiveLabels = if (availableLiveLabels.isNotEmpty()) availableLiveLabels
-            else liveGroups.map { XtreamDisplayGroups.label(it, MediaKind.LIVE) }.toSet()
         entries.forEach { entry ->
             if (entry.kind == kind) {
-                // A remote category ID refers to its ORIGINAL provider group, even when
-                // the presentation classifier assigns another existing genre.
-                val group = when {
-                    preferSourceGroup && consolidateSourceGroups && kind == MediaKind.LIVE ->
-                        SmartLiveCatalog.category(entry, validLiveLabels)
-                    preferSourceGroup && consolidateSourceGroups ->
-                        XtreamDisplayGroups.label(entry.group, entry.kind)
-                    preferSourceGroup -> entry.group.trim()
-                    else -> if (entry.kind == MediaKind.LIVE)
-                        SmartLiveCatalog.category(entry, validLiveLabels) else entry.group.trim()
-                }
+                val group = entry.group.trim()
                 if (group.isNotBlank() && (selectedCategory.isBlank() || selectedCategory == group)) {
                     grouped.getOrPut(group) { ArrayList() }.add(entry)
                 }

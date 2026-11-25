@@ -7,40 +7,6 @@ import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 
 class LiveQualityGroupsTest {
-    @Test fun globoRio720pJoinsOtherRioQualitiesNotSaoPaulo() {
-        val items = listOf(
-            entry("TV Globo Rio de Janeiro (720p)", "Canais abertos"),
-            entry("Globo RJ HD", "TV Brasileira"),
-            entry("Globo RJ FHD", "TV Brasileira"),
-            entry("Globo SP HD", "TV Brasileira"),
-        )
-        val cards = liveQualityCards(items) {
-            play.ott.nativeapp.data.SmartLiveCatalog.category(
-                it, setOf("Abertos", "TV Brasileira"))
-        }
-        assertEquals(2, cards.size)
-        val rio = cards.first { it.displayName == "Globo RJ" }
-        assertEquals(3, rio.options.size)
-        assertEquals(items.take(3).map { it.id }.toSet(), rio.options.map { it.id }.toSet())
-        assertTrue(rio.options.any { qualityName(it.name) == "720p" })
-        assertTrue(cards.any { it.entry.name == "Globo SP HD" })
-    }
-
-    @Test fun equivalentXtreamCategoriesJoinOnlyQualityVariantsOfSameChannel() {
-        val input = listOf(
-            entry("Globo RJ SD", "Canais abertos"),
-            entry("Globo RJ FHD", "CANAIS: ABERTOS ✨"),
-            entry("Globo SP HD", "TV Brasileira"),
-        )
-        val cards = liveQualityCards(input) { media ->
-            play.ott.nativeapp.data.XtreamDisplayGroups.label(media.group, media.kind)
-        }
-        assertEquals(2, cards.size)
-        val rj = cards.first { it.displayName == "Globo RJ" }
-        assertEquals(2, rj.options.size)
-        assertEquals(input.take(2).map { it.id }.toSet(), rj.options.map { it.id }.toSet())
-    }
-
     private fun entry(name: String, group: String = "Esportes", kind: MediaKind = MediaKind.LIVE, source: String = "starlink") =
         MediaEntry(id = "${source}:${group}:${name}", sourceId = source, name = name, group = group, kind = kind)
 

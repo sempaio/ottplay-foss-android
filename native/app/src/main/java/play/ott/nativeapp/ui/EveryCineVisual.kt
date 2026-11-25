@@ -44,7 +44,6 @@ import coil.compose.AsyncImage
 import play.ott.nativeapp.R
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
-import play.ott.nativeapp.data.XtreamDisplayGroups
 
 private val cinemaBlack = Color(0xFF050506)
 private val cinemaPanel = Color(0xFF151519)
@@ -109,8 +108,7 @@ internal fun EveryCineVisualApp(
 
     val isTv = LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK ==
         Configuration.UI_MODE_TYPE_TELEVISION
-    val mergedGroups = remember(state.xtreamGroups) { XtreamDisplayGroups.merge(state.xtreamGroups) }
-    val hasRemoteCategories = mergedGroups.isNotEmpty()
+    val hasRemoteCategories = state.xtreamGroups.isNotEmpty()
     val sourceIds = remember(state.sources) { state.sources.map { it.id }.toSet() }
     val recent = remember(state.recent, sourceIds) {
         state.recent.filter { it.entry.sourceId in sourceIds }.take(24)
@@ -124,9 +122,10 @@ internal fun EveryCineVisualApp(
         selectedCategory = category
         search = ""
         if (kind != MediaKind.LIVE && hasRemoteCategories && category.isNotBlank()) {
-            mergedGroups.firstOrNull { it.kind == kind && it.label == category }?.let { group ->
-                onAction(AppAction.OpenXtreamGroups(kind, group.sources.map { it.id }))
-            }
+            val ids = state.xtreamGroups
+                .filter { it.kind == kind && it.name == category }
+                .map { it.id }
+            if (ids.isNotEmpty()) onAction(AppAction.OpenXtreamGroups(kind, ids))
         }
     }
     LaunchedEffect(state.playingEntry?.id) {
@@ -238,7 +237,7 @@ internal fun EveryCineVisualApp(
                                 )
                                 EveryCinePage.CATALOG -> EveryCineCatalog(
                                     state, onAction, search, catalogKind, selectedCategory,
-                                    mergedGroups.filter { it.kind == catalogKind }.map { it.label },
+                                    state.xtreamGroups.filter { it.kind == catalogKind }.map { it.name }.distinct(),
                                     onKind = { catalogKindName = it.name; selectedCategory = "" },
                                     onCategory = { browse(catalogKind, it) },
                                     hasRemoteCategories = hasRemoteCategories,
@@ -444,12 +443,17 @@ private fun EveryCineHome(
         everyCineSections(content, recent, state.favoriteIds)
     }
     val homeCategories = remember(state.xtreamGroups, state.entries) {
-        val live = EveryCineFamilyIndex.available(state.entries, state.xtreamGroups)
-            .map { MediaKind.LIVE to it }
-        val vod = XtreamDisplayGroups.merge(state.xtreamGroups)
-            .filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }
-            .take(16).map { it.kind to it.label }
-        live + vod
+        if (state.xtreamGroups.isNotEmpty()) {
+            val live = state.xtreamGroups.filter { it.kind == MediaKind.LIVE }
+                .map { MediaKind.LIVE to it.name }.distinct().take(12)
+            val vod = state.xtreamGroups.filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }
+                .map { it.kind to it.name }.distinct().take(16)
+            live + vod
+        } else {
+            state.entries.mapNotNull { e ->
+                e.group.trim().takeIf { it.isNotEmpty() }?.let { e.kind to it }
+            }.distinct().take(24)
+        }
     }
     LazyColumn(
         Modifier.fillMaxSize().testTag("everycine-home"),
@@ -797,68 +801,46 @@ private fun EveryCineLive(
     onSelectCategory: (String) -> Unit,
     onFullscreen: () -> Unit,
 ) {
-    val selected = selectedCategory.ifBlank { EveryCineFamilyIndex.ALL }
-    val categories = remember(state.entries, state.xtreamGroups) {
-        EveryCineFamilyIndex.available(state.entries, state.xtreamGroups)
+    val allLabel = "Todos"
+    val selected = selectedCategory.ifBlank { allLabel }
+    val remoteLiveGroups = remember(state.xtreamGroups) {
+        state.xtreamGroups.filter { it.kind == MediaKind.LIVE }
     }
-    var selectedSubcategory by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(selected) { selectedSubcategory = "" }
-
-    // Identify remote groups for this category and trigger on-demand load if needed
-    val categoryRemoteGroups = remember(state.xtreamGroups, selected) {
-        state.xtreamGroups.filter { group ->
-            group.kind == MediaKind.LIVE &&
-                (selected == EveryCineFamilyIndex.ALL || EveryCineFamilyIndex.category("", group.name) == selected)
-        }
-    }
-    LaunchedEffect(selected, categoryRemoteGroups.size) {
-        if (categoryRemoteGroups.isNotEmpty()) {
-            val neededIds = if (selected == EveryCineFamilyIndex.ALL) {
-                categoryRemoteGroups.take(16).map { it.id }
-            } else {
-                categoryRemoteGroups.map { it.id }
-            }
-            onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, neededIds))
+    val categories = remember(remoteLiveGroups, state.entries) {
+        if (remoteLiveGroups.isNotEmpty()) {
+            remoteLiveGroups.map { it.name }.filter { it.isNotBlank() }.distinct()
+        } else {
+            state.entries.filter { it.kind == MediaKind.LIVE }
+                .map { it.group.trim() }.filter { it.isNotBlank() }.distinct()
         }
     }
 
-    // Channels matching category and search (preserves ALL channels: 1, 2, 3, 4, FHD, HD, etc.)
-    val categoryChannels = remember(state.entries, selected, search) {
+    // Load exact remote Xtream category IDs directly from the upstream list (Pluto + IPTV 2026)
+    val selectedRemoteIds = remember(remoteLiveGroups, selected) {
+        if (selected == allLabel) {
+            remoteLiveGroups.take(10).map { it.id }
+        } else {
+            remoteLiveGroups.filter { it.name.equals(selected, ignoreCase = true) }.map { it.id }
+        }
+    }
+    LaunchedEffect(selected, selectedRemoteIds) {
+        if (selectedRemoteIds.isNotEmpty()) {
+            onAction(AppAction.OpenXtreamGroups(MediaKind.LIVE, selectedRemoteIds))
+        }
+    }
+
+    // Channels matching the exact upstream list category (zero artificial regrouping)
+    val filteredChannels = remember(state.entries, selected, search) {
         state.entries.filter { entry ->
             entry.kind == MediaKind.LIVE &&
-                (selected == EveryCineFamilyIndex.ALL || EveryCineFamilyIndex.category(entry.name, entry.group) == selected) &&
+                (selected == allLabel || entry.group.trim().equals(selected, ignoreCase = true)) &&
                 (search.isBlank() || entry.name.contains(search, ignoreCase = true) || entry.group.contains(search, ignoreCase = true))
-        }
-    }
-
-    // Available subcategories pills for this category (clean franchises only, only for specific categories)
-    val subcategories = remember(categoryChannels, selected) {
-        if (selected == EveryCineFamilyIndex.ALL) {
-            emptyList<String>()
-        } else {
-            val found = LinkedHashSet<String>()
-            for (channel in categoryChannels) {
-                val sub = EveryCineFamilyIndex.subcategory(channel.name, channel.group)
-                if (sub.isNotBlank()) found.add(sub)
-            }
-            found.toList().sortedWith(String.CASE_INSENSITIVE_ORDER)
-        }
-    }
-
-    // Channels filtered by selected subcategory pill
-    val filteredChannels = remember(categoryChannels, selectedSubcategory) {
-        if (selectedSubcategory.isBlank() || selectedSubcategory == "Todos os grupos") {
-            categoryChannels
-        } else {
-            categoryChannels.filter { entry ->
-                EveryCineFamilyIndex.subcategory(entry.name, entry.group).equals(selectedSubcategory, ignoreCase = true)
-            }
         }
     }
 
     @Composable fun liveChannelBrowser(modifier: Modifier) {
         Column(modifier) {
-            // Level 1: Category Pills
+            // Exact upstream list categories (Pluto + IPTV 2026), no invented subcategories
             LazyRow(
                 Modifier
                     .fillMaxWidth()
@@ -868,50 +850,19 @@ private fun EveryCineLive(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
-                    EveryCineCategoryChip("Todos", selected == EveryCineFamilyIndex.ALL) {
-                        selectedSubcategory = ""
+                    EveryCineCategoryChip(allLabel, selected == allLabel) {
                         onSelectCategory("")
                     }
                 }
                 items(categories, key = { it }) { name ->
                     EveryCineCategoryChip(name, selected == name) {
-                        selectedSubcategory = ""
                         onSelectCategory(name)
                     }
                 }
             }
             if (state.isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
 
-            // Level 2: Subcategories (only when available and non-empty)
-            if (subcategories.isNotEmpty()) {
-                LazyRow(
-                    Modifier
-                        .fillMaxWidth()
-                        .testTag("everycine-live-subcategories")
-                        .padding(vertical = 4.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item {
-                        EveryCineCategoryChip(
-                            "Todos os grupos",
-                            selectedSubcategory.isBlank() || selectedSubcategory == "Todos os grupos"
-                        ) {
-                            selectedSubcategory = ""
-                        }
-                    }
-                    items(subcategories, key = { it }) { subcat ->
-                        EveryCineCategoryChip(
-                            subcat,
-                            selectedSubcategory.equals(subcat, ignoreCase = true)
-                        ) {
-                            selectedSubcategory = subcat
-                        }
-                    }
-                }
-            }
-
-            // Level 3: Channel Rows (vertical list with logo fallback, Guia button, play & fav)
+            // Channel Rows (vertical list with logo fallback, Guia button, play & fav)
             EveryCineChannelRows(
                 channels = filteredChannels,
                 state = state,
@@ -1207,9 +1158,8 @@ private fun EveryCineChannelRows(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    val groupText = formatChannelGroup(channel.name, channel.group)
                     Text(
-                        groupText,
+                        channel.group.ifBlank { "Ao vivo" },
                         color = cinemaGrey,
                         fontSize = 11.sp,
                         maxLines = 1,
@@ -1260,20 +1210,6 @@ private fun EveryCineChannelRows(
     }
 }
 
-private fun formatChannelGroup(name: String, group: String): String {
-    val lower = (name + " " + group).lowercase()
-    val base = group.ifBlank { "Ao vivo" }.uppercase()
-    return when {
-        lower.contains("esporte") || lower.contains("sport") || lower.contains("premiere") || lower.contains("combate") -> "CANAIS: ESPORTES ⚽"
-        lower.contains("filme") || lower.contains("telecine") || lower.contains("hbo") || lower.contains("cinema") -> "CANAIS: FILMES 🎬"
-        lower.contains("24h") || lower.contains("24 horas") -> "CANAIS: 24 HORAS ✨"
-        lower.contains("desenho") || lower.contains("kids") || lower.contains("anime") -> "CANAIS: DESENHOS 🎨"
-        lower.contains("noticia") || lower.contains("news") -> "CANAIS: NOTÍCIAS 📰"
-        lower.contains("aberto") || lower.contains("globo") || lower.contains("sbt") || lower.contains("band") -> "CANAIS: ABERTOS 📺"
-        else -> "CANAIS: $base"
-    }
-}
-
 @Composable
 private fun EveryCineCatalog(
     state: AppUiState,
@@ -1288,14 +1224,9 @@ private fun EveryCineCatalog(
 ) {
     val categories = if (remoteCategories.isNotEmpty()) remoteCategories
         else state.entries.filter { it.kind == kind }.map { it.group }.filter { it.isNotBlank() }.distinct()
-    val remoteGroupNames = remember(state.xtreamGroups, kind, selectedCategory) {
-        XtreamDisplayGroups.merge(state.xtreamGroups)
-            .firstOrNull { it.kind == kind && it.label == selectedCategory }
-            ?.sources?.map { it.name }?.toSet().orEmpty()
-    }
-    val visible = remember(state.entries, kind, search, selectedCategory, remoteCategories, remoteGroupNames) {
+    val visible = remember(state.entries, kind, search, selectedCategory, hasRemoteCategories) {
         if (hasRemoteCategories && selectedCategory.isNotBlank())
-            everyCineVisibleRemote(state.entries, kind, remoteGroupNames, search)
+            everyCineVisibleRemote(state.entries, kind, setOf(selectedCategory), search)
         else everyCineVisible(state.entries, kind,
             if (hasRemoteCategories) "" else selectedCategory, search)
     }
