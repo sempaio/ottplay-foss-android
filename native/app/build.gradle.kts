@@ -103,6 +103,10 @@ android {
         create("official") {
             initWith(getByName("release"))
             buildConfigField("boolean", "CUSTOMER_MODE", "true")
+            // CoreAPI login/API/updates remain strictly HTTPS, while IPTV media streams
+            // redirected by CoreAPI (307 -> upstream CDN) frequently use HTTP.
+            buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
+            manifestPlaceholders["allowCleartextTraffic"] = "true"
             matchingFallbacks += "release"
             resValue("string", "app_name", "STARLINK IPTV")
         }
