@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import play.ott.nativeapp.BuildConfig
@@ -24,8 +25,14 @@ internal data class AppUpdate(val version: Long, val name: String, val packageNa
 
 /** Only the read-only M81 update contract is used. Preview updates are never forced. */
 internal class UpdateClient(private val context: Context) {
-    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(90, TimeUnit.SECONDS)
-        .followRedirects(false).followSslRedirects(false).build()
+    // Force HTTP/1.1 for update downloads to avoid HTTP/2 flow-control stalls over relay tunnels.
+    private val client = OkHttpClient.Builder()
+        .protocols(listOf(Protocol.HTTP_1_1))
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
 
     suspend fun latest(): AppUpdate? = withContext(Dispatchers.IO) {
         val url = (StarlinkConfig.XTREAM_BASE_URL + "/app/update/latest").toHttpUrl().newBuilder()
@@ -51,7 +58,10 @@ internal class UpdateClient(private val context: Context) {
         error("Too many update redirects")
     }
 
-    suspend fun downloadAndVerify(update: AppUpdate): File = withContext(Dispatchers.IO) {
+    suspend fun downloadAndVerify(
+        update: AppUpdate,
+        onProgress: (downloadedBytes: Long, totalBytes: Long, status: String) -> Unit = { _, _, _ -> },
+    ): File = withContext(Dispatchers.IO) {
         require(update.packageName == context.packageName && update.version > BuildConfig.VERSION_CODE) {
             "Versao ou pacote incompativel"
         }
@@ -63,24 +73,33 @@ internal class UpdateClient(private val context: Context) {
         try {
             pending.delete()
             staged.delete()
+            onProgress(0L, -1L, "Conectando ao servidor...")
             response(update.url).use { result ->
                 require(result.isSuccessful) { "HTTP ${result.code}" }
+                val totalBytes = result.body.contentLength()
+                onProgress(0L, totalBytes, "Baixando atualização...")
                 result.body.byteStream().use { input -> pending.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
+                    val buffer = ByteArray(64 * 1024)
                     var bytes = 0L
+                    var lastReport = 0L
                     while (true) {
                         val size = input.read(buffer)
                         if (size < 0) break
                         bytes += size
                         require(bytes <= 150L * 1024 * 1024) { "APK excede limite" }
                         output.write(buffer, 0, size)
+                        if (bytes - lastReport >= 128 * 1024 || (totalBytes > 0 && bytes >= totalBytes)) {
+                            lastReport = bytes
+                            onProgress(bytes, totalBytes, "Baixando atualização...")
+                        }
                     }
                     require(bytes > 0) { "Arquivo vazio" }
                 } }
             }
+            onProgress(-1L, -1L, "Verificando integridade e assinatura...")
             val digest = MessageDigest.getInstance("SHA-256")
             pending.inputStream().use { input ->
-                val buffer = ByteArray(8192)
+                val buffer = ByteArray(64 * 1024)
                 while (true) {
                     val size = input.read(buffer)
                     if (size < 0) break
@@ -108,6 +127,7 @@ internal class UpdateClient(private val context: Context) {
                 staged.copyTo(file, overwrite = true)
                 staged.delete()
             }
+            onProgress(-1L, -1L, "Abrindo instalador do Android...")
             file
         } finally {
             pending.delete()

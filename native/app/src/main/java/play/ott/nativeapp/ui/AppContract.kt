@@ -23,6 +23,8 @@ data class AppUiState(
     val updateMessage: String = "",
     val updateUrl: String = "",
     val updateError: String? = null,
+    val updateProgress: Float? = null,
+    val updateStatusText: String = "",
     val updateMandatory: Boolean = false,
     val dismissedUpdateVersion: Long? = null,
     val welcomeId: Long? = null,

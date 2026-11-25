@@ -282,9 +282,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.InstallUpdate -> {
                 if (updateJob?.isActive != true) latestUpdate?.let { update ->
                     updateJob = viewModelScope.launch {
-                        updateState { it.copy(checkingUpdate = true, updateError = null) }
+                        updateState {
+                            it.copy(
+                                checkingUpdate = true,
+                                updateError = null,
+                                updateProgress = null,
+                                updateStatusText = "Conectando ao servidor...",
+                            )
+                        }
                         try {
-                            val verifiedApk = updates.downloadAndVerify(update)
+                            val verifiedApk = updates.downloadAndVerify(update) { downloaded, total, phase ->
+                                val progress = if (downloaded >= 0L && total > 0L) {
+                                    (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                                } else null
+                                val label = if (downloaded > 0L && total > 0L) {
+                                    val mbDone = String.format(java.util.Locale.US, "%.1f", downloaded / (1024f * 1024f))
+                                    val mbTotal = String.format(java.util.Locale.US, "%.1f", total / (1024f * 1024f))
+                                    val pct = ((downloaded * 100L) / total).coerceIn(0L, 100L)
+                                    "Baixando $mbDone MB / $mbTotal MB ($pct%)"
+                                } else if (downloaded > 0L) {
+                                    val mbDone = String.format(java.util.Locale.US, "%.1f", downloaded / (1024f * 1024f))
+                                    "Baixando $mbDone MB..."
+                                } else phase
+                                updateState { it.copy(updateProgress = progress, updateStatusText = label) }
+                            }
                             val launched = updates.requestInstall(verifiedApk)
                             if (!launched) {
                                 updateState {
@@ -298,7 +319,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                 it.copy(updateError = "Não foi possível instalar automaticamente ($detail). Tente novamente ou use \"Baixar no navegador\".")
                             }
                             setNoticeText { message(R.string.neon_update_failed) }
-                        } finally { updateState { it.copy(checkingUpdate = false) } }
+                        } finally {
+                            updateState { it.copy(checkingUpdate = false, updateProgress = null, updateStatusText = "") }
+                        }
                     }
                 }
             }

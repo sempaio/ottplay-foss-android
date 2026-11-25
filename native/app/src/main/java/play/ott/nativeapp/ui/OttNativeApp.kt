@@ -545,6 +545,20 @@ private fun StarlinkUpdatePrompt(state: AppUiState, onAction: (AppAction) -> Uni
             Text(stringResource(R.string.starlink_update_version, state.updateVersionName))
             if (state.updateMessage.isNotBlank()) Text(state.updateMessage.take(1000))
             Text(stringResource(R.string.starlink_update_confirmation))
+            if (state.checkingUpdate) {
+                val p = state.updateProgress
+                if (p != null) {
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { p },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                if (state.updateStatusText.isNotBlank()) {
+                    Text(state.updateStatusText, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             state.updateError?.takeIf { it.isNotBlank() }?.let { err ->
                 Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
