@@ -141,9 +141,9 @@ fun OttNativeApp(
                 onFullscreenChanged = onFullscreenChanged,
                 inPictureInPicture = inPictureInPicture,
             )
-            if (state.playingEntry == null) {
+            if (state.playingEntry == null || state.updateMandatory) {
                 StarlinkUpdatePrompt(state, onAction)
-                StarlinkWelcomePrompt(state, onAction)
+                if (state.playingEntry == null) StarlinkWelcomePrompt(state, onAction)
             }
         }
         return
@@ -545,6 +545,14 @@ private fun StarlinkUpdatePrompt(state: AppUiState, onAction: (AppAction) -> Uni
             Text(stringResource(R.string.starlink_update_version, state.updateVersionName))
             if (state.updateMessage.isNotBlank()) Text(state.updateMessage.take(1000))
             Text(stringResource(R.string.starlink_update_confirmation))
+            state.updateError?.takeIf { it.isNotBlank() }?.let { err ->
+                Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            if (state.updateUrl.isNotBlank()) {
+                TextButton(onClick = { onAction(AppAction.OpenUpdateInBrowser) }) {
+                    Text("Baixar no navegador")
+                }
+            }
         } },
         confirmButton = {
             ActionButton(
@@ -763,9 +771,11 @@ internal fun SettingsDialog(state: AppUiState, onAction: (AppAction) -> Unit, cu
                 ActionButton("Redefinir recomendações", { onAction(AppAction.ResetForYou); onDismiss() }, Modifier.fillMaxWidth(), compact = true)
 
                 SupportButton()
+                ActionButton("Atualizar catálogo", { onAction(AppAction.Refresh); onDismiss() }, Modifier.fillMaxWidth())
                 ActionButton(stringResource(R.string.neon_updates), { onAction(AppAction.CheckUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
                 if (state.updateAvailable) ActionButton(stringResource(R.string.neon_update_install), { onAction(AppAction.InstallUpdate) }, Modifier.fillMaxWidth(), enabled = !state.checkingUpdate)
-                Text("STARLINK IPTV Prévia · " + play.ott.nativeapp.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
+                val appLabel = if (play.ott.nativeapp.BuildConfig.APPLICATION_ID == "br.starlink.iptv") "STARLINK IPTV" else "STARLINK IPTV Prévia"
+                Text("$appLabel · v${play.ott.nativeapp.BuildConfig.VERSION_NAME} (build ${play.ott.nativeapp.BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.labelSmall)
                 Text(stringResource(R.string.library_language), style = MaterialTheme.typography.titleSmall)
                 ActionButton(languageName, { showLanguages = true },
                     Modifier.fillMaxWidth().focusRequester(languageFocus).testTag("settings-language"))

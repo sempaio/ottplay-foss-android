@@ -24,7 +24,7 @@ internal data class AppUpdate(val version: Long, val name: String, val packageNa
 
 /** Only the read-only M81 update contract is used. Preview updates are never forced. */
 internal class UpdateClient(private val context: Context) {
-    private val client = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
+    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(90, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
 
     suspend fun latest(): AppUpdate? = withContext(Dispatchers.IO) {
@@ -52,13 +52,19 @@ internal class UpdateClient(private val context: Context) {
     }
 
     suspend fun downloadAndVerify(update: AppUpdate): File = withContext(Dispatchers.IO) {
-        require(update.packageName == context.packageName && update.version > BuildConfig.VERSION_CODE)
+        require(update.packageName == context.packageName && update.version > BuildConfig.VERSION_CODE) {
+            "Versao ou pacote incompativel"
+        }
         val directory = File(context.cacheDir, "updates").apply { mkdirs() }
         val file = File(directory, "verified.apk")
         val pending = File(directory, "download.part")
+        // Android 11+ PackageManager.getPackageArchiveInfo requires the file path to end with ".apk".
+        val staged = File(directory, "staged.apk")
         try {
+            pending.delete()
+            staged.delete()
             response(update.url).use { result ->
-                require(result.isSuccessful)
+                require(result.isSuccessful) { "HTTP ${result.code}" }
                 result.body.byteStream().use { input -> pending.outputStream().use { output ->
                     val buffer = ByteArray(8192)
                     var bytes = 0L
@@ -66,39 +72,94 @@ internal class UpdateClient(private val context: Context) {
                         val size = input.read(buffer)
                         if (size < 0) break
                         bytes += size
-                        require(bytes <= 150L * 1024 * 1024)
+                        require(bytes <= 150L * 1024 * 1024) { "APK excede limite" }
                         output.write(buffer, 0, size)
                     }
-                    require(bytes > 0)
+                    require(bytes > 0) { "Arquivo vazio" }
                 } }
             }
             val digest = MessageDigest.getInstance("SHA-256")
-            pending.inputStream().use { input -> val buffer = ByteArray(8192); while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) } }
-            require(digest.digest().joinToString("") { "%02x".format(it) }.equals(update.sha256, true))
-            val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
-            @Suppress("DEPRECATION") val archive = context.packageManager.getPackageArchiveInfo(pending.path, flags) ?: error("Invalid APK")
-            @Suppress("DEPRECATION") val installed = context.packageManager.getPackageInfo(context.packageName, flags)
-            require(archive.packageName == context.packageName)
+            pending.inputStream().use { input ->
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val size = input.read(buffer)
+                    if (size < 0) break
+                    digest.update(buffer, 0, size)
+                }
+            }
+            require(digest.digest().joinToString("") { "%02x".format(it) }.equals(update.sha256, true)) {
+                "SHA-256 divergente"
+            }
+            if (!pending.renameTo(staged)) {
+                pending.copyTo(staged, overwrite = true)
+                pending.delete()
+            }
+            val archive = archiveInfo(staged) ?: error("APK invalido")
+            val installed = installedInfo()
+            require(archive.packageName == context.packageName) { "Pacote divergente" }
             val version = if (Build.VERSION.SDK_INT >= 28) archive.longVersionCode else @Suppress("DEPRECATION") archive.versionCode.toLong()
-            require(version == update.version)
-            require(certificates(archive) == certificates(installed) && certificates(installed).isNotEmpty())
-            require(pending.renameTo(file))
+            require(version == update.version) { "Build divergente ($version != ${update.version})" }
+            val installedCerts = certificates(installed)
+            require(certificates(archive) == installedCerts && installedCerts.isNotEmpty()) {
+                "Assinatura do APK divergente"
+            }
+            if (file.exists()) file.delete()
+            if (!staged.renameTo(file)) {
+                staged.copyTo(file, overwrite = true)
+                staged.delete()
+            }
             file
-        } finally { pending.delete() }
+        } finally {
+            pending.delete()
+            staged.delete()
+        }
     }
 
-    fun requestInstall(file: File) {
+    private fun archiveInfo(apkFile: File): PackageInfo? {
+        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+        return if (Build.VERSION.SDK_INT >= 33) {
+            context.packageManager.getPackageArchiveInfo(apkFile.path, PackageManager.PackageInfoFlags.of(flags.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageArchiveInfo(apkFile.path, flags)
+        }
+    }
+
+    private fun installedInfo(): PackageInfo {
+        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+        return if (Build.VERSION.SDK_INT >= 33) {
+            context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(flags.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, flags)
+        }
+    }
+
+    fun requestInstall(file: File): Boolean {
         if (!context.packageManager.canRequestPackageInstalls()) {
             context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, ("package:" + context.packageName).toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return
+            return false
         }
         val uri = FileProvider.getUriForFile(context, context.packageName + ".updates", file)
         context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        return true
+    }
+
+    fun openInBrowser(address: String) {
+        val url = address.toHttpUrl()
+        require(url.isHttps && url.username.isEmpty() && url.password.isEmpty())
+        context.startActivity(Intent(Intent.ACTION_VIEW, url.toString().toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     private fun certificates(info: PackageInfo): Set<String> {
-        val signatures = if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners else @Suppress("DEPRECATION") info.signatures
+        val signatures = if (Build.VERSION.SDK_INT >= 28) {
+            info.signingInfo?.let { signing ->
+                signing.apkContentsSigners?.takeIf { it.isNotEmpty() } ?: signing.signingCertificateHistory
+            }
+        } else {
+            @Suppress("DEPRECATION") info.signatures
+        }
         return signatures.orEmpty().map { signature -> MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()).joinToString("") { "%02x".format(it) } }.toSet()
     }
 }

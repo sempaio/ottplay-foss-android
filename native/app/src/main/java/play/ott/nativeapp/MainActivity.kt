@@ -173,6 +173,11 @@ open class MainActivity : AppCompatActivity() {
         pip = isInPictureInPictureMode
         if (!pip) setFullscreen(fullScreen)
     }
+    override fun onResume() {
+        super.onResume()
+        model.checkUpdateOnResume()
+    }
+
     override fun onStop() {
         // The service owns TV visibility, including after this Activity is destroyed.
         if (!isTelevision && !isChangingConfigurations && !isInPictureInPictureMode &&

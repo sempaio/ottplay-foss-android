@@ -29,6 +29,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val announcements = play.ott.nativeapp.data.AnnouncementClient()
     private var latestUpdate: play.ott.nativeapp.data.AppUpdate? = null
     private var updateJob: Job? = null
+    private var lastUpdateCheckElapsedMs = 0L
     private val repository = (application as OttplayApplication).repository
     private suspend fun availableSources() = StarlinkConfig.visibleSources(repository.sources())
     private fun message(id: Int, vararg args: Any) = AppLanguages.localizedContext(getApplication()).getString(id, *args)
@@ -163,10 +164,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun checkUpdateOnResume() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (latestUpdate != null) return
+        if (lastUpdateCheckElapsedMs > 0L && now - lastUpdateCheckElapsedMs < 30_000L) return
+        checkUpdate(false)
+    }
+
     private fun checkUpdate(manual: Boolean) {
         if (updateJob?.isActive == true) return
+        lastUpdateCheckElapsedMs = android.os.SystemClock.elapsedRealtime()
         updateJob = viewModelScope.launch {
-            updateState { it.copy(checkingUpdate = true) }
+            updateState { it.copy(checkingUpdate = true, updateError = null) }
             try {
                 latestUpdate = updates.latest()
                 updateState { it.copy(
@@ -174,6 +183,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     updateVersionCode = latestUpdate?.version,
                     updateVersionName = latestUpdate?.name.orEmpty(),
                     updateMessage = latestUpdate?.text.orEmpty(),
+                    updateUrl = latestUpdate?.url.orEmpty(),
+                    updateError = null,
                     updateMandatory = play.ott.nativeapp.data.effectiveMandatoryUpdate(
                         latestUpdate?.mandatory == true, BuildConfig.APPLICATION_ID
                     ),
@@ -271,11 +282,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppAction.InstallUpdate -> {
                 if (updateJob?.isActive != true) latestUpdate?.let { update ->
                     updateJob = viewModelScope.launch {
-                        updateState { it.copy(checkingUpdate = true) }
-                        try { updates.requestInstall(updates.downloadAndVerify(update)) }
-                        catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { setNoticeText { message(R.string.neon_update_failed) } }
-                        finally { updateState { it.copy(checkingUpdate = false) } }
+                        updateState { it.copy(checkingUpdate = true, updateError = null) }
+                        try {
+                            val verifiedApk = updates.downloadAndVerify(update)
+                            val launched = updates.requestInstall(verifiedApk)
+                            if (!launched) {
+                                updateState {
+                                    it.copy(updateError = "Permita \"Instalar apps desconhecidos\" para o STARLINK IPTV e toque em Atualizar novamente.")
+                                }
+                            }
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) {
+                            val detail = e.message?.take(140)?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                            updateState {
+                                it.copy(updateError = "Não foi possível instalar automaticamente ($detail). Tente novamente ou use \"Baixar no navegador\".")
+                            }
+                            setNoticeText { message(R.string.neon_update_failed) }
+                        } finally { updateState { it.copy(checkingUpdate = false) } }
+                    }
+                }
+            }
+            AppAction.OpenUpdateInBrowser -> {
+                latestUpdate?.url?.let { url ->
+                    runCatching { updates.openInBrowser(url) }.onFailure {
+                        updateState { it.copy(updateError = "Não foi possível abrir o navegador. Acesse o link oficial do painel.") }
                     }
                 }
             }
@@ -584,13 +614,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         catch (e: CancellationException) { throw e }
                         catch (_: Exception) { null }
                     if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
-                    if (cached != null && cached.value.isNotEmpty()) {
-                        updateState { it.copy(xtreamGroups = cached.value, entries = emptyList(), isBusy = false) }
-                        if (!refresh && cached.ageMillis < 30 * 60_000L) return@launch
+                    val hasCached = cached != null && cached.value.isNotEmpty()
+                    if (hasCached) {
+                        updateState { it.copy(xtreamGroups = cached!!.value, entries = emptyList(), isBusy = false) }
+                        if (!refresh && cached!!.ageMillis < 60_000L) return@launch
                     }
-                    val groups = repository.xtreamCategories(source)
+                    val groups = try {
+                        repository.xtreamCategories(source)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (hasCached) return@launch
+                        throw e
+                    }
                     ensureActive()
                     if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
+                    if (cached != null && groups != cached.value) {
+                        visitedGroups.clear()
+                    }
                     updateState { it.copy(xtreamGroups = groups, entries = emptyList(), isBusy = false) }
                     try { repository.saveXtreamCategories(source, groups) }
                     catch (e: CancellationException) { throw e }

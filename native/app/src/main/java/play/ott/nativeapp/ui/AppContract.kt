@@ -21,6 +21,8 @@ data class AppUiState(
     val updateVersionCode: Long? = null,
     val updateVersionName: String = "",
     val updateMessage: String = "",
+    val updateUrl: String = "",
+    val updateError: String? = null,
     val updateMandatory: Boolean = false,
     val dismissedUpdateVersion: Long? = null,
     val welcomeId: Long? = null,
@@ -56,6 +58,7 @@ sealed interface AppAction {
     data object Logout : AppAction
     data object CheckUpdate : AppAction
     data object InstallUpdate : AppAction
+    data object OpenUpdateInBrowser : AppAction
     data object DismissUpdatePrompt : AppAction
     data object DismissWelcome : AppAction
     data object Refresh : AppAction
