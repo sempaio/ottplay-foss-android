@@ -13,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.datasource.HttpDataSource
@@ -78,13 +79,22 @@ class PlaybackService : MediaSessionService() {
             .followSslRedirects(true)
             .build()
         httpClient = client
-        // Start conservatively on adaptive HLS. The bandwidth meter promotes quality as
-        // throughput measurements arrive; fixed-quality sources remain unchanged.
+        // Start fast on IPTV/HLS streams while keeping enough headroom against brief network jitter.
         val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
-            .setInitialBitrateEstimate(650_000L)
+            .setInitialBitrateEstimate(2_500_000L)
+            .build()
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 30_000,
+                /* bufferForPlaybackMs = */ 800,
+                /* bufferForPlaybackAfterRebufferMs = */ 1_800,
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(ItemMediaSourceFactory(this, client))
+            .setLoadControl(loadControl)
             .setBandwidthMeter(bandwidthMeter)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),

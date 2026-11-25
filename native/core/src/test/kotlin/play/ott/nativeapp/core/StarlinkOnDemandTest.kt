@@ -2,21 +2,32 @@ package play.ott.nativeapp.core
 
 import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import kotlin.test.*
 
 /** A Starlink Xtream launch must not request a full stream catalog. */
 class StarlinkOnDemandTest {
     @Test fun initialCategoriesFetchNeverDownloadsStreams() = runBlocking {
         MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.queryParameter("action")) {
+                    null -> MockResponse().setBody("""{"user_info":{"auth":1,"status":"Active"}}""")
+                    "get_live_categories" -> MockResponse().setBody("""[{"category_id":"live-a","category_name":"Noticias"}]""")
+                    "get_vod_categories" -> MockResponse().setBody("""[{"category_id":"vod-a","category_name":"Filmes"}]""")
+                    "get_series_categories" -> MockResponse().setBody("""[{"category_id":"series-a","category_name":"Series"}]""")
+                    "get_live_streams" -> MockResponse().setBody(
+                        """[{"stream_id":41,"name":"Canal Noticias","category_id":"live-a",
+                            "container_extension":"m3u8","stream_icon":"https://images.example/logo.png",
+                            "epg_channel_id":"channel-41"}]""")
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
             server.start()
             val config = SourceConfig("managed", "STARLINK", SourceKind.XTREAM,
                 server.url("/").toString(), "user fixture", "password fixture")
-            server.enqueue(MockResponse().setBody("""{"user_info":{"auth":1,"status":"Active"}}"""))
-            server.enqueue(MockResponse().setBody("""[{"category_id":"live-a","category_name":"Noticias"}]"""))
-            server.enqueue(MockResponse().setBody("""[{"category_id":"vod-a","category_name":"Filmes"}]"""))
-            server.enqueue(MockResponse().setBody("""[{"category_id":"series-a","category_name":"Series"}]"""))
             val repo = ProviderRepository()
             val groups = repo.xtreamCategories(config)
             assertEquals(listOf(MediaKind.LIVE, MediaKind.MOVIE, MediaKind.SERIES), groups.map { it.kind })
@@ -24,14 +35,10 @@ class StarlinkOnDemandTest {
             val requests = (1..4).map { server.takeRequest().requestUrl }
             assertNull(requests[0]?.queryParameter("action"))
             assertEquals(
-                listOf("get_live_categories", "get_vod_categories", "get_series_categories"),
-                requests.drop(1).map { it?.queryParameter("action") })
+                setOf("get_live_categories", "get_vod_categories", "get_series_categories"),
+                requests.drop(1).map { it?.queryParameter("action") }.toSet())
             assertTrue(requests.all { it?.queryParameter("category_id") == null })
 
-            server.enqueue(MockResponse().setBody(
-                """[{"stream_id":41,"name":"Canal Noticias","category_id":"live-a",
-                    "container_extension":"m3u8","stream_icon":"https://images.example/logo.png",
-                    "epg_channel_id":"channel-41"}]"""))
             val loaded = repo.xtreamCategory(config, groups[0])
             assertEquals(1, loaded.entries.size)
             assertEquals("Canal Noticias", loaded.entries.single().name)

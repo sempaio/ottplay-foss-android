@@ -12,6 +12,9 @@ import play.ott.core.XtreamSource
 import kotlinx.serialization.json.*
 import java.util.Base64
 import okhttp3.HttpUrl
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
 /** HTTP, URL codec and native model adapter for the common Xtream session. */
@@ -38,7 +41,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         Catalog(entries, listOf(epg), messages.map { it.english() }, messages)
     }
 
-    /** Fetch only the three compact category lists; no complete streams request. */
+    /** Fetch the three compact category lists in parallel; no complete streams request. */
     suspend fun categories(config: SourceConfig): List<XtreamGroup> = translateFailure {
         authenticate(config)
         val types = listOf(
@@ -46,16 +49,20 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             MediaKind.MOVIE to "get_vod_categories",
             MediaKind.SERIES to "get_series_categories",
         )
-        types.flatMap { (kind, action) ->
-            val rows = api(config, action, "", "") as? JsonArray
-                ?: throw ProviderException("Xtream category response has an unexpected format")
-            if (rows.size > 10000) throw ProviderException("Xtream category response is too large")
-            rows.objects().mapNotNull { row ->
-                val id = row.string("category_id").trim()
-                if (id.isBlank()) null else XtreamGroup(
-                    id, row.string("category_name").ifBlank { "Sem categoria" }, kind,
-                )
-            }
+        coroutineScope {
+            types.map { (kind, action) ->
+                async {
+                    val rows = api(config, action, "", "") as? JsonArray
+                        ?: throw ProviderException("Xtream category response has an unexpected format")
+                    if (rows.size > 10000) throw ProviderException("Xtream category response is too large")
+                    rows.objects().mapNotNull { row ->
+                        val id = row.string("category_id").trim()
+                        if (id.isBlank()) null else XtreamGroup(
+                            id, row.string("category_name").ifBlank { "Sem categoria" }, kind,
+                        )
+                    }
+                }
+            }.awaitAll().flatten()
         }.distinctBy { it.kind to it.id }
     }
 

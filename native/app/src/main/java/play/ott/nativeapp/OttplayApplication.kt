@@ -6,6 +6,9 @@ import android.os.Handler
 import android.os.Looper
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
@@ -49,5 +52,18 @@ class OttplayApplication : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .okHttpClient(AppTransportPolicy.current.secure(OkHttpClient()))
+        .memoryCache {
+            MemoryCache.Builder(this)
+                .maxSizePercent(0.25)
+                .build()
+        }
+        .diskCache {
+            DiskCache.Builder()
+                .directory(File(cacheDir, "image_cache"))
+                .maxSizeBytes(150L * 1024L * 1024L)
+                .build()
+        }
+        .respectCacheHeaders(false)
+        .crossfade(false)
         .build()
 }
