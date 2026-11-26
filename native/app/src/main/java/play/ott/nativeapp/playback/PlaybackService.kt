@@ -15,6 +15,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -84,7 +86,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         val liveClient = vodClient.newBuilder()
             .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
             .protocols(listOf(Protocol.HTTP_1_1))
             .build()
         httpClient = vodClient
@@ -93,12 +95,23 @@ class PlaybackService : MediaSessionService() {
         val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
             .setInitialBitrateEstimate(550_000L)
             .build()
-        // Balance fast zapping (1.5s start) with real headroom against MPEG-TS upstream jitter
-        // (3.5s after rebuffer, 25s-50s buffer window) to eliminate micro-stutter loops.
+        // Smooth adaptive selection (especially Pluto TV) so quality upgrades only after 15s of
+        // steady buffer and leaves 35% bandwidth headroom to prevent micro-stutters.
+        val trackSelector = DefaultTrackSelector(
+            this,
+            AdaptiveTrackSelection.Factory(
+                /* minDurationForQualityIncreaseMs = */ 15_000,
+                /* maxDurationForQualityDecreaseMs = */ 15_000,
+                /* minDurationToRetainAfterDiscardMs = */ 25_000,
+                /* bandwidthFraction = */ 0.65f,
+            ),
+        )
+        // Balance fast zapping (1.5s start) with deep headroom for 10s HLS segments and Pluto TV
+        // SSAI transitions (3.5s after rebuffer, 30s-60s buffer window).
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 25_000,
-                /* maxBufferMs = */ 50_000,
+                /* minBufferMs = */ 30_000,
+                /* maxBufferMs = */ 60_000,
                 /* bufferForPlaybackMs = */ 1_500,
                 /* bufferForPlaybackAfterRebufferMs = */ 3_500,
             )
@@ -106,6 +119,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(ItemMediaSourceFactory(this, vodClient, liveClient = liveClient))
+            .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setBandwidthMeter(bandwidthMeter)
             .setAudioAttributes(

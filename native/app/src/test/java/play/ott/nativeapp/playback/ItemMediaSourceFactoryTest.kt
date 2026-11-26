@@ -228,4 +228,69 @@ class ItemMediaSourceFactoryTest {
             }
         }
     }
+
+    @Test fun `live hls manifest reload renews short-lived redirected token via upstream without leaking origin credentials`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val client = OkHttpClient()
+        try {
+            MockWebServer().use { origin -> MockWebServer().use { upstream -> MockWebServer().use { cdn ->
+                origin.start(); upstream.start(); cdn.start()
+                origin.enqueue(MockResponse().setResponseCode(307).setHeader("Location", upstream.url("/u/p/43031.m3u8")))
+                upstream.enqueue(MockResponse().setResponseCode(302).setHeader("Location", cdn.url("/auth/43031.m3u8?token=t1")))
+                upstream.enqueue(MockResponse().setResponseCode(302).setHeader("Location", cdn.url("/auth/43031.m3u8?token=t2")))
+                cdn.enqueue(MockResponse().setBody("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:1\n/hls/seg1.ts\n"))
+                cdn.enqueue(MockResponse().setBody("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:2\n/hls/seg2.ts\n"))
+
+                val factory = ItemMediaSourceFactory(context, client, RemoteTransportPolicy.HTTP_COMPATIBLE)
+                val item = PlaybackItems.build(
+                    id = "live-43031",
+                    title = "Band SP",
+                    url = origin.url("/live/user/pass/43031.m3u8").toString(),
+                    headers = mapOf("Authorization" to "Bearer origin-secret", "User-Agent" to "custom-agent"),
+                    isLive = true,
+                )
+                val dataSourceFactory = factory.httpFactoryFor(item)
+                val firstBody = readText(dataSourceFactory, origin.url("/live/user/pass/43031.m3u8").toString())
+                assertEquals("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:1\n/hls/seg1.ts\n", firstBody)
+                // Simulate ExoPlayer reloading the expired redirected manifest URL.
+                val secondBody = readText(dataSourceFactory, cdn.url("/auth/43031.m3u8?token=t1").toString())
+                assertEquals("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:2\n/hls/seg2.ts\n", secondBody)
+
+                val originReq = requireNotNull(origin.takeRequest(5, TimeUnit.SECONDS))
+                assertEquals("Bearer origin-secret", originReq.getHeader("Authorization"))
+                repeat(2) {
+                    val upReq = requireNotNull(upstream.takeRequest(5, TimeUnit.SECONDS))
+                    assertEquals("/u/p/43031.m3u8", upReq.path)
+                    assertNull(upReq.getHeader("Authorization"))
+                }
+                val cdnReq1 = requireNotNull(cdn.takeRequest(5, TimeUnit.SECONDS))
+                val cdnReq2 = requireNotNull(cdn.takeRequest(5, TimeUnit.SECONDS))
+                assertEquals("/auth/43031.m3u8?token=t1", cdnReq1.path)
+                assertEquals("/auth/43031.m3u8?token=t2", cdnReq2.path)
+                assertNull(cdnReq1.getHeader("Authorization"))
+                assertNull(cdnReq2.getHeader("Authorization"))
+            } } }
+        } finally {
+            client.dispatcher.cancelAll()
+            client.dispatcher.executorService.shutdown()
+            client.connectionPool.evictAll()
+        }
+    }
+
+    private fun readText(factory: DataSource.Factory, url: String): String {
+        val source = factory.createDataSource()
+        return try {
+            source.open(DataSpec(Uri.parse(url)))
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(1024)
+            while (true) {
+                val n = source.read(buf, 0, buf.size)
+                if (n <= 0) break
+                out.write(buf, 0, n)
+            }
+            out.toString(Charsets.UTF_8.name())
+        } finally {
+            source.close()
+        }
+    }
 }

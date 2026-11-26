@@ -582,7 +582,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         visitedGroups[key] = cached.value.entries
                         shown = true
                         updateState { it.copy(entries = visitedXtreamEntries()) }
-                        if (cached.ageMillis < 30 * 60_000L) continue
+                        val hasLegacyTsLive = group.kind == MediaKind.LIVE &&
+                            cached.value.entries.any { it.url.endsWith(".ts", ignoreCase = true) }
+                        val ttlMs = if (hasLegacyTsLive) 60_000L else 30 * 60_000L
+                        if (cached.ageMillis < ttlMs) continue
                     }
                     val catalog = try { repository.xtreamCategory(source, group) }
                         catch (e: CancellationException) { throw e }
