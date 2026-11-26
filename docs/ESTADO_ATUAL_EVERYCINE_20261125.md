@@ -1,41 +1,31 @@
-# Estado Atual — EveryCine IPTV Android (`br.starlink.iptv`) — 2026-11-25
+# Estado Atual — EveryCine IPTV Android (`br.starlink.iptv`) — 2026-11-26
 
 - **Worktree ativa:** `E:\painelcliente_test\_worktrees\everycine-artwork-20261123`
-- **Branch:** `fix/everycine-current-source-20261123`
-- **Versão publicada oficial:** **`0.3.10`** (`versionCode = 18` em `native/version.properties`)
-- **APK oficial publicado:** `E:\painelcliente_test\projeto\data\app_releases\STARLINK-EveryCine-Official-20261125.apk`
+- **Branch:** `fix/everycine-current-source-20261123` (remote GitHub `starlink`: `https://github.com/sempaio/ottplay-foss-android.git`)
+- **Versão publicada oficial:** **`0.3.14`** (`versionCode = 22` em `native/version.properties`)
+- **APK oficial publicado:** `E:\painelcliente_test\projeto\data\app_releases\STARLINK-EveryCine-Official-0.3.14-20261125.apk`
   - **Tamanho:** `6.468.585` bytes
-  - **SHA-256:** `816370c23f2ca3011546ee6c19f5cbaf1c10bd0d7a55ea54cedbb893741aceeb`
+  - **SHA-256:** `0b5942f3a50f6a4ade69c4a50e589a8266d65117aecadbaf2c9891b6bdd98988`
   - **Certificado oficial (v2/v3):** `21:61:B6:BE:77:0A:73:30:0D:E7:81:89:54:A1:FA:A2:A4:C4:BA:F5:C8:04:55:5A:45:88:D0:60:C9:8B:C7:C0`
-  - **PostgreSQL `app_releases`:** ID `#20`, `force_upgrade = True`, `is_published = True`
+  - **PostgreSQL `app_releases`:** ID `#24`, `force_upgrade = True`, `is_published = True`
 
 ---
 
-## Histórico de Commits da Entrega Atual
+## Histórico de Commits Consolidados (2026-11-24 a 2026-11-26)
 
-1. **`f51b9f68`** — Restauração de subcategorias em pílulas e exibição de todos os canais numerados sem colapso.
-2. **`1c5ad11e`** (`0.3.9` / build 17):
-   - Busca global em todo o catálogo via CoreAPI (`XtreamProvider.search` -> `action=search_catalog`, `ProviderRepository.searchXtreamCatalog`, `NativeRepository.searchXtreamCatalog`, `PlayerViewModel.searchCatalog`, `EveryCineGlobalSearchResults`).
-   - Aumento do cache de grupos visitados (`visitedGroups > 32`) para não evictar categorias multi-grupos.
-   - Insets de tela seguros (`statusBarsPadding`, `navigationBarsPadding`, `displayCutoutPadding`) no shell principal, barra inferior, detalhes de filme, snackbars e overlay de tela cheia.
-   - `NativePlayerPane.kt`: player tela cheia com overlay translúcido + auto-ocultação, `externalResizeMode` acoplado ao botão `Ajustar`, contraste branco legível no card de erro e remoção do cabeçalho duplicado no modo inline.
-   - `EveryCineVisual.kt`: lista vertical `EveryCineChannelRows` com iniciais de fallback (exibidas quando logo é vazio ou 404), barra inline horizontal rolável sem quebra vertical e `openCastOrMirroring` (`ACTION_CAST_SETTINGS` + verificação `PackageManager` + Toast seguro).
-3. **`9108702b`** (`0.3.10` / build 18):
-   - `native/app/build.gradle.kts`: adicionados `buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")` e `manifestPlaceholders["allowCleartextTraffic"] = "true"` na variante `official` para permitir reprodução de filmes e canais redirecionados via `HTTP 307 -> http://` (mantendo login, CoreAPI e updates 100% em HTTPS).
-   - `native/app/src/main/java/play/ott/nativeapp/playback/PlaybackService.kt`: adicionados `.followRedirects(true)`, `.followSslRedirects(true)` e timeouts ampliados (`25s` conexão / `45s` leitura) para CDNs VOD mais lentas no primeiro byte.
+1. **`f51b9f68`** — Preservação de todos os canais numerados sem colapso silencioso.
+2. **`1c5ad11e`** (`0.3.9` / build 17): busca global em todo o catálogo via CoreAPI (`action=search_catalog`), insets seguros (`statusBarsPadding`, `navigationBarsPadding`, `displayCutoutPadding`), player tela cheia em overlay com auto-ocultação, botão `Ajustar` conectado ao ExoPlayer, `Cast` seguro (`ACTION_CAST_SETTINGS` + Toast) e fallback de iniciais nos logos.
+3. **`9108702b`** (`0.3.10` / build 18): `ALLOW_INSECURE_HTTP=true` e `usesCleartextTraffic=true` na variante `official` + `followRedirects(true)` / `followSslRedirects(true)` + timeouts `25s`/`45s` no player para reproduzir filmes e canais redirecionados em `http://` (mantendo login, CoreAPI e updates 100% em HTTPS).
+4. **`48e92b8f`** (`0.3.11` / build 19): removidos todos os 5 classificadores artificiais locais (`EveryCineFamilyIndex`, `SmartLiveCatalog`, `XtreamDisplayGroups`, `CatalogDisplayGroup`, `LiveNetworkDiscovery`, `-1.484` linhas); o app agora exibe exclusivamente as categorias originais (`group-title` / `category_name`) das listas **Pluto TV Brasil** e **IPTV Brasil 2026**.
+5. **`b78d4fa2`** (`0.3.12` / build 20): correção do auto-update no Android 11+ (staging com extensão `.apk` antes de `getPackageArchiveInfo`), checagem de atualização em `MainActivity.onResume()`, erro legível direto no dialog + botão reserva **"Baixar no navegador"**, botão **"Atualizar catálogo"** nas Configurações e revalidação de categorias em background após `60s`.
+6. **`3aa82275`** (`0.3.13` / build 21): categorias Xtream carregadas em paralelo (`async`/`awaitAll` em `XtreamProvider.kt`), `DefaultLoadControl` otimizado para IPTV no `PlaybackService.kt` (`bufferForPlaybackMs=800ms`, `afterRebuffer=1800ms`, `minBuffer=15s`, `maxBuffer=30s`, `initialBitrate=2.5Mbps`) e Coil `ImageLoader` com `MemoryCache` 25% + `DiskCache` `150 MB` + `respectCacheHeaders(false)`.
+7. **`232b613c`** (`0.3.14` / build 22): forçado `HTTP/1.1` + buffer de `64 KB` no `UpdateClient.kt` (eliminando estrangulamento HTTP/2 no Tailscale Funnel) e adicionada barra de progresso real (`LinearProgressIndicator` + `Baixando X,X MB / 6,2 MB (XX%)` e status de fase) na janela de atualização.
 
 ---
 
 ## Validações Concluídas
 
 - `:core:test`, `:app:testLayoutUnitTest`, `:app:lintVitalOfficial`, `:app:assembleOfficial`: **BUILD SUCCESSFUL**.
-- `aapt2 dump xmltree`: confirmados `versionCode=18`, `versionName="0.3.10"` e `usesCleartextTraffic=true`.
-- `apksigner verify --verbose --print-certs`: verificado v2/v3 com o certificado oficial Starlink IPTV.
-- Validação visual no emulador `Pixel_10_Pro` (`0.3.9`): busca global (`chaves` retornando canais ao vivo + filmes + séries com capas), barra inferior acima da barra de gestos, player ao vivo com controles alinhados e player tela cheia em paisagem com overlay seguro.
-- Validação HTTPS ao vivo (`2026-11-25`): `/client-apps/download/starlink-iptv`, `/app/update/latest?package_name=br.starlink.iptv` e `/app/update/download/20` todos HTTP 200 com `6.468.585` bytes.
-
----
-
-## Pendência para Retomada
-
-- Confirmar reprodução real de filmes VOD e canais HTTP/HTTPS na **`0.3.10`** diretamente no aparelho físico do proprietário.
+- `aapt2` e `apksigner verify`: confirmados `versionCode=22`, `versionName="0.3.14"`, `usesCleartextTraffic=true` e certificado oficial v2/v3.
+- Emulador `Pixel_10_Pro`: validados fluxo real de atualização in-app (`0.3.12 -> 0.3.13` abrindo o `PackageInstaller` oficial) e inicialização limpa da `0.3.14`; emulador encerrado ao final para liberar memória.
+- Validação HTTPS ao vivo (`2026-11-26`): `/client-apps/download/starlink-iptv`, `/app/update/latest?package_name=br.starlink.iptv` e `/app/update/download/24` todos HTTP 200 com `Content-Length: 6468585` exato (sem GZip em binários).
