@@ -25,6 +25,7 @@ import androidx.media3.session.SessionError
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
@@ -72,28 +73,39 @@ class PlaybackService : MediaSessionService() {
                 }
             })
             .build())
-        val client = OkHttpClient.Builder()
-            .connectTimeout(25, TimeUnit.SECONDS)
-            .readTimeout(45, TimeUnit.SECONDS)
+        // Force HTTP/1.1 to avoid OkHttp 5.4 HTTP/2 stalls over Tailscale Funnel, and separate
+        // snappy live timeouts from longer VOD timeouts so frozen live sockets recover quickly.
+        val vodClient = OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(40, TimeUnit.SECONDS)
+            .protocols(listOf(Protocol.HTTP_1_1))
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
-        httpClient = client
-        // Start fast on IPTV/HLS streams while keeping enough headroom against brief network jitter.
-        val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
-            .setInitialBitrateEstimate(2_500_000L)
+        val liveClient = vodClient.newBuilder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
+            .protocols(listOf(Protocol.HTTP_1_1))
             .build()
+        httpClient = vodClient
+        // Favor a low initial HLS bitrate estimate so adaptive live streams open fast on the
+        // lightest variant and step up smoothly as real throughput is measured.
+        val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
+            .setInitialBitrateEstimate(550_000L)
+            .build()
+        // Balance fast zapping (1.5s start) with real headroom against MPEG-TS upstream jitter
+        // (3.5s after rebuffer, 25s-50s buffer window) to eliminate micro-stutter loops.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 30_000,
-                /* bufferForPlaybackMs = */ 800,
-                /* bufferForPlaybackAfterRebufferMs = */ 1_800,
+                /* minBufferMs = */ 25_000,
+                /* maxBufferMs = */ 50_000,
+                /* bufferForPlaybackMs = */ 1_500,
+                /* bufferForPlaybackAfterRebufferMs = */ 3_500,
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val exoPlayer = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(ItemMediaSourceFactory(this, client))
+            .setMediaSourceFactory(ItemMediaSourceFactory(this, vodClient, liveClient = liveClient))
             .setLoadControl(loadControl)
             .setBandwidthMeter(bandwidthMeter)
             .setAudioAttributes(
@@ -199,7 +211,7 @@ class PlaybackService : MediaSessionService() {
         liveRecoveryListener = listener
         liveRecoveryJob = serviceScope.launch {
             while (isActive) {
-                delay(1_500L)
+                delay(1_000L)
                 val current = exoPlayer.currentMediaItem
                 val live = current?.requestMetadata?.extras
                     ?.getBoolean(PlaybackItems.EXTRA_IS_LIVE, false) == true

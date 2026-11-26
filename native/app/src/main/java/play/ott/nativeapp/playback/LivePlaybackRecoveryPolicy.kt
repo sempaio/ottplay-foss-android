@@ -53,14 +53,14 @@ internal class LivePlaybackRecoveryPolicy {
                 lastMovementMs = nowMs
                 unhealthySinceMs = -1L
                 if (sustainedSinceMs < 0L) sustainedSinceMs = nowMs
-                if (nowMs - sustainedSinceMs >= 10_000L) {
+                if (nowMs - sustainedSinceMs >= 8_000L) {
                     retries = 0
                     retryAllowedAtMs = 0L
                 }
                 return false
             }
             // Detect a stream stuck on the same timecode while the player reports READY.
-            if (lastMovementMs < 0L || nowMs - lastMovementMs < 18_000L) return false
+            if (lastMovementMs < 0L || nowMs - lastMovementMs < 9_000L) return false
         } else {
             sustainedSinceMs = -1L
             lastPositionMs = positionMs
@@ -70,7 +70,7 @@ internal class LivePlaybackRecoveryPolicy {
         val unhealthy = when (state) {
             LiveRecoveryState.BUFFERING, LiveRecoveryState.ENDED -> true
             LiveRecoveryState.IDLE -> retryableError
-            LiveRecoveryState.READY -> isPlaying && lastMovementMs >= 0L && nowMs - lastMovementMs >= 18_000L
+            LiveRecoveryState.READY -> isPlaying && lastMovementMs >= 0L && nowMs - lastMovementMs >= 9_000L
         }
         if (!unhealthy) {
             unhealthySinceMs = -1L
@@ -78,14 +78,20 @@ internal class LivePlaybackRecoveryPolicy {
         }
         if (unhealthySinceMs < 0L) unhealthySinceMs = nowMs
         val thresholdMs = when (state) {
-            LiveRecoveryState.BUFFERING -> 14_000L
-            LiveRecoveryState.READY -> 0L // Already observed >=18s without progress.
-            LiveRecoveryState.ENDED, LiveRecoveryState.IDLE -> 1_500L
+            LiveRecoveryState.BUFFERING -> 7_000L
+            LiveRecoveryState.READY -> 0L // Already observed >=9s without progress.
+            LiveRecoveryState.ENDED, LiveRecoveryState.IDLE -> 1_000L
         }
         if (nowMs - unhealthySinceMs < thresholdMs || nowMs < retryAllowedAtMs) return false
 
         retries++
-        retryAllowedAtMs = nowMs + if (retries >= 3) 60_000L else 1_500L
+        val backoffMs = when (retries) {
+            1 -> 1_500L
+            2 -> 3_000L
+            3 -> 6_000L
+            else -> 15_000L
+        }
+        retryAllowedAtMs = nowMs + backoffMs
         unhealthySinceMs = nowMs
         sustainedSinceMs = -1L
         return true

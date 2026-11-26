@@ -2,12 +2,14 @@ package play.ott.nativeapp.playback
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
@@ -27,8 +29,10 @@ internal class ItemMediaSourceFactory(
     context: Context,
     client: OkHttpClient,
     private val transportPolicy: RemoteTransportPolicy = AppTransportPolicy.current,
+    liveClient: OkHttpClient = client,
 ) : MediaSource.Factory {
     private val client = transportPolicy.secure(client)
+    private val liveHttpClient = transportPolicy.secure(liveClient)
     private val context = context.applicationContext
     private var drmProvider: DrmSessionManagerProvider? = null
     private var errorPolicy: LoadErrorHandlingPolicy? = null
@@ -37,7 +41,14 @@ internal class ItemMediaSourceFactory(
         val resolved = PlaybackItems.resolve(mediaItem)
         PlaybackItems.requireSupported(context, resolved)
         val http = httpFactoryFor(resolved)
-        val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+        val dataSourceFactory = DefaultDataSource.Factory(context, http)
+        val isHls = resolved.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
+            resolved.localConfiguration?.uri?.path.orEmpty().lowercase(Locale.ROOT).endsWith(".m3u8")
+        val factory: MediaSource.Factory = if (isHls) {
+            HlsMediaSource.Factory(dataSourceFactory).setAllowChunklessPreparation(true)
+        } else {
+            DefaultMediaSourceFactory(dataSourceFactory)
+        }
         val config = PlaybackItems.drm(resolved)
         if (drmProvider != null) {
             factory.setDrmSessionManagerProvider(requireNotNull(drmProvider))
@@ -58,7 +69,9 @@ internal class ItemMediaSourceFactory(
         val headers = PlaybackItems.headers(item)
         val source = (item.localConfiguration?.uri ?: item.requestMetadata.mediaUri)?.toString()?.toHttpUrlOrNull()
         val privateHeaderNames = headers.keys.filter { it.lowercase(Locale.ROOT) !in PUBLIC_HEADERS }
-        val scopedClient = client.newBuilder().addNetworkInterceptor { chain ->
+        val isLive = item.requestMetadata.extras?.getBoolean(PlaybackItems.EXTRA_IS_LIVE, false) == true
+        val baseClient = if (isLive) liveHttpClient else client
+        val scopedClient = baseClient.newBuilder().addNetworkInterceptor { chain ->
             val request = chain.request()
             val target = request.url
             val sameOrigin = source != null && source.scheme == target.scheme &&
