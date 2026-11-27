@@ -397,14 +397,19 @@ internal fun CastingActiveOverlay(
             val tvStateText = castState.tvTransportState.ifBlank { if (castState.isPlayingOnTv) "PLAYING" else "PAUSED" }
             val telemetry = buildString {
                 append(if (device.protocol == CastProtocol.CHROMECAST) "Cast" else "DLNA")
+                if (castState.castingDirectMode) {
+                    append(" Direto (M81/CDN)")
+                }
                 append(" • TV: ")
                 append(tvStateText)
-                append(" • ")
-                append(stats.totalRequests)
-                append(" reqs")
-                if (stats.bytesSent > 0L) {
+                if (!castState.castingDirectMode) {
                     append(" • ")
-                    append("%.1f MB".format(mbSent))
+                    append(stats.totalRequests)
+                    append(" reqs")
+                    if (stats.bytesSent > 0L) {
+                        append(" • ")
+                        append("%.1f MB".format(mbSent))
+                    }
                 }
                 if (castState.autoReconnectCount > 0) {
                     append(" • ")
@@ -412,11 +417,15 @@ internal fun CastingActiveOverlay(
                     append(" rec.")
                 }
             }
-            val subDiag = buildString {
-                if (stats.bindAddress.isNotBlank()) append(stats.bindAddress)
-                if (stats.lastHttpSummary.isNotBlank()) {
-                    if (isNotEmpty()) append(" • ")
-                    append(stats.lastHttpSummary)
+            val subDiag = if (castState.castingDirectMode) {
+                "Sem uso do celular — pode fechar ou bloquear a tela"
+            } else {
+                buildString {
+                    if (stats.bindAddress.isNotBlank()) append(stats.bindAddress)
+                    if (stats.lastHttpSummary.isNotBlank()) {
+                        if (isNotEmpty()) append(" • ")
+                        append(stats.lastHttpSummary)
+                    }
                 }
             }
             Text(
