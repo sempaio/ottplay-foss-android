@@ -1,11 +1,6 @@
 package play.ott.nativeapp.ui
 
-import android.content.Context
-import android.content.Intent
 import android.content.res.Configuration
-import android.net.Uri
-import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,7 +36,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.session.MediaController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import play.ott.nativeapp.R
+import play.ott.nativeapp.cast.CastingActiveOverlay
+import play.ott.nativeapp.cast.UniversalCastController
+import play.ott.nativeapp.cast.UniversalCastDialog
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
 
@@ -142,8 +142,19 @@ internal fun EveryCineVisualApp(
     LaunchedEffect(state.notice) {
         state.notice?.let { snackbar.showSnackbar(it); onAction(AppAction.DismissNotice) }
     }
+    val rootContext = LocalContext.current
+    val castController = remember { UniversalCastController() }
+    val castState by castController.state.collectAsState()
+    var showCastDialog by rememberSaveable { mutableStateOf(false) }
+    var lastCastEntryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val castScope = rememberCoroutineScope()
+
     BackHandler(enabled = fullscreen && state.playingEntry != null && !inPictureInPicture) {
-        if (state.playingEntry?.kind == MediaKind.LIVE) fullscreen = false else onAction(AppAction.StopPlayback)
+        if (castState.connectedDevice != null || state.playingEntry?.kind == MediaKind.LIVE) {
+            fullscreen = false
+        } else {
+            onAction(AppAction.StopPlayback)
+        }
     }
     BackHandler(enabled = searchOpened) {
         searchOpened = false
@@ -152,38 +163,128 @@ internal fun EveryCineVisualApp(
     BackHandler(enabled = !fullscreen && page != EveryCinePage.HOME && !showSettings && !showSource && !showGuide && !showForYou && !searchOpened && !inPictureInPicture) {
         pageName = EveryCinePage.HOME.name
     }
-    val rootContext = LocalContext.current
+
+    LaunchedEffect(showCastDialog) {
+        if (showCastDialog) {
+            castController.scanDevices(rootContext)
+        }
+    }
+
+    // Automatically forward channel/episode changes to an already-connected Smart TV
+    LaunchedEffect(state.playingEntry?.id, castState.connectedDevice?.avTransportControlUrl) {
+        val entry = state.playingEntry ?: return@LaunchedEffect
+        val device = castState.connectedDevice ?: return@LaunchedEffect
+        if (lastCastEntryId == entry.id) return@LaunchedEffect
+        lastCastEntryId = entry.id
+        var url = resolveCurrentStreamUrl(entry, controller)
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+            delay(500L)
+            url = resolveCurrentStreamUrl(entry, controller)
+        }
+        if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+            controller?.pause()
+            castController.castMedia(
+                device = device,
+                rawUrl = url,
+                title = entry.name,
+                isLive = entry.kind == MediaKind.LIVE,
+                startPositionMs = 0L,
+            )
+        }
+    }
+
     val liveChannelsForZap = remember(state.entries) { state.entries.filter { it.kind == MediaKind.LIVE } }
     Box(Modifier.fillMaxSize().background(cinemaBlack).testTag("everycine-visual-shell")) {
         if ((fullscreen || inPictureInPicture) && state.playingEntry != null) {
-            val currentLiveIndex = if (state.playingEntry.kind == MediaKind.LIVE) {
-                liveChannelsForZap.indexOfFirst { it.id == state.playingEntry.id }
+            val playing = state.playingEntry
+            val isLive = playing.kind == MediaKind.LIVE
+            val currentLiveIndex = if (isLive) {
+                liveChannelsForZap.indexOfFirst { it.id == playing.id }
             } else -1
-            NativePlayerPane(
-                state.playingEntry, controller, true,
-                onFullscreen = {
-                    if (state.playingEntry.kind == MediaKind.LIVE) fullscreen = false
-                    else onAction(AppAction.StopPlayback)
-                },
-                onPictureInPicture = onPictureInPicture,
-                onStop = { onAction(AppAction.StopPlayback) },
-                onRetry = { onAction(AppAction.Play(state.playingEntry)) },
-                onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
-                modifier = Modifier.fillMaxSize(), inPictureInPicture = inPictureInPicture,
-                onPrevious = if (state.playingEntry.kind == MediaKind.LIVE && liveChannelsForZap.size > 1) {
+            val currentEpisodeIndex = if (!isLive && state.episodes.isNotEmpty()) {
+                state.episodes.indexOfFirst { it.id == playing.id }
+            } else -1
+            val drawerItems = when {
+                isLive -> liveChannelsForZap
+                currentEpisodeIndex >= 0 -> state.episodes
+                else -> emptyList()
+            }
+            val onPrevItem: (() -> Unit)? = when {
+                isLive && liveChannelsForZap.size > 1 -> {
                     {
                         val prevIdx = if (currentLiveIndex > 0) currentLiveIndex - 1 else liveChannelsForZap.lastIndex
                         onAction(AppAction.Play(liveChannelsForZap[prevIdx]))
                     }
-                } else null,
-                onNext = if (state.playingEntry.kind == MediaKind.LIVE && liveChannelsForZap.size > 1) {
+                }
+                !isLive && currentEpisodeIndex > 0 -> {
+                    { onAction(AppAction.Play(state.episodes[currentEpisodeIndex - 1])) }
+                }
+                else -> null
+            }
+            val onNextItem: (() -> Unit)? = when {
+                isLive && liveChannelsForZap.size > 1 -> {
                     {
                         val nextIdx = if (currentLiveIndex in 0 until liveChannelsForZap.lastIndex) currentLiveIndex + 1 else 0
                         onAction(AppAction.Play(liveChannelsForZap[nextIdx]))
                     }
-                } else null,
-                onCast = { openCastOrMirroring(rootContext, state.playingEntry) },
-            )
+                }
+                !isLive && currentEpisodeIndex in 0 until state.episodes.lastIndex -> {
+                    { onAction(AppAction.Play(state.episodes[currentEpisodeIndex + 1])) }
+                }
+                else -> null
+            }
+            val liveNowTitle = if (isLive && state.epgEntry?.id == playing.id) {
+                CinemaPlayerLogic.activeProgrammeTitle(state.programmes, System.currentTimeMillis())
+            } else null
+
+            Box(Modifier.fillMaxSize()) {
+                NativePlayerPane(
+                    playing, controller, true,
+                    onFullscreen = {
+                        if (isLive) fullscreen = false
+                        else onAction(AppAction.StopPlayback)
+                    },
+                    onPictureInPicture = onPictureInPicture,
+                    onStop = {
+                        castScope.launch { castController.disconnect() }
+                        onAction(AppAction.StopPlayback)
+                    },
+                    onRetry = { onAction(AppAction.Play(playing)) },
+                    onTrackPreference = { audio, pref -> onAction(AppAction.SetTrackPreference(audio, pref)) },
+                    modifier = Modifier.fillMaxSize(), inPictureInPicture = inPictureInPicture,
+                    onPrevious = onPrevItem,
+                    onNext = onNextItem,
+                    onCast = { showCastDialog = true },
+                    isCasting = castState.connectedDevice != null,
+                    onOpenEpg = if (isLive) { { onAction(AppAction.OpenEpg(playing)) } } else null,
+                    liveNowPlayingTitle = liveNowTitle,
+                    drawerItems = drawerItems,
+                    onSelectDrawerItem = if (drawerItems.isNotEmpty()) { { onAction(AppAction.Play(it)) } } else null,
+                )
+                if (castState.connectedDevice != null && !inPictureInPicture) {
+                    CastingActiveOverlay(
+                        castState = castState,
+                        onTogglePlayPause = { castScope.launch { castController.togglePlayPause() } },
+                        onSeekRelative = { delta -> castScope.launch { castController.seekRelative(delta) } },
+                        onSeekTo = { pos -> castScope.launch { castController.seekTo(pos) } },
+                        onAdjustVolume = { delta -> castScope.launch { castController.adjustVolume(delta) } },
+                        onSwitchTv = { showCastDialog = true },
+                        onSystemMirroring = { UniversalCastController.openSystemScreenMirroring(rootContext) },
+                        onDisconnect = {
+                            lastCastEntryId = null
+                            castScope.launch {
+                                castController.disconnect()
+                                controller?.play()
+                            }
+                        },
+                        onBack = { fullscreen = false },
+                        onPollPosition = { castController.pollPosition() },
+                        onPrevious = onPrevItem,
+                        onNext = onNextItem,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
         } else {
             Column(
                 Modifier
@@ -234,6 +335,8 @@ internal fun EveryCineVisualApp(
                                     state, controller, onAction, search, selectedCategory,
                                     onSelectCategory = { browse(MediaKind.LIVE, it) },
                                     onFullscreen = { fullscreen = true },
+                                    connectedTvName = castState.connectedDevice?.friendlyName,
+                                    onOpenCast = { showCastDialog = true },
                                 )
                                 EveryCinePage.CATALOG -> EveryCineCatalog(
                                     state, onAction, search, catalogKind, selectedCategory,
@@ -248,6 +351,63 @@ internal fun EveryCineVisualApp(
                                     onBrowse = ::browse,
                                 )
                             }
+                        }
+                    }
+                }
+                castState.connectedDevice?.let { tv ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF0C1A2B))
+                            .border(1.dp, cinemaAccent.copy(alpha = 0.55f))
+                            .clickable {
+                                if (state.playingEntry != null) fullscreen = true else showCastDialog = true
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("📡", fontSize = 15.sp)
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Transmitindo para ${tv.friendlyName}",
+                                color = cinemaAccent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (castState.castingTitle.isNotBlank()) {
+                                Text(
+                                    castState.castingTitle,
+                                    color = cinemaWhite,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        Box(
+                            Modifier
+                                .background(Color(0xFF17273D), RoundedCornerShape(10.dp))
+                                .clickable { castScope.launch { castController.togglePlayPause() } }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                        ) {
+                            Text(if (castState.isPlayingOnTv) "⏸" else "▶", color = cinemaWhite, fontSize = 13.sp)
+                        }
+                        Box(
+                            Modifier
+                                .background(Color(0xFF2B1722), RoundedCornerShape(10.dp))
+                                .clickable {
+                                    lastCastEntryId = null
+                                    castScope.launch {
+                                        castController.disconnect()
+                                        controller?.play()
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                        ) {
+                            Text("✕", color = Color(0xFFFF8A9B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -271,6 +431,62 @@ internal fun EveryCineVisualApp(
         )
     }
 
+    if (showCastDialog) {
+        val currentPlaying = state.playingEntry
+        UniversalCastDialog(
+            castState = castState,
+            mediaTitle = currentPlaying?.name.orEmpty(),
+            onRescan = { castScope.launch { castController.scanDevices(rootContext) } },
+            onSelectDevice = { device ->
+                if (currentPlaying != null) {
+                    val streamUrl = resolveCurrentStreamUrl(currentPlaying, controller)
+                    val posMs = if (currentPlaying.kind == MediaKind.LIVE) 0L else (controller?.currentPosition ?: 0L)
+                    lastCastEntryId = currentPlaying.id
+                    controller?.pause()
+                    castScope.launch {
+                        val ok = castController.castMedia(
+                            device = device,
+                            rawUrl = streamUrl,
+                            title = currentPlaying.name,
+                            isLive = currentPlaying.kind == MediaKind.LIVE,
+                            startPositionMs = posMs,
+                        )
+                        if (ok) {
+                            showCastDialog = false
+                            fullscreen = true
+                        }
+                    }
+                }
+            },
+            onDisconnect = {
+                lastCastEntryId = null
+                castScope.launch {
+                    castController.disconnect()
+                    controller?.play()
+                }
+            },
+            onSystemMirroring = {
+                showCastDialog = false
+                UniversalCastController.openSystemScreenMirroring(rootContext)
+            },
+            onExternalCastApp = {
+                if (currentPlaying != null) {
+                    val streamUrl = resolveCurrentStreamUrl(currentPlaying, controller)
+                    showCastDialog = false
+                    UniversalCastController.openExternalCastApp(
+                        rootContext,
+                        streamUrl,
+                        currentPlaying.name,
+                        currentPlaying.kind == MediaKind.LIVE,
+                    )
+                }
+            },
+            onDismiss = {
+                castController.clearError()
+                showCastDialog = false
+            },
+        )
+    }
     state.epgEntry?.let { GuideDialog(it, state.programmes, state.epgLoading, onAction) }
     state.movieEntry?.let {
         EveryCineMovieDetail(it, state.isBusy, it.id in state.favoriteIds, onAction)
@@ -800,6 +1016,8 @@ private fun EveryCineLive(
     selectedCategory: String,
     onSelectCategory: (String) -> Unit,
     onFullscreen: () -> Unit,
+    connectedTvName: String? = null,
+    onOpenCast: () -> Unit = {},
 ) {
     val allLabel = "Todos"
     val selected = selectedCategory.ifBlank { allLabel }
@@ -882,6 +1100,8 @@ private fun EveryCineLive(
                 channels = filteredChannels,
                 onAction = onAction,
                 onFullscreen = onFullscreen,
+                connectedTvName = connectedTvName,
+                onOpenCast = onOpenCast,
                 modifier = Modifier.weight(1f).fillMaxHeight()
             )
             liveChannelBrowser(Modifier.weight(1f).fillMaxHeight())
@@ -894,6 +1114,8 @@ private fun EveryCineLive(
                 channels = filteredChannels,
                 onAction = onAction,
                 onFullscreen = onFullscreen,
+                connectedTvName = connectedTvName,
+                onOpenCast = onOpenCast,
                 modifier = Modifier.fillMaxWidth().height(240.dp)
             )
             liveChannelBrowser(Modifier.weight(1f))
@@ -908,9 +1130,10 @@ private fun EveryCineInlinePlayer(
     channels: List<MediaEntry>,
     onAction: (AppAction) -> Unit,
     onFullscreen: () -> Unit,
+    connectedTvName: String? = null,
+    onOpenCast: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val playing = state.playingEntry?.takeIf { it.kind == MediaKind.LIVE }
     var resizeMode by rememberSaveable { mutableIntStateOf(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
@@ -936,6 +1159,26 @@ private fun EveryCineInlinePlayer(
                     externalResizeMode = resizeMode,
                     onResizeModeChange = { resizeMode = it },
                 )
+                if (connectedTvName != null) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp)
+                            .background(Color(0xDD0B1626), RoundedCornerShape(16.dp))
+                            .border(1.dp, cinemaAccent, RoundedCornerShape(16.dp))
+                            .clickable(onClick = onFullscreen)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            "📡 Na TV: $connectedTvName • Toque para controlar",
+                            color = cinemaAccent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
 
@@ -998,13 +1241,13 @@ private fun EveryCineInlinePlayer(
                 }
             )
 
-            // Cast (Native Android Cast Settings or external player, never shows "Nenhum app pode realizar esta ação")
+            // Universal Cast (Smart TVs via DLNA/UPnP + Native Screen Mirroring + External Cast Apps)
             PlayerBarButton(
                 icon = "📡",
-                label = "Cast",
+                label = if (connectedTvName != null) "Na TV" else "Transmitir",
                 enabled = playing != null,
                 onClick = {
-                    if (playing != null) openCastOrMirroring(context, playing)
+                    if (playing != null) onOpenCast()
                 }
             )
 
@@ -1019,38 +1262,17 @@ private fun EveryCineInlinePlayer(
     }
 }
 
-private fun openCastOrMirroring(context: Context, entry: MediaEntry) {
-    try {
-        val castSettings = Intent(Settings.ACTION_CAST_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        if (castSettings.resolveActivity(context.packageManager) != null) {
-            context.startActivity(castSettings)
-            return
-        }
-    } catch (_: Exception) {
+private fun resolveCurrentStreamUrl(entry: MediaEntry, controller: MediaController?): String {
+    val item = controller?.currentMediaItem
+    val localUri = item?.localConfiguration?.uri?.toString()
+    if (!localUri.isNullOrBlank() && (localUri.startsWith("http://", ignoreCase = true) || localUri.startsWith("https://", ignoreCase = true))) {
+        return localUri
     }
-    if (entry.url.startsWith("http://") || entry.url.startsWith("https://")) {
-        try {
-            val viewVideo = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(Uri.parse(entry.url), "video/*")
-                putExtra("title", entry.name)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            val externalHandlers = context.packageManager.queryIntentActivities(viewVideo, 0)
-                .filter { it.activityInfo.packageName != context.packageName }
-            if (externalHandlers.isNotEmpty()) {
-                context.startActivity(Intent.createChooser(viewVideo, "Transmitir: ${entry.name}"))
-                return
-            }
-        } catch (_: Exception) {
-        }
+    val requestUri = item?.requestMetadata?.mediaUri?.toString()
+    if (!requestUri.isNullOrBlank() && (requestUri.startsWith("http://", ignoreCase = true) || requestUri.startsWith("https://", ignoreCase = true))) {
+        return requestUri
     }
-    Toast.makeText(
-        context,
-        "Use o espelhamento de tela (Transmitir / Smart View) do aparelho para enviar para a TV.",
-        Toast.LENGTH_LONG,
-    ).show()
+    return entry.url
 }
 
 @Composable

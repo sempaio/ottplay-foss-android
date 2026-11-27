@@ -78,6 +78,11 @@ internal fun NativePlayerPane(
     onPrevious: (() -> Unit)? = null,
     onNext: (() -> Unit)? = null,
     onCast: (() -> Unit)? = null,
+    isCasting: Boolean = false,
+    onOpenEpg: (() -> Unit)? = null,
+    liveNowPlayingTitle: String? = null,
+    drawerItems: List<MediaEntry> = emptyList(),
+    onSelectDrawerItem: ((MediaEntry) -> Unit)? = null,
 ) {
     var internalResizeMode by rememberSaveable { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     val resizeMode = externalResizeMode ?: internalResizeMode
@@ -92,6 +97,7 @@ internal fun NativePlayerPane(
     var nativeView by remember { mutableStateOf<RemotePlayerView?>(null) }
     var controlsVisible by remember { mutableStateOf(true) }
     val isTv = LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+    val useCinemaHud = fullscreen && !inPictureInPicture && !isTv
     val context = LocalContext.current
     val audioTitle = stringResource(R.string.dialog_audio)
     val subtitleTitle = stringResource(R.string.dialog_subtitles)
@@ -170,8 +176,8 @@ internal fun NativePlayerPane(
                         tag = "ott-native-video"
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         player = controller
-                        useController = true
-                        controllerAutoShow = true
+                        useController = !inPictureInPicture && !useCinemaHud
+                        controllerAutoShow = !useCinemaHud
                         controllerShowTimeoutMs = 4000
                         if (isTv) setControllerAnimationEnabled(false)
                         setShowSubtitleButton(!isTv)
@@ -203,12 +209,38 @@ internal fun NativePlayerPane(
                     view.contentDescription = playerDescription
                     if (view.player !== controller) view.player = controller
                     view.resizeMode = resizeMode
-                    view.useController = !inPictureInPicture
+                    val wantController = !inPictureInPicture && !useCinemaHud
+                    if (view.useController != wantController) {
+                        view.useController = wantController
+                        if (!wantController) view.hideController()
+                    }
                 },
                 onRelease = { it.player = null; if (nativeView === it) nativeView = null },
                 modifier = Modifier.fillMaxSize(),
             )
-            if (!inPictureInPicture && fullscreen && (controlsVisible || playbackError != null || isTv)) {
+            if (useCinemaHud) {
+                CinemaPlayerOverlay(
+                    entry = entry,
+                    controller = controller,
+                    buffering = buffering,
+                    hasError = playbackError != null,
+                    resizeMode = resizeMode,
+                    onResizeModeChange = setResizeMode,
+                    onBack = onFullscreen,
+                    onOpenTracks = { type -> trackType = type },
+                    onOpenOptions = { optionsOpen = true },
+                    onPictureInPicture = onPictureInPicture,
+                    onPrevious = onPrevious,
+                    onNext = onNext,
+                    onCast = onCast,
+                    isCasting = isCasting,
+                    onOpenEpg = onOpenEpg,
+                    liveNowPlayingTitle = liveNowPlayingTitle,
+                    drawerItems = drawerItems,
+                    onSelectDrawerItem = onSelectDrawerItem,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (!inPictureInPicture && fullscreen && (controlsVisible || playbackError != null || isTv)) {
                 val aspectLabel = when (resizeMode) {
                     AspectRatioFrameLayout.RESIZE_MODE_FIT -> "Ajustar"
                     AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
@@ -272,7 +304,7 @@ internal fun NativePlayerPane(
                     }
                 }
             }
-            if (!inPictureInPicture && (controller == null || buffering)) CircularProgressIndicator()
+            if (!inPictureInPicture && !useCinemaHud && (controller == null || buffering)) CircularProgressIndicator()
             playbackError?.takeUnless { inPictureInPicture }?.let {
                 Column(
                     Modifier
