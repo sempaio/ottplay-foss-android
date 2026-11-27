@@ -5,6 +5,11 @@ import java.net.InetAddress
 import java.net.URI
 import java.util.Locale
 
+internal enum class CastProtocol {
+    DLNA,
+    CHROMECAST,
+}
+
 internal data class CastDevice(
     val id: String,
     val friendlyName: String,
@@ -14,6 +19,8 @@ internal data class CastDevice(
     val locationUrl: String,
     val avTransportControlUrl: String,
     val renderingControlUrl: String?,
+    val protocol: CastProtocol = CastProtocol.DLNA,
+    val port: Int = 8009,
 )
 
 /**

@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.net.wifi.WifiManager
-import android.provider.Settings
 import android.widget.Toast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -45,20 +44,30 @@ internal data class CastSessionState(
 )
 
 /**
- * Pure-Kotlin universal Smart TV caster (UPnP/DLNA SSDP discovery + AVTransport/RenderingControl SOAP)
- * plus Android system screen-mirroring & external casting app launchers.
- *
- * Works across Samsung Tizen, LG webOS, Android TV / Google TV, Roku, Fire TV, TV Box, Xbox and Kodi
- * on the same Wi-Fi network with zero third-party SDK dependencies.
+ * Process-scoped holder so an active TV cast session survives Activity backgrounding,
+ * app switching (WhatsApp/Instagram), screen-off, and orientation changes.
+ */
+internal object CastSessionHost {
+    val controller: UniversalCastController = UniversalCastController()
+    val isCastingActive: Boolean
+        get() = controller.state.value.connectedDevice != null
+}
+
+/**
+ * Unified pure-Kotlin Smart TV & Chromecast caster:
+ * - DLNA / UPnP (`AVTransport:1` + `RenderingControl:1`) for Samsung Tizen, LG webOS, Roku, TV Box, Xbox, Kodi.
+ * - Google Cast v2 (`_googlecast._tcp.` + TLS 8009 Default Media Receiver `CC1AD845`) for Chromecast, Google TV, Android TV.
+ * - Backed by `CastRelayService` foreground service so the user can lock the screen or use other apps freely.
  */
 internal class UniversalCastController {
     private val mutableState = MutableStateFlow(CastSessionState())
     val state: StateFlow<CastSessionState> = mutableState.asStateFlow()
     private val lanProxy = LanStreamProxyServer()
+    private val googleCastClient = GoogleCastClient()
 
     private val lanHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(4, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
         .writeTimeout(3, TimeUnit.SECONDS)
         .followRedirects(false)
         .build()
@@ -74,13 +83,16 @@ internal class UniversalCastController {
         mutableState.update {
             it.copy(
                 scanning = true,
-                scanStatus = "Procurando Smart TVs no Wi-Fi...",
+                scanStatus = "Procurando Smart TVs e Chromecasts no Wi-Fi...",
                 errorMessage = null,
             )
         }
+        val appContext = context.applicationContext
         val found = try {
-            withContext(Dispatchers.IO) {
-                discoverDlnaDevices(context.applicationContext)
+            coroutineScope {
+                val dlnaDeferred = async(Dispatchers.IO) { runCatching { discoverDlnaDevices(appContext) }.getOrDefault(emptyList()) }
+                val castDeferred = async(Dispatchers.IO) { runCatching { GoogleCastClient.discoverDevices(appContext, 2_400L) }.getOrDefault(emptyList()) }
+                dlnaDeferred.await() + castDeferred.await()
             }
         } catch (ce: CancellationException) {
             throw ce
@@ -97,20 +109,21 @@ internal class UniversalCastController {
         mutableState.update { prev ->
             val merged = (found + listOfNotNull(prev.connectedDevice))
                 .distinctBy { it.avTransportControlUrl }
-                .sortedBy { it.friendlyName.lowercase() }
+                .sortedWith(compareBy<CastDevice> { it.protocol.ordinal }.thenBy { it.friendlyName.lowercase() })
             prev.copy(
                 scanning = false,
                 devices = merged,
                 scanStatus = if (merged.isEmpty()) {
-                    "Nenhuma Smart TV DLNA respondeu no Wi-Fi. Use o Espelhamento de Tela abaixo ou confira se TV e celular estão no mesmo Wi-Fi."
+                    "Nenhuma TV ou Chromecast respondeu agora. Confira se TV e celular estão no mesmo Wi-Fi e toque em Buscar."
                 } else {
-                    "${merged.size} ${if (merged.size == 1) "TV encontrada" else "TVs encontradas"} na rede"
+                    "${merged.size} ${if (merged.size == 1) "dispositivo encontrado" else "dispositivos encontrados"} no Wi-Fi"
                 },
             )
         }
     }
 
     suspend fun castMedia(
+        context: Context,
         device: CastDevice,
         rawUrl: String,
         title: String,
@@ -123,137 +136,27 @@ internal class UniversalCastController {
                 errorMessage = null,
             )
         }
+        val appContext = context.applicationContext
         return try {
-            val result = withContext(Dispatchers.IO) {
-                val rewrittenUrl = DlnaProtocol.rewriteMediaUrlForCast(rawUrl, isLive)
-                val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
-                val castTarget = if (phoneWifiIp != null) {
-                    lanProxy.prepareStream(rewrittenUrl, isLive, phoneWifiIp)
-                } else {
-                    val directUrl = resolvePlayableCastUrl(rawUrl, isLive)
-                    ProxiedCastTarget(
-                        localUrl = directUrl,
-                        mimeType = if (isLive) "video/mp2t" else "video/mp4",
-                        dlnaFeatures = "*",
-                        contentLength = null,
-                        isLive = isLive,
-                    )
-                }
-
-                // Best-effort Stop clears stale state on Samsung / LG renderers
-                runCatching {
-                    postSoap(
-                        device.avTransportControlUrl,
-                        DlnaProtocol.AV_TRANSPORT_SERVICE,
-                        "Stop",
-                        DlnaProtocol.buildStopSoap(),
-                    )
-                }
-
-                // Try Samsung/LG-standard DLNA profile first, then generic MIME, then empty metadata
-                val attempts = listOf(
-                    DlnaProtocol.buildSetAvTransportUriSoap(
-                        mediaUrl = castTarget.localUrl,
-                        title = title,
-                        isLive = isLive,
-                        includeMetadata = true,
-                        mimeOverride = castTarget.mimeType,
-                        dlnaFeatures = castTarget.dlnaFeatures,
-                        contentLength = castTarget.contentLength,
-                    ),
-                    DlnaProtocol.buildSetAvTransportUriSoap(
-                        mediaUrl = castTarget.localUrl,
-                        title = title,
-                        isLive = isLive,
-                        includeMetadata = true,
-                        mimeOverride = if (isLive) "video/mpeg" else castTarget.mimeType,
-                        dlnaFeatures = "*",
-                        contentLength = castTarget.contentLength,
-                    ),
-                    DlnaProtocol.buildSetAvTransportUriSoap(
-                        mediaUrl = castTarget.localUrl,
-                        title = title,
-                        isLive = isLive,
-                        includeMetadata = false,
-                    ),
-                )
-
-                var setUriOk = false
-                var lastFault: String? = null
-                for (soapBody in attempts) {
-                    val resp = postSoap(
-                        device.avTransportControlUrl,
-                        DlnaProtocol.AV_TRANSPORT_SERVICE,
-                        "SetAVTransportURI",
-                        soapBody,
-                    )
-                    if (resp.isSuccessful) {
-                        setUriOk = true
-                        break
-                    }
-                    lastFault = DlnaProtocol.extractSoapFaultSummary(resp.body) ?: "HTTP ${resp.code}"
-                }
-
-                if (!setUriOk) {
-                    lanProxy.clearStream()
-                    val detail = lastFault?.let { " ($it)" }.orEmpty()
-                    return@withContext Triple(
-                        false,
-                        "A TV recusou o vídeo$detail. Tente Espelhar Tela ou Web Video Caster.",
-                        castTarget.localUrl,
-                    )
-                }
-
-                val playRes = postSoap(
-                    device.avTransportControlUrl,
-                    DlnaProtocol.AV_TRANSPORT_SERVICE,
-                    "Play",
-                    DlnaProtocol.buildPlaySoap(),
-                )
-                if (!playRes.isSuccessful) {
-                    lanProxy.clearStream()
-                    val detail = DlnaProtocol.extractSoapFaultSummary(playRes.body) ?: "HTTP ${playRes.code}"
-                    return@withContext Triple(
-                        false,
-                        "A TV não iniciou a reprodução ($detail).",
-                        castTarget.localUrl,
-                    )
-                }
-
-                if (!isLive && startPositionMs > 5_000L) {
-                    delay(700L)
-                    runCatching {
-                        postSoap(
-                            device.avTransportControlUrl,
-                            DlnaProtocol.AV_TRANSPORT_SERVICE,
-                            "Seek",
-                            DlnaProtocol.buildSeekSoap(startPositionMs),
-                        )
-                    }
-                }
-
-                val initialVolume = device.renderingControlUrl?.let { rcUrl ->
-                    runCatching {
-                        val volResp = postSoap(
-                            rcUrl,
-                            DlnaProtocol.RENDERING_CONTROL_SERVICE,
-                            "GetVolume",
-                            DlnaProtocol.buildGetVolumeSoap(),
-                        )
-                        DlnaProtocol.extractTagText(volResp.body, "CurrentVolume")?.toIntOrNull()
-                    }.getOrNull()
-                }
-
-                Triple(true, initialVolume?.toString().orEmpty(), castTarget.localUrl)
+            // Stop any prior Cast v2 session cleanly when switching targets
+            if (state.value.connectedDevice?.protocol == CastProtocol.CHROMECAST) {
+                withContext(Dispatchers.IO) { googleCastClient.disconnect(stopApp = true) }
             }
 
-            if (result.first) {
-                val vol = result.second.toIntOrNull() ?: state.value.tvVolume
+            val outcome = withContext(Dispatchers.IO) {
+                when (device.protocol) {
+                    CastProtocol.CHROMECAST -> castToChromecast(device, rawUrl, title, isLive, startPositionMs)
+                    CastProtocol.DLNA -> castToDlna(device, rawUrl, title, isLive, startPositionMs)
+                }
+            }
+
+            if (outcome.success) {
+                val vol = outcome.initialVolume ?: state.value.tvVolume
                 mutableState.update {
                     it.copy(
                         connectedDevice = device,
                         castingTitle = title,
-                        castingUrl = result.third,
+                        castingUrl = outcome.effectiveUrl,
                         castingIsLive = isLive,
                         isPlayingOnTv = true,
                         tvPositionMs = startPositionMs.coerceAtLeast(0L),
@@ -263,12 +166,15 @@ internal class UniversalCastController {
                         errorMessage = null,
                     )
                 }
+                // Keep foreground service + WakeLock + WifiLock alive so user can freely use phone or lock screen!
+                CastRelayService.startOrUpdate(appContext, device.friendlyName, title, isPlaying = true)
                 true
             } else {
+                CastRelayService.stop(appContext)
                 mutableState.update {
                     it.copy(
                         busyAction = null,
-                        errorMessage = result.second,
+                        errorMessage = outcome.error ?: "Não foi possível transmitir para ${device.friendlyName}.",
                     )
                 }
                 false
@@ -277,6 +183,7 @@ internal class UniversalCastController {
             throw ce
         } catch (e: Exception) {
             lanProxy.clearStream()
+            CastRelayService.stop(appContext)
             mutableState.update {
                 it.copy(
                     busyAction = null,
@@ -287,19 +194,255 @@ internal class UniversalCastController {
         }
     }
 
-    suspend fun togglePlayPause() {
+    private data class CastAttemptResult(
+        val success: Boolean,
+        val effectiveUrl: String,
+        val initialVolume: Int? = null,
+        val error: String? = null,
+    )
+
+    private fun castToChromecast(
+        device: CastDevice,
+        rawUrl: String,
+        title: String,
+        isLive: Boolean,
+        startPositionMs: Long,
+    ): CastAttemptResult {
+        val rewritten = DlnaProtocol.rewriteMediaUrlForCast(rawUrl, isLive)
+        val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
+        val target = if (phoneWifiIp != null) {
+            lanProxy.prepareStream(rewritten, isLive, phoneWifiIp)
+        } else {
+            val direct = resolvePlayableCastUrl(rawUrl, isLive)
+            ProxiedCastTarget(
+                localUrl = direct,
+                chromecastHlsUrl = if (isLive) direct else null,
+                directHttpVodUrl = if (!isLive) direct else null,
+                mimeType = if (isLive) "application/x-mpegurl" else "video/mp4",
+                dlnaFeatures = "*",
+                contentLength = null,
+                isLive = isLive,
+            )
+        }
+
+        // For VOD direct HTTP CDN -> Chromecast pulls straight from CDN; for Live -> CORS-enabled LAN HLS manifest!
+        val useDirectVod = !isLive && !target.directHttpVodUrl.isNullOrBlank()
+        val mediaUrl = when {
+            isLive -> target.chromecastHlsUrl ?: target.localUrl
+            useDirectVod -> target.directHttpVodUrl!!
+            else -> target.localUrl
+        }
+        val contentType = when {
+            isLive && mediaUrl.endsWith(".m3u8", ignoreCase = true) -> "application/x-mpegurl"
+            isLive -> "video/mp2t"
+            else -> target.mimeType
+        }
+
+        val res = googleCastClient.connectAndLoad(
+            device = device,
+            mediaUrl = mediaUrl,
+            title = title,
+            contentType = contentType,
+            isLive = isLive,
+            startPositionMs = startPositionMs,
+        )
+        if (res.isSuccess) {
+            if (useDirectVod) lanProxy.clearStream()
+            return CastAttemptResult(true, mediaUrl, initialVolume = res.getOrNull())
+        }
+        // Fallback: if Chromecast couldn't pull direct VOD URL, retry via LAN proxy with CORS headers
+        if (useDirectVod && mediaUrl != target.localUrl) {
+            val retry = googleCastClient.connectAndLoad(
+                device = device,
+                mediaUrl = target.localUrl,
+                title = title,
+                contentType = target.mimeType,
+                isLive = false,
+                startPositionMs = startPositionMs,
+            )
+            if (retry.isSuccess) {
+                return CastAttemptResult(true, target.localUrl, initialVolume = retry.getOrNull())
+            }
+        }
+        lanProxy.clearStream()
+        return CastAttemptResult(
+            success = false,
+            effectiveUrl = mediaUrl,
+            error = res.exceptionOrNull()?.message ?: "Chromecast recusou a reprodução deste vídeo.",
+        )
+    }
+
+    private fun castToDlna(
+        device: CastDevice,
+        rawUrl: String,
+        title: String,
+        isLive: Boolean,
+        startPositionMs: Long,
+    ): CastAttemptResult {
+        val rewrittenUrl = DlnaProtocol.rewriteMediaUrlForCast(rawUrl, isLive)
+        val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
+        val castTarget = if (phoneWifiIp != null) {
+            lanProxy.prepareStream(rewrittenUrl, isLive, phoneWifiIp)
+        } else {
+            val directUrl = resolvePlayableCastUrl(rawUrl, isLive)
+            ProxiedCastTarget(
+                localUrl = directUrl,
+                chromecastHlsUrl = null,
+                directHttpVodUrl = if (!isLive && directUrl.startsWith("http://", ignoreCase = true)) directUrl else null,
+                mimeType = if (isLive) "video/mp2t" else "video/mp4",
+                dlnaFeatures = "*",
+                contentLength = null,
+                isLive = isLive,
+            )
+        }
+
+        // Best-effort Stop clears stale state on Samsung / LG renderers
+        runCatching {
+            postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Stop", DlnaProtocol.buildStopSoap())
+        }
+
+        // For VOD Movies/Series with a plain HTTP CDN URL, try DIRECT URL first so TV plays independently of phone!
+        if (!isLive && !castTarget.directHttpVodUrl.isNullOrBlank()) {
+            val directUrl = castTarget.directHttpVodUrl
+            val directOk = tryDlnaSetUriAndPlay(
+                device = device,
+                mediaUrl = directUrl,
+                title = title,
+                isLive = false,
+                mimeType = castTarget.mimeType,
+                dlnaFeatures = castTarget.dlnaFeatures,
+                contentLength = castTarget.contentLength,
+                startPositionMs = startPositionMs,
+            )
+            if (directOk.first) {
+                // TV is streaming straight from CDN — free local proxy resources!
+                lanProxy.clearStream()
+                val vol = queryDlnaVolume(device)
+                return CastAttemptResult(true, directUrl, initialVolume = vol)
+            }
+        }
+
+        // Proxy path (required for Live HLS/AES-128 -> MPEG-TS, HTTPS VOD, or TVs that rejected direct CDN)
+        val proxyAttempt = tryDlnaSetUriAndPlay(
+            device = device,
+            mediaUrl = castTarget.localUrl,
+            title = title,
+            isLive = isLive,
+            mimeType = castTarget.mimeType,
+            dlnaFeatures = castTarget.dlnaFeatures,
+            contentLength = castTarget.contentLength,
+            startPositionMs = startPositionMs,
+        )
+        if (!proxyAttempt.first) {
+            lanProxy.clearStream()
+            val detail = proxyAttempt.second?.let { " ($it)" }.orEmpty()
+            return CastAttemptResult(
+                success = false,
+                effectiveUrl = castTarget.localUrl,
+                error = "A TV recusou o vídeo$detail. Tente novamente ou use Web Video Caster.",
+            )
+        }
+        val vol = queryDlnaVolume(device)
+        return CastAttemptResult(true, castTarget.localUrl, initialVolume = vol)
+    }
+
+    private fun tryDlnaSetUriAndPlay(
+        device: CastDevice,
+        mediaUrl: String,
+        title: String,
+        isLive: Boolean,
+        mimeType: String,
+        dlnaFeatures: String,
+        contentLength: Long?,
+        startPositionMs: Long,
+    ): Pair<Boolean, String?> {
+        val attempts = listOf(
+            DlnaProtocol.buildSetAvTransportUriSoap(
+                mediaUrl = mediaUrl,
+                title = title,
+                isLive = isLive,
+                includeMetadata = true,
+                mimeOverride = mimeType,
+                dlnaFeatures = dlnaFeatures,
+                contentLength = contentLength,
+            ),
+            DlnaProtocol.buildSetAvTransportUriSoap(
+                mediaUrl = mediaUrl,
+                title = title,
+                isLive = isLive,
+                includeMetadata = true,
+                mimeOverride = if (isLive) "video/mpeg" else mimeType,
+                dlnaFeatures = "*",
+                contentLength = contentLength,
+            ),
+            DlnaProtocol.buildSetAvTransportUriSoap(
+                mediaUrl = mediaUrl,
+                title = title,
+                isLive = isLive,
+                includeMetadata = false,
+            ),
+        )
+
+        var setUriOk = false
+        var lastFault: String? = null
+        for (soapBody in attempts) {
+            val resp = postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "SetAVTransportURI", soapBody)
+            if (resp.isSuccessful) {
+                setUriOk = true
+                break
+            }
+            lastFault = DlnaProtocol.extractSoapFaultSummary(resp.body) ?: "HTTP ${resp.code}"
+        }
+        if (!setUriOk) return false to lastFault
+
+        val playRes = postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Play", DlnaProtocol.buildPlaySoap())
+        if (!playRes.isSuccessful) {
+            val detail = DlnaProtocol.extractSoapFaultSummary(playRes.body) ?: "HTTP ${playRes.code}"
+            return false to detail
+        }
+
+        if (!isLive && startPositionMs > 5_000L) {
+            runCatching { Thread.sleep(700L) }
+            runCatching {
+                postSoap(
+                    device.avTransportControlUrl,
+                    DlnaProtocol.AV_TRANSPORT_SERVICE,
+                    "Seek",
+                    DlnaProtocol.buildSeekSoap(startPositionMs),
+                )
+            }
+        }
+        return true to null
+    }
+
+    private fun queryDlnaVolume(device: CastDevice): Int? = device.renderingControlUrl?.let { rcUrl ->
+        runCatching {
+            val volResp = postSoap(rcUrl, DlnaProtocol.RENDERING_CONTROL_SERVICE, "GetVolume", DlnaProtocol.buildGetVolumeSoap())
+            DlnaProtocol.extractTagText(volResp.body, "CurrentVolume")?.toIntOrNull()
+        }.getOrNull()
+    }
+
+    suspend fun togglePlayPause(context: Context? = null) {
         val current = state.value
         val device = current.connectedDevice ?: return
         val nextPlaying = !current.isPlayingOnTv
-        val action = if (nextPlaying) "Play" else "Pause"
-        val soap = if (nextPlaying) DlnaProtocol.buildPlaySoap() else DlnaProtocol.buildPauseSoap()
         val ok = withContext(Dispatchers.IO) {
-            runCatching {
-                postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, action, soap).isSuccessful
-            }.getOrDefault(false)
+            when (device.protocol) {
+                CastProtocol.CHROMECAST -> if (nextPlaying) googleCastClient.play() else googleCastClient.pause()
+                CastProtocol.DLNA -> {
+                    val action = if (nextPlaying) "Play" else "Pause"
+                    val soap = if (nextPlaying) DlnaProtocol.buildPlaySoap() else DlnaProtocol.buildPauseSoap()
+                    runCatching {
+                        postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, action, soap).isSuccessful
+                    }.getOrDefault(false)
+                }
+            }
         }
         if (ok) {
             mutableState.update { it.copy(isPlayingOnTv = nextPlaying, errorMessage = null) }
+            if (context != null) {
+                CastRelayService.startOrUpdate(context, device.friendlyName, current.castingTitle, nextPlaying)
+            }
         }
     }
 
@@ -311,14 +454,17 @@ internal class UniversalCastController {
             if (current.tvDurationMs > 0L) it.coerceAtMost(current.tvDurationMs) else it
         }
         val ok = withContext(Dispatchers.IO) {
-            runCatching {
-                postSoap(
-                    device.avTransportControlUrl,
-                    DlnaProtocol.AV_TRANSPORT_SERVICE,
-                    "Seek",
-                    DlnaProtocol.buildSeekSoap(clamped),
-                ).isSuccessful
-            }.getOrDefault(false)
+            when (device.protocol) {
+                CastProtocol.CHROMECAST -> googleCastClient.seek(clamped)
+                CastProtocol.DLNA -> runCatching {
+                    postSoap(
+                        device.avTransportControlUrl,
+                        DlnaProtocol.AV_TRANSPORT_SERVICE,
+                        "Seek",
+                        DlnaProtocol.buildSeekSoap(clamped),
+                    ).isSuccessful
+                }.getOrDefault(false)
+            }
         }
         if (ok) {
             mutableState.update { it.copy(tvPositionMs = clamped, errorMessage = null) }
@@ -332,17 +478,22 @@ internal class UniversalCastController {
     suspend fun adjustVolume(delta: Int) {
         val current = state.value
         val device = current.connectedDevice ?: return
-        val rcUrl = device.renderingControlUrl ?: return
         val nextVol = (current.tvVolume + delta).coerceIn(0, 100)
         val ok = withContext(Dispatchers.IO) {
-            runCatching {
-                postSoap(
-                    rcUrl,
-                    DlnaProtocol.RENDERING_CONTROL_SERVICE,
-                    "SetVolume",
-                    DlnaProtocol.buildSetVolumeSoap(nextVol),
-                ).isSuccessful
-            }.getOrDefault(false)
+            when (device.protocol) {
+                CastProtocol.CHROMECAST -> googleCastClient.setVolume(nextVol)
+                CastProtocol.DLNA -> {
+                    val rcUrl = device.renderingControlUrl ?: return@withContext false
+                    runCatching {
+                        postSoap(
+                            rcUrl,
+                            DlnaProtocol.RENDERING_CONTROL_SERVICE,
+                            "SetVolume",
+                            DlnaProtocol.buildSetVolumeSoap(nextVol),
+                        ).isSuccessful
+                    }.getOrDefault(false)
+                }
+            }
         }
         if (ok) {
             mutableState.update { it.copy(tvVolume = nextVol, errorMessage = null) }
@@ -353,28 +504,42 @@ internal class UniversalCastController {
         val current = state.value
         val device = current.connectedDevice ?: return
         if (current.castingIsLive) return
-        val resp = withContext(Dispatchers.IO) {
-            runCatching {
-                postSoap(
-                    device.avTransportControlUrl,
-                    DlnaProtocol.AV_TRANSPORT_SERVICE,
-                    "GetPositionInfo",
-                    DlnaProtocol.buildGetPositionInfoSoap(),
-                )
-            }.getOrNull()
-        } ?: return
-        if (!resp.isSuccessful) return
-        val relMs = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(resp.body, "RelTime"))
-        val durMs = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(resp.body, "TrackDuration"))
-        mutableState.update { prev ->
-            prev.copy(
-                tvPositionMs = relMs ?: prev.tvPositionMs,
-                tvDurationMs = durMs?.takeIf { it > 0L } ?: prev.tvDurationMs,
-            )
+        when (device.protocol) {
+            CastProtocol.CHROMECAST -> {
+                val st = withContext(Dispatchers.IO) { googleCastClient.requestStatus() } ?: return
+                mutableState.update { prev ->
+                    prev.copy(
+                        isPlayingOnTv = st.playerState == "PLAYING" || st.playerState == "BUFFERING",
+                        tvPositionMs = (st.currentTimeSec * 1000.0).toLong().coerceAtLeast(0L),
+                        tvDurationMs = if (st.durationSec > 0.0) (st.durationSec * 1000.0).toLong() else prev.tvDurationMs,
+                    )
+                }
+            }
+            CastProtocol.DLNA -> {
+                val resp = withContext(Dispatchers.IO) {
+                    runCatching {
+                        postSoap(
+                            device.avTransportControlUrl,
+                            DlnaProtocol.AV_TRANSPORT_SERVICE,
+                            "GetPositionInfo",
+                            DlnaProtocol.buildGetPositionInfoSoap(),
+                        )
+                    }.getOrNull()
+                } ?: return
+                if (!resp.isSuccessful) return
+                val relMs = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(resp.body, "RelTime"))
+                val durMs = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(resp.body, "TrackDuration"))
+                mutableState.update { prev ->
+                    prev.copy(
+                        tvPositionMs = relMs ?: prev.tvPositionMs,
+                        tvDurationMs = durMs?.takeIf { it > 0L } ?: prev.tvDurationMs,
+                    )
+                }
+            }
         }
     }
 
-    suspend fun disconnect() {
+    suspend fun disconnect(context: Context? = null) {
         val device = state.value.connectedDevice
         lanProxy.clearStream()
         mutableState.update {
@@ -389,15 +554,21 @@ internal class UniversalCastController {
                 errorMessage = null,
             )
         }
+        if (context != null) {
+            CastRelayService.stop(context)
+        }
         if (device != null) {
             withContext(Dispatchers.IO) {
-                runCatching {
-                    postSoap(
-                        device.avTransportControlUrl,
-                        DlnaProtocol.AV_TRANSPORT_SERVICE,
-                        "Stop",
-                        DlnaProtocol.buildStopSoap(),
-                    )
+                when (device.protocol) {
+                    CastProtocol.CHROMECAST -> googleCastClient.disconnect(stopApp = true)
+                    CastProtocol.DLNA -> runCatching {
+                        postSoap(
+                            device.avTransportControlUrl,
+                            DlnaProtocol.AV_TRANSPORT_SERVICE,
+                            "Stop",
+                            DlnaProtocol.buildStopSoap(),
+                        )
+                    }
                 }
             }
         }
@@ -405,10 +576,6 @@ internal class UniversalCastController {
 
     fun clearError() {
         mutableState.update { it.copy(errorMessage = null) }
-    }
-
-    fun shutdown() {
-        lanProxy.shutdown()
     }
 
     private suspend fun discoverDlnaDevices(appContext: Context): List<CastDevice> {
@@ -439,14 +606,13 @@ internal class UniversalCastController {
                     DlnaProtocol.buildMSearchPacket(DlnaProtocol.MEDIA_RENDERER_DEVICE, mxSeconds = 2),
                 )
 
-                // Send 2 discovery bursts spaced 350ms apart to overcome Wi-Fi UDP packet loss
                 repeat(2) { burst ->
                     for (query in queries) {
                         val bytes = query.toByteArray(Charsets.UTF_8)
                         val packet = DatagramPacket(bytes, bytes.size, multicastGroup, DlnaProtocol.SSDP_PORT)
                         runCatching { socket.send(packet) }
                     }
-                    val deadline = System.currentTimeMillis() + if (burst == 0) 900L else 1500L
+                    val deadline = System.currentTimeMillis() + if (burst == 0) 900L else 1_400L
                     val buf = ByteArray(4096)
                     while (System.currentTimeMillis() < deadline) {
                         val recv = DatagramPacket(buf, buf.size)
@@ -473,9 +639,7 @@ internal class UniversalCastController {
 
         return coroutineScope {
             locations.map { loc ->
-                async(Dispatchers.IO) {
-                    fetchDeviceDescription(loc)
-                }
+                async(Dispatchers.IO) { fetchDeviceDescription(loc) }
             }.awaitAll().filterNotNull().distinctBy { it.avTransportControlUrl }
         }
     }
@@ -493,11 +657,6 @@ internal class UniversalCastController {
         }.getOrNull()
     }
 
-    /**
-     * Prepares the stream URL for Smart TVs:
-     * - LIVE: rewrites M81 `/live/...` to `/live-hls/...m3u8` so M81 renews short-lived tokens automatically.
-     * - VOD: follows up to 3 HTTP 30x redirects so DLNA TVs that choke on 307/TLS receive the direct CDN file URL.
-     */
     internal fun resolvePlayableCastUrl(rawUrl: String, isLive: Boolean): String {
         val rewritten = DlnaProtocol.rewriteMediaUrlForCast(rawUrl, isLive)
         if (isLive) return rewritten
@@ -539,27 +698,6 @@ internal class UniversalCastController {
     }
 
     companion object {
-        fun openSystemScreenMirroring(context: Context): Boolean {
-            val intents = listOf(
-                Intent(Settings.ACTION_CAST_SETTINGS),
-                Intent("android.settings.WIFI_DISPLAY_SETTINGS"),
-            )
-            for (intent in intents) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                if (runCatching { intent.resolveActivity(context.packageManager) != null }.getOrDefault(false)) {
-                    if (runCatching { context.startActivity(intent); true }.getOrDefault(false)) {
-                        return true
-                    }
-                }
-            }
-            Toast.makeText(
-                context,
-                "Abra 'Transmitir' ou 'Smart View' na barra de atalhos do Android para espelhar a tela.",
-                Toast.LENGTH_LONG,
-            ).show()
-            return false
-        }
-
         fun openExternalCastApp(context: Context, mediaUrl: String, title: String, isLive: Boolean): Boolean {
             val preparedUrl = DlnaProtocol.rewriteMediaUrlForCast(mediaUrl, isLive)
             if (!preparedUrl.startsWith("http://", ignoreCase = true) &&
@@ -584,7 +722,7 @@ internal class UniversalCastController {
             if (!hasExternalHandler(context, chosen)) {
                 Toast.makeText(
                     context,
-                    "Instale Web Video Caster ou VLC para enviar por app externo, ou use as Smart TVs acima.",
+                    "Instale Web Video Caster ou VLC para enviar por app externo, ou selecione sua TV acima.",
                     Toast.LENGTH_LONG,
                 ).show()
                 return false

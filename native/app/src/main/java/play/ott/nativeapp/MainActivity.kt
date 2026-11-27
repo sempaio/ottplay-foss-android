@@ -180,8 +180,9 @@ open class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         // The service owns TV visibility, including after this Activity is destroyed.
+        // Also keep playback/relay intact while actively casting so the user can freely use other apps or lock the screen.
         if (!isTelevision && !isChangingConfigurations && !isInPictureInPictureMode &&
-            !model.state.value.backgroundPlayback) {
+            !model.state.value.backgroundPlayback && !play.ott.nativeapp.cast.CastSessionHost.isCastingActive) {
             // Pause is insufficient: the MediaSessionService can keep a playing item alive
             // when the activity disappears. Stop also cancels pending stream resolution.
             model.dispatch(AppAction.StopPlayback)

@@ -178,4 +178,34 @@ class LanStreamProxyTest {
         """.trimIndent()
         assertEquals("UPnP 714 (Illegal MIME-type)", DlnaProtocol.extractSoapFaultSummary(fault))
     }
+
+    @Test fun mpegTsNullBurstAndSegmentDedupHandleCdnRotation() {
+        val burst = HlsRemuxCodec.createMpegTsNullBurst(packetCount = 4)
+        assertEquals(188 * 4, burst.size)
+        for (i in 0 until 4) {
+            val base = i * 188
+            assertEquals(0x47.toByte(), burst[base])
+            assertEquals(0x1F.toByte(), burst[base + 1])
+            assertEquals(0xFF.toByte(), burst[base + 2])
+            assertEquals(0x10.toByte(), burst[base + 3])
+        }
+
+        val k1 = HlsRemuxCodec.segmentDedupKey("http://cdn1.net/81598_760.ts?token=AAA", queryDifferentiated = false)
+        val k2 = HlsRemuxCodec.segmentDedupKey("http://cdn2.net/81598_760.ts?token=BBB", queryDifferentiated = false)
+        assertEquals(k1, k2)
+    }
+
+    @Test fun rewritePlaylistForRelayRewritesSegmentsAndKeys() {
+        val manifest = """
+            #EXTM3U
+            #EXT-X-KEY:METHOD=AES-128,URI="https://cdn.example/key.bin"
+            #EXTINF:5,
+            seg_100.ts
+        """.trimIndent()
+        val rewritten = HlsRemuxCodec.rewritePlaylistForRelay(manifest, "https://cdn.example/live/index.m3u8") { remote ->
+            "http://192.168.1.5:9000/proxy?url=$remote"
+        }
+        assertTrue(rewritten.contains("URI=\"http://192.168.1.5:9000/proxy?url=https://cdn.example/key.bin\""))
+        assertTrue(rewritten.contains("http://192.168.1.5:9000/proxy?url=https://cdn.example/live/seg_100.ts"))
+    }
 }

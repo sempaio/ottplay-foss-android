@@ -39,6 +39,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import play.ott.nativeapp.R
+import play.ott.nativeapp.cast.CastSessionHost
 import play.ott.nativeapp.cast.CastingActiveOverlay
 import play.ott.nativeapp.cast.UniversalCastController
 import play.ott.nativeapp.cast.UniversalCastDialog
@@ -143,14 +144,11 @@ internal fun EveryCineVisualApp(
         state.notice?.let { snackbar.showSnackbar(it); onAction(AppAction.DismissNotice) }
     }
     val rootContext = LocalContext.current
-    val castController = remember { UniversalCastController() }
+    val castController = remember { CastSessionHost.controller }
     val castState by castController.state.collectAsState()
     var showCastDialog by rememberSaveable { mutableStateOf(false) }
     var lastCastEntryId by rememberSaveable { mutableStateOf<String?>(null) }
     val castScope = rememberCoroutineScope()
-    DisposableEffect(castController) {
-        onDispose { castController.shutdown() }
-    }
 
     BackHandler(enabled = fullscreen && state.playingEntry != null && !inPictureInPicture) {
         if (castState.connectedDevice != null || state.playingEntry?.kind == MediaKind.LIVE) {
@@ -187,6 +185,7 @@ internal fun EveryCineVisualApp(
         if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
             controller?.pause()
             castController.castMedia(
+                context = rootContext,
                 device = device,
                 rawUrl = url,
                 title = entry.name,
@@ -249,7 +248,7 @@ internal fun EveryCineVisualApp(
                     },
                     onPictureInPicture = onPictureInPicture,
                     onStop = {
-                        castScope.launch { castController.disconnect() }
+                        castScope.launch { castController.disconnect(rootContext) }
                         onAction(AppAction.StopPlayback)
                     },
                     onRetry = { onAction(AppAction.Play(playing)) },
@@ -267,16 +266,15 @@ internal fun EveryCineVisualApp(
                 if (castState.connectedDevice != null && !inPictureInPicture) {
                     CastingActiveOverlay(
                         castState = castState,
-                        onTogglePlayPause = { castScope.launch { castController.togglePlayPause() } },
+                        onTogglePlayPause = { castScope.launch { castController.togglePlayPause(rootContext) } },
                         onSeekRelative = { delta -> castScope.launch { castController.seekRelative(delta) } },
                         onSeekTo = { pos -> castScope.launch { castController.seekTo(pos) } },
                         onAdjustVolume = { delta -> castScope.launch { castController.adjustVolume(delta) } },
                         onSwitchTv = { showCastDialog = true },
-                        onSystemMirroring = { UniversalCastController.openSystemScreenMirroring(rootContext) },
                         onDisconnect = {
                             lastCastEntryId = null
                             castScope.launch {
-                                castController.disconnect()
+                                castController.disconnect(rootContext)
                                 controller?.play()
                             }
                         },
@@ -393,7 +391,7 @@ internal fun EveryCineVisualApp(
                         Box(
                             Modifier
                                 .background(Color(0xFF17273D), RoundedCornerShape(10.dp))
-                                .clickable { castScope.launch { castController.togglePlayPause() } }
+                                .clickable { castScope.launch { castController.togglePlayPause(rootContext) } }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Text(if (castState.isPlayingOnTv) "⏸" else "▶", color = cinemaWhite, fontSize = 13.sp)
@@ -404,7 +402,7 @@ internal fun EveryCineVisualApp(
                                 .clickable {
                                     lastCastEntryId = null
                                     castScope.launch {
-                                        castController.disconnect()
+                                        castController.disconnect(rootContext)
                                         controller?.play()
                                     }
                                 }
@@ -448,6 +446,7 @@ internal fun EveryCineVisualApp(
                     controller?.pause()
                     castScope.launch {
                         val ok = castController.castMedia(
+                            context = rootContext,
                             device = device,
                             rawUrl = streamUrl,
                             title = currentPlaying.name,
@@ -464,13 +463,9 @@ internal fun EveryCineVisualApp(
             onDisconnect = {
                 lastCastEntryId = null
                 castScope.launch {
-                    castController.disconnect()
+                    castController.disconnect(rootContext)
                     controller?.play()
                 }
-            },
-            onSystemMirroring = {
-                showCastDialog = false
-                UniversalCastController.openSystemScreenMirroring(rootContext)
             },
             onExternalCastApp = {
                 if (currentPlaying != null) {

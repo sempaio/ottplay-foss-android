@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,15 +50,15 @@ import kotlinx.coroutines.delay
 import play.ott.nativeapp.ui.CinemaPlayerLogic
 
 private val CastCyan = Color(0xFF00E5FF)
+private val CastGreen = Color(0xFF2FE68E)
 private val CastLiveRed = Color(0xFFFF3B5C)
 private val CastSurface = Color(0xFF0E1320)
 private val CastCard = Color(0xFF161D2E)
 private val CastBorder = Color(0x33FFFFFF)
 
 /**
- * Universal Smart TV & Screen Mirroring picker dialog (DeepCine ClingDeviceDialog-inspired):
- * discovers DLNA/UPnP Smart TVs on Wi-Fi + offers native Screen Mirroring (Smart View / Chromecast / Miracast)
- * and External Cast Apps (Web Video Caster / VLC) so every TV brand is covered.
+ * Unified direct-casting dialog (DLNA Smart TVs + Chromecast / Google TV).
+ * Streams ONLY the video to the TV in background so the user can freely use their phone or lock the screen.
  */
 @Composable
 internal fun UniversalCastDialog(
@@ -69,7 +67,6 @@ internal fun UniversalCastDialog(
     onRescan: () -> Unit,
     onSelectDevice: (CastDevice) -> Unit,
     onDisconnect: () -> Unit,
-    onSystemMirroring: () -> Unit,
     onExternalCastApp: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -111,7 +108,7 @@ internal fun UniversalCastDialog(
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            mediaTitle.ifBlank { "Samsung • LG • Android TV • Roku • TV Box • Kodi" },
+                            mediaTitle.ifBlank { "Samsung • LG • Chromecast • Google TV • Roku • Kodi" },
                             color = Color(0xFF9FB0C7),
                             fontSize = 12.sp,
                             maxLines = 1,
@@ -129,7 +126,24 @@ internal fun UniversalCastDialog(
                     }
                 }
 
-                // Error or busy feedback
+                // Background-usage reassurance badge
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(CastGreen.copy(alpha = 0.12f))
+                        .border(1.dp, CastGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 11.dp, vertical = 7.dp),
+                ) {
+                    Text(
+                        "✓ Envia só o vídeo para a TV — você pode usar o celular normalmente ou bloquear a tela.",
+                        color = Color(0xFFCFFCE5),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+
+                // Busy / error feedback
                 castState.busyAction?.let { busy ->
                     Row(
                         modifier = Modifier
@@ -159,13 +173,13 @@ internal fun UniversalCastDialog(
                     }
                 }
 
-                // Section 1: Discovered DLNA / Smart TVs on Wi-Fi
+                // Discovered TVs & Chromecasts on Wi-Fi
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        "SMART TVs NO WI-FI (DLNA / UPnP)",
+                        "TVs E CHROMECASTS NO WI-FI",
                         color = CastCyan,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -186,9 +200,9 @@ internal fun UniversalCastDialog(
                     ) {
                         Text(
                             if (castState.scanning) {
-                                "Procurando TVs Samsung, LG, Android TV, Roku, TV Box, Xbox e Kodi na mesma rede Wi-Fi..."
+                                "Procurando TVs Samsung, LG, Chromecast, Google TV, Android TV, Roku, TV Box e Kodi no mesmo Wi-Fi..."
                             } else {
-                                castState.scanStatus ?: "Nenhuma TV DLNA encontrada agora. Verifique se celular e TV estão no mesmo Wi-Fi ou use o Espelhamento abaixo."
+                                castState.scanStatus ?: "Nenhuma TV ou Chromecast encontrado agora. Verifique se celular e TV estão no mesmo Wi-Fi e toque em Buscar."
                             },
                             color = Color(0xFFB7C3D4),
                             fontSize = 12.sp,
@@ -198,12 +212,13 @@ internal fun UniversalCastDialog(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 190.dp),
+                            .heightIn(max = 220.dp),
                         contentPadding = PaddingValues(vertical = 2.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(castState.devices, key = { it.avTransportControlUrl }) { device ->
                             val isConnected = castState.connectedDevice?.avTransportControlUrl == device.avTransportControlUrl
+                            val badge = if (device.protocol == CastProtocol.CHROMECAST) "Chromecast" else "Smart TV"
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -221,7 +236,7 @@ internal fun UniversalCastDialog(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                Text("📺", fontSize = 20.sp)
+                                Text(if (device.protocol == CastProtocol.CHROMECAST) "📡" else "📺", fontSize = 20.sp)
                                 Column(Modifier.weight(1f)) {
                                     Text(
                                         device.friendlyName,
@@ -231,7 +246,7 @@ internal fun UniversalCastDialog(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    val meta = listOf(device.manufacturer, device.modelName, device.host)
+                                    val meta = listOf(badge, device.modelName.ifBlank { device.manufacturer }, device.host)
                                         .filter { it.isNotBlank() }
                                         .distinct()
                                         .joinToString(" • ")
@@ -258,35 +273,20 @@ internal fun UniversalCastDialog(
                     }
                 }
 
-                // Section 2: Universal Fallback (Espelhamento de Tela + App Externo)
-                Text(
-                    "ESPELHAMENTO UNIVERSAL (TODAS AS TVs / CHROMECAST)",
-                    color = Color(0xFFAEC0D6),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                // Secondary option: external cast app (Web Video Caster / VLC)
+                CastFallbackOptionRow(
+                    icon = "🎬",
+                    title = "Enviar por App Externo (Web Video Caster / VLC)",
+                    subtitle = "Opcional: abre o link direto no seu app de transmissão favorito",
+                    onClick = onExternalCastApp,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CastFallbackOptionRow(
-                        icon = "📱",
-                        title = "Espelhar Tela (Smart View / Chromecast / Miracast)",
-                        subtitle = "Abre a transmissão nativa do Android para qualquer TV ou Chromecast",
-                        onClick = onSystemMirroring,
-                    )
-                    CastFallbackOptionRow(
-                        icon = "🎬",
-                        title = "Enviar por App Externo (Web Video Caster / VLC)",
-                        subtitle = "Envia o link direto do vídeo para seu app de transmissão favorito",
-                        onClick = onExternalCastApp,
-                    )
-                }
             }
         }
     }
 }
 
 /**
- * Full-screen Remote Control Overlay shown while actively casting to a Smart TV
- * (inspired by DeepCine's SimpleExoPlayLelinkMyBinding).
+ * Full-screen TV Remote Control Overlay shown while actively casting to a Smart TV or Chromecast.
  */
 @Composable
 internal fun CastingActiveOverlay(
@@ -296,7 +296,6 @@ internal fun CastingActiveOverlay(
     onSeekTo: (Long) -> Unit,
     onAdjustVolume: (Int) -> Unit,
     onSwitchTv: () -> Unit,
-    onSystemMirroring: () -> Unit,
     onDisconnect: () -> Unit,
     onBack: () -> Unit,
     onPollPosition: suspend () -> Unit,
@@ -339,10 +338,10 @@ internal fun CastingActiveOverlay(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CastPillButton("← Voltar", highlighted = false, onClick = onBack)
+            CastPillButton("← Navegar", highlighted = false, onClick = onBack)
             Column(Modifier.weight(1f)) {
                 Text(
-                    "📡 Transmitindo na TV",
+                    if (device.protocol == CastProtocol.CHROMECAST) "📡 Transmitindo via Chromecast" else "📡 Transmitindo na Smart TV",
                     color = CastCyan,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -387,7 +386,7 @@ internal fun CastingActiveOverlay(
                     }
                 }
                 Text(
-                    castState.castingTitle.ifBlank { "Reproduzindo na Smart TV" },
+                    castState.castingTitle.ifBlank { "Reproduzindo na TV" },
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -396,6 +395,13 @@ internal fun CastingActiveOverlay(
                     textAlign = TextAlign.Center,
                 )
             }
+
+            Text(
+                "✓ Pode minimizar o app ou bloquear a tela — a transmissão continua na TV.",
+                color = Color(0xFF9DEBC3),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+            )
 
             // VOD Seek Bar on TV
             if (!castState.castingIsLive && castState.tvDurationMs > 0L) {
@@ -472,8 +478,8 @@ internal fun CastingActiveOverlay(
                 }
             }
 
-            // TV Volume Controls (when supported by TV RenderingControl)
-            if (device.renderingControlUrl != null) {
+            // TV Volume Controls
+            if (device.renderingControlUrl != null || device.protocol == CastProtocol.CHROMECAST) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -494,7 +500,7 @@ internal fun CastingActiveOverlay(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CastPillButton("📱 Espelhar Tela", highlighted = false, onClick = onSystemMirroring)
+                CastPillButton("🧭 Continuar Navegando", highlighted = false, onClick = onBack)
                 CastPillButton("📲 Voltar pro Celular", highlighted = true, onClick = onDisconnect)
             }
         }
