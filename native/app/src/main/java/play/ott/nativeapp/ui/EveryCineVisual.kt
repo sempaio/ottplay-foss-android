@@ -271,6 +271,7 @@ internal fun EveryCineVisualApp(
                         onSeekTo = { pos -> castScope.launch { castController.seekTo(pos) } },
                         onAdjustVolume = { delta -> castScope.launch { castController.adjustVolume(delta) } },
                         onSwitchTv = { showCastDialog = true },
+                        onReconnect = { castScope.launch { castController.reconnectCurrent(rootContext, isAuto = false) } },
                         onDisconnect = {
                             lastCastEntryId = null
                             castScope.launch {

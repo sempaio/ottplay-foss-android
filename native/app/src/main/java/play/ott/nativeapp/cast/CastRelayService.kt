@@ -16,8 +16,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import play.ott.nativeapp.MainActivity
 import play.ott.nativeapp.R
@@ -28,6 +31,7 @@ import play.ott.nativeapp.R
  */
 class CastRelayService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var watchdogJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
@@ -77,18 +81,36 @@ class CastRelayService : Service() {
                 } else {
                     startForeground(NOTIFICATION_ID, notification)
                 }
+                ensureWatchdogRunning()
                 return START_STICKY
             }
         }
     }
 
+    private fun ensureWatchdogRunning() {
+        if (watchdogJob?.isActive == true) return
+        watchdogJob = serviceScope.launch {
+            while (isActive) {
+                delay(5_000L)
+                if (!CastSessionHost.isCastingActive) {
+                    stopSelfCleanly()
+                    break
+                }
+                runCatching { CastSessionHost.controller.watchdogTick(applicationContext) }
+            }
+        }
+    }
+
     override fun onDestroy() {
+        watchdogJob?.cancel()
         releaseLocks()
         serviceScope.cancel()
         super.onDestroy()
     }
 
     private fun stopSelfCleanly() {
+        watchdogJob?.cancel()
+        watchdogJob = null
         releaseLocks()
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

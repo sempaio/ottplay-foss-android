@@ -282,6 +282,12 @@ internal object DlnaProtocol {
         "<InstanceID>0</InstanceID>",
     )
 
+    fun buildGetTransportInfoSoap(): String = buildSoapEnvelope(
+        AV_TRANSPORT_SERVICE,
+        "GetTransportInfo",
+        "<InstanceID>0</InstanceID>",
+    )
+
     fun buildSetVolumeSoap(volumePercent: Int): String = buildSoapEnvelope(
         RENDERING_CONTROL_SERVICE,
         "SetVolume",

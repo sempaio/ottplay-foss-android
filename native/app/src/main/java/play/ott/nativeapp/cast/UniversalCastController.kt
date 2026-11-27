@@ -34,11 +34,15 @@ internal data class CastSessionState(
     val connectedDevice: CastDevice? = null,
     val castingTitle: String = "",
     val castingUrl: String = "",
+    val rawSourceUrl: String = "",
     val castingIsLive: Boolean = false,
     val isPlayingOnTv: Boolean = false,
+    val tvTransportState: String = "",
     val tvPositionMs: Long = 0L,
     val tvDurationMs: Long = 0L,
     val tvVolume: Int = 50,
+    val proxyStats: ProxyRuntimeStats = ProxyRuntimeStats(),
+    val autoReconnectCount: Int = 0,
     val busyAction: String? = null,
     val errorMessage: String? = null,
 )
@@ -64,6 +68,9 @@ internal class UniversalCastController {
     val state: StateFlow<CastSessionState> = mutableState.asStateFlow()
     private val lanProxy = LanStreamProxyServer()
     private val googleCastClient = GoogleCastClient()
+    @Volatile private var castStartedAtMs: Long = 0L
+    @Volatile private var consecutiveStoppedTicks: Int = 0
+    @Volatile private var reconnectingInFlight: Boolean = false
 
     private val lanHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -152,16 +159,22 @@ internal class UniversalCastController {
 
             if (outcome.success) {
                 val vol = outcome.initialVolume ?: state.value.tvVolume
+                castStartedAtMs = System.currentTimeMillis()
+                consecutiveStoppedTicks = 0
                 mutableState.update {
                     it.copy(
                         connectedDevice = device,
                         castingTitle = title,
                         castingUrl = outcome.effectiveUrl,
+                        rawSourceUrl = rawUrl,
                         castingIsLive = isLive,
                         isPlayingOnTv = true,
+                        tvTransportState = "PLAYING",
                         tvPositionMs = startPositionMs.coerceAtLeast(0L),
                         tvDurationMs = 0L,
                         tvVolume = vol.coerceIn(0, 100),
+                        proxyStats = lanProxy.currentStats(),
+                        autoReconnectCount = if (reconnectingInFlight) it.autoReconnectCount else 0,
                         busyAction = null,
                         errorMessage = null,
                     )
@@ -225,13 +238,15 @@ internal class UniversalCastController {
             )
         }
 
-        // For VOD direct HTTP CDN -> Chromecast pulls straight from CDN; for Live -> CORS-enabled LAN HLS manifest!
-        val useDirectVod = !isLive && !target.directHttpVodUrl.isNullOrBlank()
+        // For VOD direct HTTP CDN (non-Cloudflare Worker) -> Chromecast pulls straight from CDN;
+        // for Live -> CORS-enabled LAN HLS manifest!
+        val directVod = target.directHttpVodUrl?.takeIf { !isLive }
         val mediaUrl = when {
             isLive -> target.chromecastHlsUrl ?: target.localUrl
-            useDirectVod -> target.directHttpVodUrl!!
+            directVod != null -> directVod
             else -> target.localUrl
         }
+        val useDirectVod = directVod != null && mediaUrl == directVod
         val contentType = when {
             isLive && mediaUrl.endsWith(".m3u8", ignoreCase = true) -> "application/x-mpegurl"
             isLive -> "video/mp2t"
@@ -301,28 +316,9 @@ internal class UniversalCastController {
             postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Stop", DlnaProtocol.buildStopSoap())
         }
 
-        // For VOD Movies/Series with a plain HTTP CDN URL, try DIRECT URL first so TV plays independently of phone!
-        if (!isLive && !castTarget.directHttpVodUrl.isNullOrBlank()) {
-            val directUrl = castTarget.directHttpVodUrl
-            val directOk = tryDlnaSetUriAndPlay(
-                device = device,
-                mediaUrl = directUrl,
-                title = title,
-                isLive = false,
-                mimeType = castTarget.mimeType,
-                dlnaFeatures = castTarget.dlnaFeatures,
-                contentLength = castTarget.contentLength,
-                startPositionMs = startPositionMs,
-            )
-            if (directOk.first) {
-                // TV is streaming straight from CDN — free local proxy resources!
-                lanProxy.clearStream()
-                val vol = queryDlnaVolume(device)
-                return CastAttemptResult(true, directUrl, initialVolume = vol)
-            }
-        }
-
-        // Proxy path (required for Live HLS/AES-128 -> MPEG-TS, HTTPS VOD, or TVs that rejected direct CDN)
+        // Always use the local Wi-Fi proxy for DLNA:
+        // - Live: continuous 188-byte aligned MPEG-TS with Null Packet keep-alive + AES-128 decryption.
+        // - VOD: 4 MB Range-stitched stream defeating Cloudflare Worker ~90s single-connection drops!
         val proxyAttempt = tryDlnaSetUriAndPlay(
             device = device,
             mediaUrl = castTarget.localUrl,
@@ -503,34 +499,59 @@ internal class UniversalCastController {
     suspend fun pollPosition() {
         val current = state.value
         val device = current.connectedDevice ?: return
-        if (current.castingIsLive) return
+        val stats = lanProxy.currentStats()
         when (device.protocol) {
             CastProtocol.CHROMECAST -> {
-                val st = withContext(Dispatchers.IO) { googleCastClient.requestStatus() } ?: return
+                if (current.castingIsLive) {
+                    mutableState.update { it.copy(proxyStats = stats) }
+                    return
+                }
+                val st = withContext(Dispatchers.IO) { googleCastClient.requestStatus() }
                 mutableState.update { prev ->
                     prev.copy(
-                        isPlayingOnTv = st.playerState == "PLAYING" || st.playerState == "BUFFERING",
-                        tvPositionMs = (st.currentTimeSec * 1000.0).toLong().coerceAtLeast(0L),
-                        tvDurationMs = if (st.durationSec > 0.0) (st.durationSec * 1000.0).toLong() else prev.tvDurationMs,
+                        proxyStats = stats,
+                        tvTransportState = st?.playerState ?: prev.tvTransportState,
+                        isPlayingOnTv = st?.let { it.playerState == "PLAYING" || it.playerState == "BUFFERING" } ?: prev.isPlayingOnTv,
+                        tvPositionMs = st?.let { (it.currentTimeSec * 1000.0).toLong().coerceAtLeast(0L) } ?: prev.tvPositionMs,
+                        tvDurationMs = st?.takeIf { it.durationSec > 0.0 }?.let { (it.durationSec * 1000.0).toLong() } ?: prev.tvDurationMs,
                     )
                 }
             }
             CastProtocol.DLNA -> {
-                val resp = withContext(Dispatchers.IO) {
-                    runCatching {
-                        postSoap(
+                val (transportState, relMs, durMs) = withContext(Dispatchers.IO) {
+                    val tState = runCatching {
+                        val tr = postSoap(
                             device.avTransportControlUrl,
                             DlnaProtocol.AV_TRANSPORT_SERVICE,
-                            "GetPositionInfo",
-                            DlnaProtocol.buildGetPositionInfoSoap(),
+                            "GetTransportInfo",
+                            DlnaProtocol.buildGetTransportInfoSoap(),
                         )
+                        if (tr.isSuccessful) DlnaProtocol.extractTagText(tr.body, "CurrentTransportState") else null
                     }.getOrNull()
-                } ?: return
-                if (!resp.isSuccessful) return
-                val relMs = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(resp.body, "RelTime"))
-                val durMs = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(resp.body, "TrackDuration"))
+
+                    var rel: Long? = null
+                    var dur: Long? = null
+                    if (!current.castingIsLive) {
+                        runCatching {
+                            val pr = postSoap(
+                                device.avTransportControlUrl,
+                                DlnaProtocol.AV_TRANSPORT_SERVICE,
+                                "GetPositionInfo",
+                                DlnaProtocol.buildGetPositionInfoSoap(),
+                            )
+                            if (pr.isSuccessful) {
+                                rel = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(pr.body, "RelTime"))
+                                dur = DlnaProtocol.parseUpnpTimeMs(DlnaProtocol.extractTagText(pr.body, "TrackDuration"))
+                            }
+                        }
+                    }
+                    Triple(tState, rel, dur)
+                }
+
                 mutableState.update { prev ->
                     prev.copy(
+                        proxyStats = stats,
+                        tvTransportState = transportState ?: prev.tvTransportState,
                         tvPositionMs = relMs ?: prev.tvPositionMs,
                         tvDurationMs = durMs?.takeIf { it > 0L } ?: prev.tvDurationMs,
                     )
@@ -539,17 +560,81 @@ internal class UniversalCastController {
         }
     }
 
+    /**
+     * Background DLNA watchdog (invoked every 5s by CastRelayService even with screen locked):
+     * refreshes telemetry/position and automatically re-attaches the stream if the Smart TV
+     * unexpectedly dropped to STOPPED/NO_MEDIA_PRESENT during a live ad discontinuity or Wi-Fi hiccup.
+     */
+    suspend fun watchdogTick(context: Context) {
+        val before = state.value
+        val device = before.connectedDevice ?: return
+        if (reconnectingInFlight || before.busyAction != null) return
+        pollPosition()
+        if (device.protocol != CastProtocol.DLNA) return
+
+        val after = state.value
+        if (!after.isPlayingOnTv) {
+            consecutiveStoppedTicks = 0
+            return
+        }
+        val elapsedSinceStart = System.currentTimeMillis() - castStartedAtMs
+        val dropped = after.tvTransportState.equals("STOPPED", ignoreCase = true) ||
+            after.tvTransportState.equals("NO_MEDIA_PRESENT", ignoreCase = true)
+
+        if (dropped && elapsedSinceStart > 15_000L) {
+            consecutiveStoppedTicks++
+            // Avoid auto-reconnecting if a VOD movie genuinely finished near the end
+            val nearVodEnd = !after.castingIsLive && after.tvDurationMs > 30_000L &&
+                after.tvPositionMs >= (after.tvDurationMs - 15_000L)
+            if (consecutiveStoppedTicks >= 2 && !nearVodEnd && after.autoReconnectCount < 4) {
+                consecutiveStoppedTicks = 0
+                reconnectCurrent(context, isAuto = true)
+            }
+        } else {
+            consecutiveStoppedTicks = 0
+        }
+    }
+
+    suspend fun reconnectCurrent(context: Context, isAuto: Boolean = false): Boolean {
+        val current = state.value
+        val device = current.connectedDevice ?: return false
+        val sourceUrl = current.rawSourceUrl.ifBlank { return false }
+        if (reconnectingInFlight) return false
+        reconnectingInFlight = true
+        return try {
+            if (isAuto) {
+                mutableState.update { it.copy(autoReconnectCount = it.autoReconnectCount + 1) }
+            }
+            castMedia(
+                context = context,
+                device = device,
+                rawUrl = sourceUrl,
+                title = current.castingTitle,
+                isLive = current.castingIsLive,
+                startPositionMs = if (current.castingIsLive) 0L else current.tvPositionMs,
+            )
+        } finally {
+            reconnectingInFlight = false
+        }
+    }
+
     suspend fun disconnect(context: Context? = null) {
         val device = state.value.connectedDevice
         lanProxy.clearStream()
+        consecutiveStoppedTicks = 0
+        reconnectingInFlight = false
         mutableState.update {
             it.copy(
                 connectedDevice = null,
                 castingTitle = "",
                 castingUrl = "",
+                rawSourceUrl = "",
                 isPlayingOnTv = false,
+                tvTransportState = "",
                 tvPositionMs = 0L,
                 tvDurationMs = 0L,
+                proxyStats = ProxyRuntimeStats(),
+                autoReconnectCount = 0,
                 busyAction = null,
                 errorMessage = null,
             )

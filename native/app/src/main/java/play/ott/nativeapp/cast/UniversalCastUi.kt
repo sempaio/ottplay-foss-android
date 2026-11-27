@@ -296,6 +296,7 @@ internal fun CastingActiveOverlay(
     onSeekTo: (Long) -> Unit,
     onAdjustVolume: (Int) -> Unit,
     onSwitchTv: () -> Unit,
+    onReconnect: () -> Unit,
     onDisconnect: () -> Unit,
     onBack: () -> Unit,
     onPollPosition: suspend () -> Unit,
@@ -307,12 +308,10 @@ internal fun CastingActiveOverlay(
     var scrubbing by remember { mutableStateOf(false) }
     var scrubMs by remember { mutableFloatStateOf(castState.tvPositionMs.toFloat()) }
 
-    LaunchedEffect(device.avTransportControlUrl, castState.castingIsLive, castState.isPlayingOnTv) {
-        if (!castState.castingIsLive) {
-            while (true) {
-                onPollPosition()
-                delay(2_000L)
-            }
+    LaunchedEffect(device.avTransportControlUrl, castState.isPlayingOnTv) {
+        while (true) {
+            onPollPosition()
+            delay(if (castState.castingIsLive) 4_000L else 2_000L)
         }
     }
 
@@ -401,6 +400,36 @@ internal fun CastingActiveOverlay(
                 color = Color(0xFF9DEBC3),
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
+            )
+
+            // Live DLNA/Cast telemetry pill so connection health is always transparent
+            val mbSent = castState.proxyStats.bytesSent / (1024.0 * 1024.0)
+            val tvStateText = castState.tvTransportState.ifBlank { if (castState.isPlayingOnTv) "PLAYING" else "PAUSED" }
+            val telemetry = buildString {
+                append(if (device.protocol == CastProtocol.CHROMECAST) "Cast" else "DLNA")
+                append(" • TV: ")
+                append(tvStateText)
+                if (castState.proxyStats.bytesSent > 0L) {
+                    append(" • ")
+                    append("%.1f MB".format(mbSent))
+                }
+                if (castState.proxyStats.chunksSent > 0) {
+                    append(" • ")
+                    append(castState.proxyStats.chunksSent)
+                    append(if (castState.castingIsLive) " segs" else " blocos")
+                }
+                if (castState.autoReconnectCount > 0) {
+                    append(" • ")
+                    append(castState.autoReconnectCount)
+                    append(" rec.")
+                }
+            }
+            Text(
+                castState.busyAction ?: telemetry,
+                color = Color(0xFF98B0CC),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
 
             // VOD Seek Bar on TV
@@ -497,11 +526,12 @@ internal fun CastingActiveOverlay(
 
             // Quick Bottom Actions
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CastPillButton("🧭 Continuar Navegando", highlighted = false, onClick = onBack)
-                CastPillButton("📲 Voltar pro Celular", highlighted = true, onClick = onDisconnect)
+                CastPillButton("🔄 Reconectar", highlighted = false, onClick = onReconnect)
+                CastPillButton("🧭 Navegar", highlighted = false, onClick = onBack)
+                CastPillButton("📲 Celular", highlighted = true, onClick = onDisconnect)
             }
         }
     }
