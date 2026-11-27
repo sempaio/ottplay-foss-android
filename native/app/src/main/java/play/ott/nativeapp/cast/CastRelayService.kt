@@ -289,10 +289,18 @@ class CastRelayService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val isDirectMode = CastSessionHost.controller.state.value.castingDirectMode
+        val notifTitle = if (isDirectMode) "☁️ Direto em $tvName" else "Transmitindo para $tvName"
+        val notifText = if (isDirectMode) {
+            val titlePart = mediaTitle.ifBlank { "Reproduzindo direto na TV" }
+            "$titlePart • Pode desconectar o celular"
+        } else {
+            mediaTitle.ifBlank { "Você pode usar o celular normalmente" }
+        }
         val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.starlink_logo)
-            .setContentTitle("Transmitindo para $tvName")
-            .setContentText(mediaTitle.ifBlank { "Você pode usar o celular normalmente" })
+            .setContentTitle(notifTitle)
+            .setContentText(notifText)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -308,7 +316,7 @@ class CastRelayService : Service() {
             .addAction(
                 Notification.Action.Builder(
                     null,
-                    "Desconectar",
+                    if (isDirectMode) "Parar TV" else "Desconectar",
                     stopPending,
                 ).build(),
             )

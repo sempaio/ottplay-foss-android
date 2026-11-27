@@ -283,6 +283,16 @@ internal fun EveryCineVisualApp(
                         },
                         onBack = { fullscreen = false },
                         onPollPosition = { castController.pollPosition() },
+                        onDetachKeepPlaying = {
+                            lastCastEntryId = null
+                            fullscreen = false
+                            castScope.launch {
+                                if (castController.detachKeepPlaying(rootContext)) {
+                                    onAction(AppAction.StopPlayback)
+                                    snackbar.showSnackbar("Celular liberado! A TV continua reproduzindo sozinha.")
+                                }
+                            }
+                        },
                         onPrevious = onPrevItem,
                         onNext = onNextItem,
                         modifier = Modifier.fillMaxSize(),
@@ -371,11 +381,15 @@ internal fun EveryCineVisualApp(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("📡", fontSize = 15.sp)
+                        Text(if (castState.castingDirectMode) "☁️" else "📡", fontSize = 15.sp)
                         Column(Modifier.weight(1f)) {
                             Text(
-                                "Transmitindo para ${tv.friendlyName}",
-                                color = cinemaAccent,
+                                if (castState.castingDirectMode) {
+                                    "Direto em ${tv.friendlyName} (celular liberável)"
+                                } else {
+                                    "Transmitindo para ${tv.friendlyName}"
+                                },
+                                color = if (castState.castingDirectMode) Color(0xFF2FE68E) else cinemaAccent,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -389,6 +403,24 @@ internal fun EveryCineVisualApp(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                            }
+                        }
+                        if (castState.castingDirectMode) {
+                            Box(
+                                Modifier
+                                    .background(Color(0xFF143127), RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        lastCastEntryId = null
+                                        castScope.launch {
+                                            if (castController.detachKeepPlaying(rootContext)) {
+                                                onAction(AppAction.StopPlayback)
+                                                snackbar.showSnackbar("Celular liberado! A TV continua reproduzindo sozinha.")
+                                            }
+                                        }
+                                    }
+                                    .padding(horizontal = 9.dp, vertical = 6.dp),
+                            ) {
+                                Text("Soltar", color = Color(0xFF2FE68E), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         Box(
@@ -472,6 +504,17 @@ internal fun EveryCineVisualApp(
                 castScope.launch {
                     castController.disconnect(rootContext)
                     if (currentPlaying != null) onAction(AppAction.Play(currentPlaying))
+                }
+            },
+            onDetachKeepPlaying = {
+                lastCastEntryId = null
+                showCastDialog = false
+                fullscreen = false
+                castScope.launch {
+                    if (castController.detachKeepPlaying(rootContext)) {
+                        onAction(AppAction.StopPlayback)
+                        snackbar.showSnackbar("Celular liberado! A TV continua reproduzindo sozinha.")
+                    }
                 }
             },
             onExternalCastApp = {

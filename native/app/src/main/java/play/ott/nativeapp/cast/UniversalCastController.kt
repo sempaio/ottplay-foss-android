@@ -65,7 +65,10 @@ internal object CastSessionHost {
  * - Google Cast v2 (`_googlecast._tcp.` + TLS 8009 Default Media Receiver `CC1AD845`) for Chromecast, Google TV, Android TV.
  * - Backed by `CastRelayService` foreground service so the user can lock the screen or use other apps freely.
  */
-internal class UniversalCastController {
+internal class UniversalCastController(
+    private val chromecastDisconnectHook: ((stopApp: Boolean) -> Unit)? = null,
+    private val dlnaStopHook: ((CastDevice) -> Unit)? = null,
+) {
     private val mutableState = MutableStateFlow(CastSessionState())
     val state: StateFlow<CastSessionState> = mutableState.asStateFlow()
     private val lanProxy = LanStreamProxyServer()
@@ -76,6 +79,10 @@ internal class UniversalCastController {
     @Volatile private var lastWatchdogBytesSent: Long = -1L
     private val diagLock = Any()
     private val diagBuffer = ArrayDeque<String>(24)
+
+    internal fun setSessionStateForTest(newState: CastSessionState) {
+        mutableState.value = newState
+    }
 
     private fun clearDiag() {
         synchronized(diagLock) { diagBuffer.clear() }
@@ -257,34 +264,44 @@ internal class UniversalCastController {
     ): CastAttemptResult {
         val rewritten = DlnaProtocol.rewriteMediaUrlForCast(rawUrl, isLive)
 
-        // 1. Direct cloud mode (ZERO phone proxy / works even with phone screen off or app closed!):
-        //    - Live Pluto TV / HTTPS+CORS HLS on M81 -> direct https://.../live-hls/...m3u8
-        //    - VOD Movies/Series -> resolved direct CDN MP4/MKV (Chromecast fetches Range chunks natively!)
+        // 1. Direct Cloud/CDN mode (ZERO phone proxy & ZERO video bytes through the panel!):
+        //    Chromecast pulls video straight from the origin CDN so the user can disconnect the phone from Wi-Fi!
+        //    - Live Pluto TV / HTTPS+CORS HLS -> direct HTTPS manifest with HTTPS CDN segments
+        //    - VOD Movies/Series -> tries resolved external CDN URL first, then HTTPS 307 redirect URL if needed
         val directCandidate = resolveDirectChromecastCandidate(rewritten, isLive)
-        if (directCandidate != null) {
-            val (directUrl, directMime) = directCandidate
-            logDiag("[Cast] Tentando modo direto M81/CDN ($directMime)...")
-            val directRes = googleCastClient.connectAndLoad(
-                device = device,
-                mediaUrl = directUrl,
-                title = title,
-                contentType = directMime,
-                isLive = isLive,
-                startPositionMs = startPositionMs,
-            )
-            if (directRes.isSuccess) {
-                logDiag("[Cast] Modo direto OK!")
-                lanProxy.clearStream()
-                return CastAttemptResult(
-                    success = true,
-                    effectiveUrl = directUrl,
-                    initialVolume = directRes.getOrNull(),
-                    isDirectMode = true,
-                )
-            }
-            logDiag("[Cast] Direto falhou (${directRes.exceptionOrNull()?.message ?: "erro"}), usando relay LAN...")
+        val directAttempts = if (isLive) {
+            listOfNotNull(directCandidate)
         } else {
-            logDiag("[Cast] Origem sem CORS/HTTP direto -> usando relay LAN com prefetch 2x .ts")
+            buildDirectChromecastVodCandidates(rewritten, directCandidate)
+        }
+        if (directAttempts.isNotEmpty()) {
+            for ((idx, attempt) in directAttempts.withIndex()) {
+                val (directUrl, directMime) = attempt
+                val label = if (idx == 0) "CDN direto" else "Redirect 307 direto"
+                logDiag("[Cast] Tentando modo direto ($label • $directMime)...")
+                val directRes = googleCastClient.connectAndLoad(
+                    device = device,
+                    mediaUrl = directUrl,
+                    title = title,
+                    contentType = directMime,
+                    isLive = isLive,
+                    startPositionMs = startPositionMs,
+                )
+                if (directRes.isSuccess) {
+                    logDiag("[Cast] Modo direto OK ($label) — TV busca vídeo direto no CDN, celular liberável!")
+                    lanProxy.clearStream()
+                    return CastAttemptResult(
+                        success = true,
+                        effectiveUrl = directUrl,
+                        initialVolume = directRes.getOrNull(),
+                        isDirectMode = true,
+                    )
+                }
+                logDiag("[Cast] Direto ($label) falhou (${directRes.exceptionOrNull()?.message ?: "erro"})")
+            }
+            logDiag("[Cast] Chromecast recusou URLs diretas -> ativando ponte Wi-Fi local")
+        } else {
+            logDiag("[Cast] Origem HTTP sem CORS direto -> usando ponte Wi-Fi local com prefetch 2x .ts")
         }
 
         // 2. Fallback to local Wi-Fi CORS proxy (with async 2-segment prefetch + M81 /live-hls/ renewal!)
@@ -336,9 +353,10 @@ internal class UniversalCastController {
     }
 
     /**
-     * Checks whether Chromecast can pull the media directly from M81/CDN without phone proxying:
-     * - LIVE: M81 `/live-hls/` redirecting to `/iptv/pluto/` (all HTTPS + `ACAO: *`!), or HTTPS HLS with HTTPS segments.
-     * - VOD: follows M81 redirects (GET Range 0-0) to the final MP4/MKV CDN URL.
+     * Checks whether Chromecast can pull the media directly from the origin CDN without phone proxying
+     * (and with ZERO video bytes flowing through the authentication panel):
+     * - LIVE: Pluto TV / HTTPS+CORS HLS with HTTPS segments (follows up to 3 HTTPS 307/302 redirects).
+     * - VOD: follows auth redirects (`GET Range: bytes=0-0`) to the final MP4/MKV CDN URL.
      */
     private fun resolveDirectChromecastCandidate(rewrittenUrl: String, isLive: Boolean): Pair<String, String>? {
         if (!rewrittenUrl.startsWith("http://", ignoreCase = true) &&
@@ -348,30 +366,46 @@ internal class UniversalCastController {
         if (isLive) {
             if (!rewrittenUrl.startsWith("https://", ignoreCase = true)) return null
             return runCatching {
-                val req = Request.Builder()
-                    .url(rewrittenUrl)
-                    .header("Origin", "https://www.gstatic.com")
-                    .header("User-Agent", "OTT-play-Android/1.0")
-                    .get()
-                    .build()
-                redirectResolverClient.newCall(req).execute().use { resp ->
-                    val acao = resp.header("Access-Control-Allow-Origin")
-                    if (acao != "*") return@use null
-                    val loc = resp.header("Location").orEmpty()
-                    if (resp.code in 301..308 && loc.contains("/iptv/pluto/", ignoreCase = true)) {
-                        // Pluto TV via M81: every hop & CDN segment is HTTPS + ACAO=*!
-                        return@use rewrittenUrl to "application/vnd.apple.mpegurl"
-                    }
-                    if (resp.isSuccessful) {
-                        val body = resp.body.string()
-                        val mediaLines = body.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.toList()
-                        // Only direct-cast HLS if all segment URLs are HTTPS (never HTTP mixed content)
-                        if (mediaLines.isNotEmpty() && mediaLines.all { it.startsWith("https://", ignoreCase = true) || !it.contains("://") }) {
-                            return@use rewrittenUrl to "application/vnd.apple.mpegurl"
+                var currentUrl = rewrittenUrl
+                repeat(4) { hop ->
+                    if (!currentUrl.startsWith("https://", ignoreCase = true)) return@runCatching null
+                    val req = Request.Builder()
+                        .url(currentUrl)
+                        .header("Origin", "https://www.gstatic.com")
+                        .header("User-Agent", "OTT-play-Android/1.0")
+                        .get()
+                        .build()
+                    val stepResult = redirectResolverClient.newCall(req).execute().use { resp ->
+                        val acao = resp.header("Access-Control-Allow-Origin")
+                        val loc = resp.header("Location").orEmpty()
+                        if (resp.code in 301..308 && loc.isNotBlank()) {
+                            val nextUrl = resp.request.url.resolve(loc)?.toString().orEmpty()
+                            if (loc.contains("/iptv/pluto/", ignoreCase = true) && isGstaticCorsAllowed(acao)) {
+                                // Pluto TV: panel only handles session/manifest text; video segments go 100% direct from Pluto CDN.
+                                return@use Pair("FOUND", rewrittenUrl)
+                            }
+                            if (nextUrl.startsWith("https://", ignoreCase = true) && nextUrl != currentUrl) {
+                                return@use Pair("NEXT", nextUrl)
+                            }
+                            return@use Pair("STOP", "")
                         }
+                        if (resp.isSuccessful) {
+                            val body = resp.body.string()
+                            if (isDirectHttpsHlsManifest(body, acao)) {
+                                // Prefer direct HTTPS target when redirected off the auth panel, or rewrittenUrl on hop 0
+                                val target = if (hop == 0) rewrittenUrl else currentUrl
+                                return@use Pair("FOUND", target)
+                            }
+                        }
+                        Pair("STOP", "")
                     }
-                    null
+                    when (stepResult.first) {
+                        "FOUND" -> return@runCatching stepResult.second to "application/vnd.apple.mpegurl"
+                        "NEXT" -> currentUrl = stepResult.second
+                        else -> return@runCatching null
+                    }
                 }
+                null
             }.getOrNull()
         }
 
@@ -393,13 +427,8 @@ internal class UniversalCastController {
             vodClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful && resp.code != 206) return@use null
                 val finalUrl = resp.request.url.toString()
-                val lower = finalUrl.substringBefore('?').lowercase()
                 val ct = resp.header("Content-Type")?.substringBefore(';')?.trim()?.lowercase().orEmpty()
-                val mime = when {
-                    lower.endsWith(".mkv") || ct.contains("matroska") -> "video/x-matroska"
-                    lower.endsWith(".webm") || ct.contains("webm") -> "video/webm"
-                    else -> "video/mp4"
-                }
+                val mime = guessVodMime(finalUrl, ct)
                 finalUrl to mime
             }
         }.getOrNull()
@@ -1002,6 +1031,55 @@ internal class UniversalCastController {
         }
     }
 
+    /**
+     * Releases the phone cleanly while keeping Direct-mode playback running autonomously on the TV / Chromecast!
+     * Unlike [disconnect], this NEVER sends `STOP` to the receiver:
+     * - Chromecast: closes our TLS control channel (`CLOSE`, `stopApp = false`) so `CC1AD845` keeps playing
+     *   even if the user disconnects the phone from Wi-Fi, enables Airplane Mode, or closes the app.
+     * - DLNA Direct VOD: releases phone state without sending UPnP `Stop`, so the TV keeps pulling directly from CDN.
+     *
+     * Returns `true` when detached in Direct Mode, or `false` if the active stream requires the phone's Wi-Fi proxy.
+     */
+    suspend fun detachKeepPlaying(context: Context? = null): Boolean {
+        val current = state.value
+        val device = current.connectedDevice ?: return false
+        if (!current.castingDirectMode) return false
+        lanProxy.clearStream()
+        consecutiveStoppedTicks = 0
+        reconnectingInFlight = false
+        logDiag("[Cast] Celular liberado — ${device.friendlyName} continua reproduzindo sozinho!")
+        mutableState.update {
+            it.copy(
+                connectedDevice = null,
+                castingTitle = "",
+                castingUrl = "",
+                rawSourceUrl = "",
+                castingDirectMode = false,
+                isPlayingOnTv = false,
+                tvTransportState = "",
+                tvPositionMs = 0L,
+                tvDurationMs = 0L,
+                proxyStats = ProxyRuntimeStats(),
+                autoReconnectCount = 0,
+                busyAction = null,
+                errorMessage = null,
+            )
+        }
+        if (context != null) {
+            CastRelayService.stop(context)
+        }
+        withContext(Dispatchers.IO) {
+            when (device.protocol) {
+                CastProtocol.CHROMECAST -> {
+                    val hook = chromecastDisconnectHook
+                    if (hook != null) hook(false) else googleCastClient.disconnect(stopApp = false)
+                }
+                CastProtocol.DLNA -> Unit // Direct CDN VOD: NEVER send UPnP Stop!
+            }
+        }
+        return true
+    }
+
     suspend fun disconnect(context: Context? = null) {
         val device = state.value.connectedDevice
         lanProxy.clearStream()
@@ -1030,14 +1108,24 @@ internal class UniversalCastController {
         if (device != null) {
             withContext(Dispatchers.IO) {
                 when (device.protocol) {
-                    CastProtocol.CHROMECAST -> googleCastClient.disconnect(stopApp = true)
-                    CastProtocol.DLNA -> runCatching {
-                        postSoap(
-                            device.avTransportControlUrl,
-                            DlnaProtocol.AV_TRANSPORT_SERVICE,
-                            "Stop",
-                            DlnaProtocol.buildStopSoap(),
-                        )
+                    CastProtocol.CHROMECAST -> {
+                        val hook = chromecastDisconnectHook
+                        if (hook != null) hook(true) else googleCastClient.disconnect(stopApp = true)
+                    }
+                    CastProtocol.DLNA -> {
+                        val hook = dlnaStopHook
+                        if (hook != null) {
+                            hook(device)
+                        } else {
+                            runCatching {
+                                postSoap(
+                                    device.avTransportControlUrl,
+                                    DlnaProtocol.AV_TRANSPORT_SERVICE,
+                                    "Stop",
+                                    DlnaProtocol.buildStopSoap(),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1168,6 +1256,55 @@ internal class UniversalCastController {
     }
 
     companion object {
+        internal fun guessVodMime(url: String, contentType: String = ""): String {
+            val lower = url.substringBefore('?').lowercase()
+            val ct = contentType.substringBefore(';').trim().lowercase()
+            return when {
+                lower.endsWith(".mkv") || ct.contains("matroska") -> "video/x-matroska"
+                lower.endsWith(".webm") || ct.contains("webm") -> "video/webm"
+                else -> "video/mp4"
+            }
+        }
+
+        internal fun isGstaticCorsAllowed(acaoHeader: String?): Boolean {
+            val normalized = acaoHeader?.trim().orEmpty()
+            return normalized == "*" || normalized.equals("https://www.gstatic.com", ignoreCase = true)
+        }
+
+        internal fun isDirectHttpsHlsManifest(body: String, acaoHeader: String?): Boolean {
+            if (!isGstaticCorsAllowed(acaoHeader)) return false
+            if (!body.trimStart().startsWith("#EXTM3U")) return false
+            val mediaLines = body.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("#") }
+                .toList()
+            return mediaLines.isNotEmpty() &&
+                mediaLines.all { it.startsWith("https://", ignoreCase = true) || !it.contains("://") }
+        }
+
+        /**
+         * Builds ordered Direct Cloud/CDN VOD attempts for Chromecast:
+         * 1. Already-resolved final external CDN URL (panel is not even touched by Chromecast).
+         * 2. Original HTTPS auth redirect URL (`307` -> CDN, ZERO video bytes through the panel) in case
+         *    the CDN token from attempt #1 was single-use or bound to the client User-Agent.
+         */
+        internal fun buildDirectChromecastVodCandidates(
+            rewrittenUrl: String,
+            resolvedCandidate: Pair<String, String>?,
+        ): List<Pair<String, String>> {
+            val out = ArrayList<Pair<String, String>>(2)
+            if (resolvedCandidate != null && resolvedCandidate.first.isNotBlank()) {
+                out.add(resolvedCandidate)
+            }
+            if (rewrittenUrl.startsWith("https://", ignoreCase = true) &&
+                out.none { it.first == rewrittenUrl }
+            ) {
+                val mime = resolvedCandidate?.second ?: guessVodMime(rewrittenUrl)
+                out.add(rewrittenUrl to mime)
+            }
+            return out
+        }
+
         fun openExternalCastApp(context: Context, mediaUrl: String, title: String, isLive: Boolean): Boolean {
             val preparedUrl = DlnaProtocol.rewriteMediaUrlForCast(mediaUrl, isLive)
             if (!preparedUrl.startsWith("http://", ignoreCase = true) &&

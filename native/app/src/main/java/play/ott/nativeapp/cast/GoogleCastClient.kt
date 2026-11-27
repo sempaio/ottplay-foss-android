@@ -208,14 +208,32 @@ internal class GoogleCastClient {
     }
 
     fun disconnect(stopApp: Boolean = true) {
-        if (stopApp && connected.get()) {
-            val sid = sessionId
-            if (!sid.isNullOrBlank()) {
+        if (connected.get()) {
+            if (stopApp) {
+                val sid = sessionId
+                if (!sid.isNullOrBlank()) {
+                    runCatching {
+                        sendMessage(
+                            GoogleCastProtocol.RECEIVER_ID,
+                            GoogleCastProtocol.NS_RECEIVER,
+                            GoogleCastProtocol.buildStopSessionJson(requestSeq.getAndIncrement(), sid),
+                        )
+                    }
+                }
+            } else {
+                // Clean Cast v2 sender detach: close virtual channels WITHOUT stopping CC1AD845
+                // so Chromecast keeps playing autonomously even after the phone leaves Wi-Fi.
+                val tid = transportId
+                if (!tid.isNullOrBlank()) {
+                    runCatching {
+                        sendMessage(tid, GoogleCastProtocol.NS_CONNECTION, GoogleCastProtocol.buildCloseJson())
+                    }
+                }
                 runCatching {
                     sendMessage(
                         GoogleCastProtocol.RECEIVER_ID,
-                        GoogleCastProtocol.NS_RECEIVER,
-                        GoogleCastProtocol.buildStopSessionJson(requestSeq.getAndIncrement(), sid),
+                        GoogleCastProtocol.NS_CONNECTION,
+                        GoogleCastProtocol.buildCloseJson(),
                     )
                 }
             }

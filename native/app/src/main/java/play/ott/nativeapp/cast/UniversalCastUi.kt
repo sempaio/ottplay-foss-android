@@ -84,6 +84,7 @@ internal fun UniversalCastDialog(
     onDisconnect: () -> Unit,
     onExternalCastApp: () -> Unit,
     onDismiss: () -> Unit,
+    onDetachKeepPlaying: (() -> Unit)? = null,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -265,7 +266,21 @@ internal fun UniversalCastDialog(
                                     )
                                 }
                                 if (isConnected) {
-                                    CastPillButton("Desconectar", highlighted = true, onClick = onDisconnect)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (castState.castingDirectMode && onDetachKeepPlaying != null) {
+                                            CastPillButton(
+                                                label = "☁️ Soltar",
+                                                highlighted = true,
+                                                accentColor = CastGreen,
+                                                onClick = onDetachKeepPlaying,
+                                            )
+                                        }
+                                        CastPillButton(
+                                            label = if (castState.castingDirectMode) "Parar TV" else "Desconectar",
+                                            highlighted = !castState.castingDirectMode,
+                                            onClick = onDisconnect,
+                                        )
+                                    }
                                 } else {
                                     Text(
                                         "Transmitir →",
@@ -313,6 +328,7 @@ internal fun CastingActiveOverlay(
     onDisconnect: () -> Unit,
     onBack: () -> Unit,
     onPollPosition: suspend () -> Unit,
+    onDetachKeepPlaying: () -> Unit = {},
     onPrevious: (() -> Unit)? = null,
     onNext: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -390,7 +406,11 @@ internal fun CastingActiveOverlay(
                 )
             }
             CastPillButton("📺 Trocar TV", highlighted = false, onClick = onSwitchTv)
-            CastPillButton("✕ Desconectar", highlighted = true, onClick = onDisconnect)
+            CastPillButton(
+                label = if (castState.castingDirectMode) "✕ Parar TV" else "✕ Desconectar",
+                highlighted = true,
+                onClick = onDisconnect,
+            )
         }
 
         // Center Remote Card
@@ -430,7 +450,45 @@ internal fun CastingActiveOverlay(
                 )
             }
 
-            BatteryBackgroundBanner()
+            if (castState.castingDirectMode) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(CastGreen.copy(alpha = 0.14f))
+                        .border(1.dp, CastGreen.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        "☁️ Direto na TV — pode desconectar o celular",
+                        color = Color(0xFFD2FDE8),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "A TV busca o vídeo direto na origem (sem passar pelo celular nem pelo painel). Toque em Soltar celular ou desligue o Wi-Fi.",
+                        color = Color(0xFFB3EED2),
+                        fontSize = 10.sp,
+                    )
+                }
+            } else {
+                BatteryBackgroundBanner()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(CastCyan.copy(alpha = 0.10f))
+                        .border(1.dp, CastCyan.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 11.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        "📱 Ponte Wi-Fi ativa — mantenha o celular no mesmo Wi-Fi (seu painel apenas autentica e não retransmite vídeo).",
+                        color = Color(0xFFC5E9F7),
+                        fontSize = 10.sp,
+                    )
+                }
+            }
 
             // Live DLNA/Cast telemetry pill so connection health is always transparent
             val stats = castState.proxyStats
@@ -439,7 +497,7 @@ internal fun CastingActiveOverlay(
             val telemetry = buildString {
                 append(if (device.protocol == CastProtocol.CHROMECAST) "Cast" else "DLNA")
                 if (castState.castingDirectMode) {
-                    append(" Direto (M81/CDN)")
+                    append(" Direto (CDN)")
                 }
                 append(" • TV: ")
                 append(tvStateText)
@@ -464,7 +522,7 @@ internal fun CastingActiveOverlay(
                 }
             }
             val subDiag = if (castState.castingDirectMode) {
-                "Sem uso do celular — pode fechar ou bloquear a tela"
+                "Sem uso do celular — pode desconectar do Wi-Fi ou fechar o app"
             } else {
                 buildString {
                     if (stats.bindAddress.isNotBlank()) append(stats.bindAddress)
@@ -592,9 +650,20 @@ internal fun CastingActiveOverlay(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CastPillButton("🔄 Reconectar", highlighted = false, onClick = onReconnect)
-                CastPillButton("🧭 Navegar", highlighted = false, onClick = onBack)
-                CastPillButton("📲 Celular", highlighted = true, onClick = onDisconnect)
+                if (castState.castingDirectMode) {
+                    CastPillButton(
+                        label = "☁️ Soltar celular",
+                        highlighted = true,
+                        accentColor = CastGreen,
+                        onClick = onDetachKeepPlaying,
+                    )
+                    CastPillButton("🧭 Navegar", highlighted = false, onClick = onBack)
+                    CastPillButton("✕ Parar TV", highlighted = false, onClick = onDisconnect)
+                } else {
+                    CastPillButton("🔄 Reconectar", highlighted = false, onClick = onReconnect)
+                    CastPillButton("🧭 Navegar", highlighted = false, onClick = onBack)
+                    CastPillButton("📲 Celular", highlighted = true, onClick = onDisconnect)
+                }
             }
         }
     }
@@ -694,15 +763,16 @@ private fun CastPillButton(
     label: String,
     highlighted: Boolean,
     enabled: Boolean = true,
+    accentColor: Color = CastCyan,
     onClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(if (highlighted) CastCyan.copy(alpha = 0.22f) else Color(0xFF1A2234))
+            .background(if (highlighted) accentColor.copy(alpha = 0.22f) else Color(0xFF1A2234))
             .border(
                 1.dp,
-                if (highlighted) CastCyan else CastBorder,
+                if (highlighted) accentColor else CastBorder,
                 RoundedCornerShape(16.dp),
             )
             .clickable(enabled = enabled, onClick = onClick)
@@ -711,7 +781,7 @@ private fun CastPillButton(
     ) {
         Text(
             label,
-            color = if (!enabled) Color(0xFF6B778C) else if (highlighted) CastCyan else Color.White,
+            color = if (!enabled) Color(0xFF6B778C) else if (highlighted) accentColor else Color.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
