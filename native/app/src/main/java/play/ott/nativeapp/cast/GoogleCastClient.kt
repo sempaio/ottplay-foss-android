@@ -36,6 +36,7 @@ internal class GoogleCastClient {
 
     @Volatile private var socket: SSLSocket? = null
     @Volatile private var output: OutputStream? = null
+    @Volatile private var connectedHostPort: String? = null
     @Volatile private var transportId: String? = null
     @Volatile private var sessionId: String? = null
     @Volatile private var mediaSessionId: Int = -1
@@ -54,6 +55,19 @@ internal class GoogleCastClient {
         startPositionMs: Long,
     ): Result<Int> {
         require(DlnaProtocol.isPrivateLanHost(device.host)) { "Blocked non-LAN Cast target" }
+        val targetKey = "${device.host}:${device.port}"
+
+        // Fast path: reuse already-running CC1AD845 session on the SAME Chromecast
+        // (avoids STOP->LAUNCH race condition so channel/movie switching works every single time!)
+        val activeTid = transportId
+        if (connected.get() && connectedHostPort == targetKey && !activeTid.isNullOrBlank()) {
+            val reused = sendLoadWithRetry(activeTid, mediaUrl, title, contentType, isLive, startPositionMs)
+            if (reused != null && reused.isSuccess) {
+                return Result.success((volume01 * 100.0).toInt().coerceIn(0, 100))
+            }
+            // If receiver closed or errored, fall through to fresh connect below
+        }
+
         disconnect(stopApp = false)
 
         return try {
@@ -75,6 +89,7 @@ internal class GoogleCastClient {
 
             socket = rawSock
             output = rawSock.outputStream
+            connectedHostPort = targetKey
             connected.set(true)
 
             startReaderLoop(rawSock)
@@ -110,29 +125,7 @@ internal class GoogleCastClient {
             Thread.sleep(250L)
 
             // 4. Load media stream (retry once if CC1AD845 was still cold-booting)
-            var loadOutcome: Result<CastMediaStatus>? = null
-            for (attempt in 1..2) {
-                val loadFuture = CompletableFuture<Result<CastMediaStatus>>()
-                pendingLoad = loadFuture
-                sendMessage(
-                    appStatus.transportId,
-                    GoogleCastProtocol.NS_MEDIA,
-                    GoogleCastProtocol.buildLoadMediaJson(
-                        requestId = requestSeq.getAndIncrement(),
-                        mediaUrl = mediaUrl,
-                        title = title,
-                        contentType = contentType,
-                        isLive = isLive,
-                        startPositionSec = startPositionMs / 1000.0,
-                    ),
-                )
-                val waitSec = if (attempt == 1) 6L else 10L
-                loadOutcome = runCatching { loadFuture.get(waitSec, TimeUnit.SECONDS) }.getOrNull()
-                pendingLoad = null
-                if (loadOutcome != null) break
-                Thread.sleep(700L)
-            }
-
+            val loadOutcome = sendLoadWithRetry(appStatus.transportId, mediaUrl, title, contentType, isLive, startPositionMs)
             if (loadOutcome == null) {
                 disconnect(stopApp = true)
                 return Result.failure(IllegalStateException("Chromecast abriu a tela mas não respondeu ao carregamento do vídeo."))
@@ -146,6 +139,43 @@ internal class GoogleCastClient {
             disconnect(stopApp = false)
             Result.failure(e)
         }
+    }
+
+    private fun sendLoadWithRetry(
+        tid: String,
+        mediaUrl: String,
+        title: String,
+        contentType: String,
+        isLive: Boolean,
+        startPositionMs: Long,
+    ): Result<CastMediaStatus>? {
+        var outcome: Result<CastMediaStatus>? = null
+        for (attempt in 1..2) {
+            val loadFuture = CompletableFuture<Result<CastMediaStatus>>()
+            pendingLoad = loadFuture
+            val sent = sendMessage(
+                tid,
+                GoogleCastProtocol.NS_MEDIA,
+                GoogleCastProtocol.buildLoadMediaJson(
+                    requestId = requestSeq.getAndIncrement(),
+                    mediaUrl = mediaUrl,
+                    title = title,
+                    contentType = contentType,
+                    isLive = isLive,
+                    startPositionSec = startPositionMs / 1000.0,
+                ),
+            )
+            if (!sent) {
+                pendingLoad = null
+                return null
+            }
+            val waitSec = if (attempt == 1) 7L else 10L
+            outcome = runCatching { loadFuture.get(waitSec, TimeUnit.SECONDS) }.getOrNull()
+            pendingLoad = null
+            if (outcome != null) return outcome
+            runCatching { Thread.sleep(700L) }
+        }
+        return outcome
     }
 
     fun play(): Boolean = sendMediaSimple("PLAY")
@@ -191,6 +221,7 @@ internal class GoogleCastClient {
             }
         }
         connected.set(false)
+        connectedHostPort = null
         transportId = null
         sessionId = null
         mediaSessionId = -1

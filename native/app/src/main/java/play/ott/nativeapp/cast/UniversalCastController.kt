@@ -146,8 +146,12 @@ internal class UniversalCastController {
         }
         val appContext = context.applicationContext
         return try {
-            // Stop any prior Cast v2 session cleanly when switching targets
-            if (state.value.connectedDevice?.protocol == CastProtocol.CHROMECAST) {
+            // Stop prior Cast v2 session ONLY when switching to a DIFFERENT TV/Chromecast
+            // (reusing the active CC1AD845 session on the same Chromecast avoids STOP->LAUNCH races!)
+            val prevDevice = state.value.connectedDevice
+            if (prevDevice?.protocol == CastProtocol.CHROMECAST &&
+                prevDevice.avTransportControlUrl != device.avTransportControlUrl
+            ) {
                 withContext(Dispatchers.IO) { googleCastClient.disconnect(stopApp = true) }
             }
 
@@ -668,12 +672,15 @@ internal class UniversalCastController {
         val dropped = after.tvTransportState.equals("STOPPED", ignoreCase = true) ||
             after.tvTransportState.equals("NO_MEDIA_PRESENT", ignoreCase = true)
 
-        if (dropped && elapsedSinceStart > 15_000L && after.proxyStats.activeClients == 0) {
+        // Only attempt at most ONE quiet auto-recovery if playback had ALREADY stabilized for > 45s
+        // with >= 2 MB transferred. Never auto-loop if the TV failed on initial connect!
+        val hadStablePlayback = elapsedSinceStart > 45_000L && after.proxyStats.bytesSent >= 2_000_000L
+        if (dropped && hadStablePlayback && after.proxyStats.activeClients == 0) {
             consecutiveStoppedTicks++
             // Avoid auto-reconnecting if a VOD movie genuinely finished near the end
             val nearVodEnd = !after.castingIsLive && after.tvDurationMs > 30_000L &&
                 after.tvPositionMs >= (after.tvDurationMs - 15_000L)
-            if (consecutiveStoppedTicks >= 2 && !nearVodEnd && after.autoReconnectCount < 4) {
+            if (consecutiveStoppedTicks >= 2 && !nearVodEnd && after.autoReconnectCount < 1) {
                 consecutiveStoppedTicks = 0
                 reconnectCurrent(context, isAuto = true)
             }
