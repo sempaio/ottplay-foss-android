@@ -297,6 +297,7 @@ internal class UniversalCastController {
         // Best-effort Stop clears stale state on Samsung / LG renderers
         runCatching {
             postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Stop", DlnaProtocol.buildStopSoap())
+            Thread.sleep(250L)
         }
 
         // Always use the local Wi-Fi proxy for DLNA:
@@ -374,7 +375,13 @@ internal class UniversalCastController {
         }
         if (!setUriOk) return false to lastFault
 
-        val playRes = postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Play", DlnaProtocol.buildPlaySoap())
+        // Give LG webOS / Samsung Tizen time to finish async HEAD probe before Play (avoids UPnP 701!)
+        runCatching { Thread.sleep(400L) }
+        var playRes = postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Play", DlnaProtocol.buildPlaySoap())
+        if (!playRes.isSuccessful) {
+            runCatching { Thread.sleep(750L) }
+            playRes = postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Play", DlnaProtocol.buildPlaySoap())
+        }
         if (!playRes.isSuccessful) {
             val detail = DlnaProtocol.extractSoapFaultSummary(playRes.body) ?: "HTTP ${playRes.code}"
             return false to detail
@@ -485,15 +492,14 @@ internal class UniversalCastController {
         val stats = lanProxy.currentStats()
         when (device.protocol) {
             CastProtocol.CHROMECAST -> {
-                if (current.castingIsLive) {
-                    mutableState.update { it.copy(proxyStats = stats) }
-                    return
-                }
                 val st = withContext(Dispatchers.IO) { googleCastClient.requestStatus() }
+                val stateLabel = st?.let {
+                    if (!it.idleReason.isNullOrBlank()) "${it.playerState} (${it.idleReason})" else it.playerState
+                }
                 mutableState.update { prev ->
                     prev.copy(
                         proxyStats = stats,
-                        tvTransportState = st?.playerState ?: prev.tvTransportState,
+                        tvTransportState = stateLabel ?: prev.tvTransportState,
                         isPlayingOnTv = st?.let { it.playerState == "PLAYING" || it.playerState == "BUFFERING" } ?: prev.isPlayingOnTv,
                         tvPositionMs = st?.let { (it.currentTimeSec * 1000.0).toLong().coerceAtLeast(0L) } ?: prev.tvPositionMs,
                         tvDurationMs = st?.takeIf { it.durationSec > 0.0 }?.let { (it.durationSec * 1000.0).toLong() } ?: prev.tvDurationMs,

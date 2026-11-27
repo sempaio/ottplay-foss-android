@@ -392,25 +392,31 @@ internal fun CastingActiveOverlay(
             BatteryBackgroundBanner()
 
             // Live DLNA/Cast telemetry pill so connection health is always transparent
-            val mbSent = castState.proxyStats.bytesSent / (1024.0 * 1024.0)
+            val stats = castState.proxyStats
+            val mbSent = stats.bytesSent / (1024.0 * 1024.0)
             val tvStateText = castState.tvTransportState.ifBlank { if (castState.isPlayingOnTv) "PLAYING" else "PAUSED" }
             val telemetry = buildString {
                 append(if (device.protocol == CastProtocol.CHROMECAST) "Cast" else "DLNA")
                 append(" • TV: ")
                 append(tvStateText)
-                if (castState.proxyStats.bytesSent > 0L) {
+                append(" • ")
+                append(stats.totalRequests)
+                append(" reqs")
+                if (stats.bytesSent > 0L) {
                     append(" • ")
                     append("%.1f MB".format(mbSent))
-                }
-                if (castState.proxyStats.chunksSent > 0) {
-                    append(" • ")
-                    append(castState.proxyStats.chunksSent)
-                    append(if (castState.castingIsLive) " segs" else " blocos")
                 }
                 if (castState.autoReconnectCount > 0) {
                     append(" • ")
                     append(castState.autoReconnectCount)
                     append(" rec.")
+                }
+            }
+            val subDiag = buildString {
+                if (stats.bindAddress.isNotBlank()) append(stats.bindAddress)
+                if (stats.lastHttpSummary.isNotBlank()) {
+                    if (isNotEmpty()) append(" • ")
+                    append(stats.lastHttpSummary)
                 }
             }
             Text(
@@ -420,6 +426,15 @@ internal fun CastingActiveOverlay(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (subDiag.isNotBlank()) {
+                Text(
+                    subDiag,
+                    color = Color(0xFF6F849E),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
             // VOD Seek Bar on TV
             if (!castState.castingIsLive && castState.tvDurationMs > 0L) {

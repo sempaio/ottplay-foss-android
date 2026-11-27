@@ -32,6 +32,7 @@ internal data class CastMediaStatus(
     val playerState: String,
     val currentTimeSec: Double,
     val durationSec: Double,
+    val idleReason: String? = null,
 )
 
 /**
@@ -232,6 +233,7 @@ internal object GoogleCastProtocol {
         val first = root["status"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
         val sessionId = first["mediaSessionId"]?.jsonPrimitive?.intOrNull ?: return null
         val playerState = first["playerState"]?.jsonPrimitive?.content ?: "UNKNOWN"
+        val idleReason = first["idleReason"]?.jsonPrimitive?.content
         val currentTime = first["currentTime"]?.jsonPrimitive?.doubleOrNull ?: 0.0
         val duration = first["media"]?.jsonObject?.get("duration")?.jsonPrimitive?.doubleOrNull ?: 0.0
         return CastMediaStatus(
@@ -239,6 +241,7 @@ internal object GoogleCastProtocol {
             playerState = playerState,
             currentTimeSec = currentTime,
             durationSec = duration,
+            idleReason = idleReason,
         )
     }
 

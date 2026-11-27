@@ -350,17 +350,10 @@ internal object DlnaProtocol {
      * avoiding 5G/cellular or VPN interfaces on multi-homed Android devices.
      */
     internal fun localLanIpv4ForTarget(targetHost: String): String? {
-        // 1. Ask Android's routing table directly via an unconnected-UDP route probe (no packets sent)
-        val routed = runCatching {
-            java.net.DatagramSocket().use { probe ->
-                probe.connect(InetAddress.getByName(targetHost), SSDP_PORT)
-                probe.localAddress?.hostAddress
-            }
-        }.getOrNull()
-        if (routed != null && isPrivateLanHost(routed)) return routed
+        val targetPrefix24 = targetHost.substringBeforeLast('.', "")
+        val targetParts = targetHost.split('.')
+        val targetPrefix16 = if (targetParts.size == 4) "${targetParts[0]}.${targetParts[1]}." else ""
 
-        // 2. Match interface on the same /24 subnet as targetHost, preferring wlan*
-        val targetPrefix = targetHost.substringBeforeLast('.', "")
         val interfaces = runCatching {
             java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
                 .filter { it.isUp && !it.isLoopback }
@@ -373,8 +366,27 @@ internal object DlnaProtocol {
                 .filterIsInstance<Inet4Address>()
                 .mapNotNull { addr -> addr.hostAddress?.takeIf(::isPrivateLanHost)?.let { it to isWifi } }
         }
-        return candidates.firstOrNull { (ip, _) -> targetPrefix.isNotEmpty() && ip.startsWith("$targetPrefix.") }?.first
-            ?: candidates.firstOrNull { (_, isWifi) -> isWifi }?.first
+
+        // 1. Exact /24 subnet match with the TV (immune to 5G cellular / Tailscale VPN!)
+        if (targetPrefix24.isNotEmpty()) {
+            candidates.firstOrNull { (ip, isWifi) -> isWifi && ip.startsWith("$targetPrefix24.") }?.first?.let { return it }
+            candidates.firstOrNull { (ip, _) -> ip.startsWith("$targetPrefix24.") }?.first?.let { return it }
+        }
+
+        // 2. Kernel routing table probe via UDP connect (no packets sent)
+        val routed = runCatching {
+            java.net.DatagramSocket().use { probe ->
+                probe.connect(InetAddress.getByName(targetHost), SSDP_PORT)
+                probe.localAddress?.hostAddress
+            }
+        }.getOrNull()
+        if (routed != null && isPrivateLanHost(routed)) return routed
+
+        // 3. Same /16 subnet, then any Wi-Fi LAN interface, then fallback
+        if (targetPrefix16.isNotEmpty()) {
+            candidates.firstOrNull { (ip, _) -> ip.startsWith(targetPrefix16) }?.first?.let { return it }
+        }
+        return candidates.firstOrNull { (_, isWifi) -> isWifi }?.first
             ?: candidates.firstOrNull()?.first
     }
 

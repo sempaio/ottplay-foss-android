@@ -296,8 +296,81 @@ class LanStreamProxyTest {
             client.newCall(Request.Builder().url(target.localUrl).get().build()).execute().use { resp ->
                 assertEquals(200, resp.code)
                 assertEquals("video/mp4", resp.header("Content-Type"))
+                assertEquals("*", resp.header("Access-Control-Allow-Origin"))
+                assertEquals("*", resp.header("Access-Control-Expose-Headers"))
                 val received = resp.body.bytes()
                 assertArrayEquals(fullMovie, received)
+            }
+            assertTrue(proxy.currentStats().totalRequests >= 1)
+        } finally {
+            running.set(false)
+            proxy.shutdown()
+            runCatching { upstream.close() }
+            pool.shutdownNow()
+        }
+    }
+
+    @Test fun chromecastLiveHlsRelayServesCorsManifestAndTsWithExtensions() {
+        val sampleTs = ByteArray(188) { idx -> if (idx == 0) 0x47.toByte() else (idx and 0x7F).toByte() }
+        val running = AtomicBoolean(true)
+        val upstream = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+        val pool = Executors.newCachedThreadPool()
+        val upstreamPort = upstream.localPort
+
+        pool.execute {
+            while (running.get() && !upstream.isClosed) {
+                val sock = runCatching { upstream.accept() }.getOrNull() ?: break
+                pool.execute {
+                    sock.use { s ->
+                        val reqLine = s.getInputStream().bufferedReader().readLine().orEmpty()
+                        val path = reqLine.split(' ').getOrNull(1).orEmpty()
+                        val out = s.getOutputStream()
+                        when (path) {
+                            "/live-hls/demo/pass/100.m3u8" -> {
+                                val body = """
+                                    #EXTM3U
+                                    #EXT-X-VERSION:3
+                                    #EXT-X-TARGETDURATION:5
+                                    #EXTINF:5,
+                                    http://127.0.0.1:$upstreamPort/seg_100.ts
+                                """.trimIndent().toByteArray()
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(body)
+                            }
+                            "/seg_100.ts" -> {
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nContent-Length: ${sampleTs.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(sampleTs)
+                            }
+                            else -> out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                        }
+                        out.flush()
+                    }
+                }
+            }
+        }
+
+        val proxy = LanStreamProxyServer(allowLoopbackForTest = true)
+        try {
+            val target = proxy.prepareStream(
+                upstreamUrl = "http://127.0.0.1:$upstreamPort/live-hls/demo/pass/100.m3u8",
+                isLive = true,
+                localLanIp = "127.0.0.1",
+            )
+            assertNotNull(target.chromecastHlsUrl)
+            val client = OkHttpClient()
+            val manifestBody = client.newCall(Request.Builder().url(target.chromecastHlsUrl!!).get().build()).execute().use { resp ->
+                assertEquals(200, resp.code)
+                assertEquals("*", resp.header("Access-Control-Allow-Origin"))
+                assertEquals("*", resp.header("Access-Control-Expose-Headers"))
+                resp.body.string()
+            }
+            val segUrl = manifestBody.lineSequence().firstOrNull { it.startsWith("http://127.0.0.1:") }
+            assertNotNull(segUrl)
+            assertTrue("Expected .ts extension for Chromecast Shaka player: $segUrl", segUrl!!.endsWith(".ts"))
+            client.newCall(Request.Builder().url(segUrl).get().build()).execute().use { segResp ->
+                assertEquals(200, segResp.code)
+                assertEquals("*", segResp.header("Access-Control-Allow-Origin"))
+                assertArrayEquals(sampleTs, segResp.body.bytes())
             }
         } finally {
             running.set(false)
