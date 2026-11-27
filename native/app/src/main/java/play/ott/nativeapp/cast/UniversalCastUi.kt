@@ -27,6 +27,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -38,7 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,22 +131,8 @@ internal fun UniversalCastDialog(
                     }
                 }
 
-                // Background-usage reassurance badge
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(CastGreen.copy(alpha = 0.12f))
-                        .border(1.dp, CastGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 11.dp, vertical = 7.dp),
-                ) {
-                    Text(
-                        "✓ Envia só o vídeo para a TV — você pode usar o celular normalmente ou bloquear a tela.",
-                        color = Color(0xFFCFFCE5),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
+                // Background-usage / Battery optimization banner (prevents Android 30s freeze on minimize!)
+                BatteryBackgroundBanner()
 
                 // Busy / error feedback
                 castState.busyAction?.let { busy ->
@@ -309,9 +300,12 @@ internal fun CastingActiveOverlay(
     var scrubMs by remember { mutableFloatStateOf(castState.tvPositionMs.toFloat()) }
 
     LaunchedEffect(device.avTransportControlUrl, castState.isPlayingOnTv) {
+        // Only poll from UI if CastRelayService background poller is not already running
         while (true) {
-            onPollPosition()
-            delay(if (castState.castingIsLive) 4_000L else 2_000L)
+            if (!CastRelayService.isServiceActive) {
+                onPollPosition()
+            }
+            delay(4_000L)
         }
     }
 
@@ -395,12 +389,7 @@ internal fun CastingActiveOverlay(
                 )
             }
 
-            Text(
-                "✓ Pode minimizar o app ou bloquear a tela — a transmissão continua na TV.",
-                color = Color(0xFF9DEBC3),
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-            )
+            BatteryBackgroundBanner()
 
             // Live DLNA/Cast telemetry pill so connection health is always transparent
             val mbSent = castState.proxyStats.bytesSent / (1024.0 * 1024.0)
@@ -533,6 +522,68 @@ internal fun CastingActiveOverlay(
                 CastPillButton("🧭 Navegar", highlighted = false, onClick = onBack)
                 CastPillButton("📲 Celular", highlighted = true, onClick = onDisconnect)
             }
+        }
+    }
+}
+
+@Composable
+private fun BatteryBackgroundBanner() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var unrestricted by remember { mutableStateOf(CastPowerPolicy.isBatteryUnrestricted(context)) }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                unrestricted = CastPowerPolicy.isBatteryUnrestricted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (unrestricted) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(CastGreen.copy(alpha = 0.12f))
+                .border(1.dp, CastGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 11.dp, vertical = 7.dp),
+        ) {
+            Text(
+                "✓ 2º plano liberado — pode minimizar o app ou bloquear a tela sem travar a TV.",
+                color = Color(0xFFCFFCE5),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0x33FFB300))
+                .border(1.dp, Color(0xAAFFB300), RoundedCornerShape(10.dp))
+                .clickable { CastPowerPolicy.requestUnrestrictedBattery(context) }
+                .padding(horizontal = 11.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("⚡", fontSize = 15.sp)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Liberar 2º plano (toque aqui)",
+                    color = Color(0xFFFFE599),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Evita que o Android trave a TV ~30s depois de minimizar o app.",
+                    color = Color(0xFFFFF0C2),
+                    fontSize = 10.sp,
+                )
+            }
+            Text("Liberar ›", color = Color(0xFFFFD54F), fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

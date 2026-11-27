@@ -158,16 +158,30 @@ internal object GoogleCastProtocol {
         if (!isLive && startPositionSec > 1.0) {
             put("currentTime", startPositionSec)
         }
+        val isHls = contentType.contains("mpegurl", ignoreCase = true) ||
+            mediaUrl.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
         put("media", buildJsonObject {
             put("contentId", mediaUrl)
             put("streamType", if (isLive) "LIVE" else "BUFFERED")
             put("contentType", contentType)
+            if (isHls) {
+                put("hlsSegmentFormat", "TS")
+                put("hlsVideoSegmentFormat", "MPEG2_TS")
+            }
             put("metadata", buildJsonObject {
                 put("metadataType", 0)
                 put("title", title.ifBlank { "STARLINK TV" })
             })
         })
     }.toString()
+
+    fun parseLoadFailureDetail(payload: String): String {
+        val root = parseJsonObject(payload) ?: return "LOAD_FAILED"
+        val type = root["type"]?.jsonPrimitive?.content ?: "LOAD_FAILED"
+        val reason = root["reason"]?.jsonPrimitive?.content
+        val code = root["detailedErrorCode"]?.jsonPrimitive?.intOrNull
+        return listOfNotNull(type, reason, code?.let { "code=$it" }).joinToString(" • ")
+    }
 
     fun buildMediaCommandJson(
         type: String,

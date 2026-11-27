@@ -524,7 +524,9 @@ internal class LanStreamProxyServer(
             val cors = "HTTP/1.1 204 No Content\r\n" +
                 "Access-Control-Allow-Origin: *\r\n" +
                 "Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n" +
-                "Access-Control-Allow-Headers: Range, Content-Type\r\n" +
+                "Access-Control-Allow-Headers: *\r\n" +
+                "Access-Control-Expose-Headers: *\r\n" +
+                "Access-Control-Max-Age: 86400\r\n" +
                 "Connection: close\r\n\r\n"
             out.write(cors.toByteArray(Charsets.ISO_8859_1))
             out.flush()
@@ -602,6 +604,7 @@ internal class LanStreamProxyServer(
             "Content-Type: application/vnd.apple.mpegurl\r\n" +
             "Content-Length: ${rewritten.size}\r\n" +
             "Access-Control-Allow-Origin: *\r\n" +
+            "Access-Control-Expose-Headers: *\r\n" +
             "Cache-Control: no-cache, no-store\r\n" +
             "Connection: close\r\n\r\n"
         out.write(header.toByteArray(Charsets.ISO_8859_1))
@@ -643,6 +646,7 @@ internal class LanStreamProxyServer(
                 "Content-Type: $finalCt\r\n" +
                 "Content-Length: ${finalBytes.size}\r\n" +
                 "Access-Control-Allow-Origin: *\r\n" +
+                "Access-Control-Expose-Headers: *\r\n" +
                 "Cache-Control: no-cache\r\n" +
                 "Connection: close\r\n\r\n"
             out.write(header.toByteArray(Charsets.ISO_8859_1))
@@ -925,6 +929,7 @@ internal class LanStreamProxyServer(
                 append("HTTP/1.1 $statusLine\r\n")
                 append("Content-Type: ${stream.mimeType}\r\n")
                 append("Access-Control-Allow-Origin: *\r\n")
+                append("Access-Control-Expose-Headers: *\r\n")
                 append("Content-Length: $responseLen\r\n")
                 if (range.isPartial) {
                     append("Content-Range: bytes ${range.start}-${range.end}/$totalLen\r\n")
@@ -938,70 +943,63 @@ internal class LanStreamProxyServer(
             out.write(headerBlock.toByteArray(Charsets.ISO_8859_1))
             out.flush()
 
-            var cursor = range.start
-            val buffer = ByteArray(64 * 1024)
-            var sliceRetries = 0
+            // Producer-consumer 2 MB RAM-buffered slice prefetch:
+            // Upstream HTTP socket finishes & closes in ~0.3s, so even if the TV pauses for
+            // 30+ minutes (blocking out.write), ZERO upstream socket can ever time out!
+            val sliceQueue = LinkedBlockingQueue<ByteArray>(2)
+            val producerAlive = AtomicBoolean(true)
+            val clientAlive = AtomicBoolean(true)
 
-            while (cursor <= range.end && running.get() && activeStream.get()?.token == stream.token) {
-                val sliceEnd = minOf(cursor + VOD_SLICE_BYTES - 1L, range.end)
-                val targetUrl = stream.resolvedUpstreamUrl
-                var sliceProgress = 0L
-                var tvSocketClosed = false
-
+            val sliceProducer = executor.submit {
+                var cursor = range.start
+                var sliceRetries = 0
                 try {
-                    val req = Request.Builder()
-                        .url(targetUrl)
-                        .header("User-Agent", "OTT-play-Android/1.0")
-                        .header("Range", "bytes=$cursor-$sliceEnd")
-                        .get()
-                        .build()
-                    controlClient.newCall(req).execute().use { resp ->
-                        if (resp.code == 206 || (resp.code == 200 && cursor == 0L)) {
-                            val input = BufferedInputStream(resp.body.byteStream(), 64 * 1024)
-                            val expectedMax = (sliceEnd - cursor) + 1L
-                            while (sliceProgress < expectedMax && running.get() && activeStream.get()?.token == stream.token) {
-                                val toRead = minOf(buffer.size.toLong(), expectedMax - sliceProgress).toInt()
-                                val n = input.read(buffer, 0, toRead)
-                                if (n <= 0) break
-                                try {
-                                    out.write(buffer, 0, n)
-                                } catch (_: IOException) {
-                                    tvSocketClosed = true
-                                    break
-                                }
-                                cursor += n
-                                sliceProgress += n
-                                bytesSentCounter.addAndGet(n.toLong())
-                            }
-                            if (!tvSocketClosed) {
-                                runCatching { out.flush() }.onFailure { tvSocketClosed = true }
-                            }
-                            if (sliceProgress > 0L) {
-                                chunksSentCounter.incrementAndGet()
-                                sliceRetries = 0
+                    while (cursor <= range.end && running.get() && clientAlive.get() && activeStream.get()?.token == stream.token) {
+                        val sliceEnd = minOf(cursor + VOD_SLICE_BYTES - 1L, range.end)
+                        val expectedLen = ((sliceEnd - cursor) + 1L).toInt()
+                        val fetched = fetchVodSliceBytes(stream.resolvedUpstreamUrl, cursor, sliceEnd, expectedLen)
+                        if (fetched != null && fetched.isNotEmpty()) {
+                            cursor += fetched.size.toLong()
+                            sliceRetries = 0
+                            while (running.get() && clientAlive.get() && activeStream.get()?.token == stream.token) {
+                                if (sliceQueue.offer(fetched, 500L, TimeUnit.MILLISECONDS)) break
                             }
                         } else {
-                            // Upstream error / expired signed URL -> trigger refresh below
-                            sliceProgress = 0L
+                            sliceRetries++
+                            reconnectCounter.incrementAndGet()
+                            if (sliceRetries > 5) break
+                            val refreshed = probeUpstream(stream.originalUpstreamUrl, isLive = false)
+                            if (refreshed.finalUrl.isNotBlank()) {
+                                stream.resolvedUpstreamUrl = refreshed.finalUrl
+                            }
+                            Thread.sleep(350L * sliceRetries)
                         }
                     }
+                } catch (_: InterruptedException) {
+                    // Clean exit
                 } catch (_: Exception) {
-                    // Upstream read/connect error -> retry with refreshed M81 URL below
+                    // Exit producer cleanly
+                } finally {
+                    producerAlive.set(false)
                 }
+            }
 
-                if (tvSocketClosed) return
-
-                if (sliceProgress == 0L) {
-                    sliceRetries++
-                    reconnectCounter.incrementAndGet()
-                    if (sliceRetries > 4) return
-                    // Re-resolve original M81 /movie/... redirect to get a fresh Cloudflare Worker URL!
-                    val refreshed = probeUpstream(stream.originalUpstreamUrl, isLive = false)
-                    if (refreshed.finalUrl.isNotBlank()) {
-                        stream.resolvedUpstreamUrl = refreshed.finalUrl
+            try {
+                while (running.get() && activeStream.get()?.token == stream.token) {
+                    val data = sliceQueue.poll(1_000L, TimeUnit.MILLISECONDS)
+                    if (data != null) {
+                        writeChunkedToTv(out, data)
+                        bytesSentCounter.addAndGet(data.size.toLong())
+                        chunksSentCounter.incrementAndGet()
+                    } else if (!producerAlive.get() && sliceQueue.isEmpty()) {
+                        break
                     }
-                    runCatching { Thread.sleep(350L * sliceRetries) }
                 }
+            } catch (_: IOException) {
+                // Normal when TV closes connection or seeks
+            } finally {
+                clientAlive.set(false)
+                sliceProducer.cancel(true)
             }
             return
         }
@@ -1151,6 +1149,29 @@ internal class LanStreamProxyServer(
         }
     }.getOrNull()
 
+    private fun fetchVodSliceBytes(url: String, start: Long, end: Long, expectedLen: Int): ByteArray? = runCatching {
+        val req = Request.Builder()
+            .url(url)
+            .header("User-Agent", "OTT-play-Android/1.0")
+            .header("Range", "bytes=$start-$end")
+            .get()
+            .build()
+        controlClient.newCall(req).execute().use { resp ->
+            if (resp.code != 206 && !(resp.code == 200 && start == 0L)) return null
+            val input = BufferedInputStream(resp.body.byteStream(), 64 * 1024)
+            val baos = java.io.ByteArrayOutputStream(expectedLen.coerceAtMost(VOD_SLICE_BYTES.toInt()))
+            val buf = ByteArray(64 * 1024)
+            var readTotal = 0
+            while (readTotal < expectedLen) {
+                val n = input.read(buf, 0, minOf(buf.size, expectedLen - readTotal))
+                if (n <= 0) break
+                baos.write(buf, 0, n)
+                readTotal += n
+            }
+            if (readTotal > 0) baos.toByteArray() else null
+        }
+    }.getOrNull()
+
     private fun fetchBytes(url: String): ByteArray? = runCatching {
         val req = Request.Builder().url(url).header("User-Agent", "OTT-play-Android/1.0").get().build()
         controlClient.newCall(req).execute().use { resp ->
@@ -1172,6 +1193,6 @@ internal class LanStreamProxyServer(
     }
 
     companion object {
-        private const val VOD_SLICE_BYTES = 4L * 1024L * 1024L
+        private const val VOD_SLICE_BYTES = 2L * 1024L * 1024L
     }
 }

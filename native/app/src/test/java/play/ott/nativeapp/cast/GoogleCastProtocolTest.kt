@@ -56,12 +56,19 @@ class GoogleCastProtocolTest {
             requestId = 2,
             mediaUrl = "http://192.168.1.20:51234/cast/abc/live.m3u8",
             title = "Globo News HD",
-            contentType = "application/x-mpegurl",
+            contentType = "application/vnd.apple.mpegurl",
             isLive = true,
         )
         assertTrue(loadJson.contains("\"streamType\":\"LIVE\""))
-        assertTrue(loadJson.contains("\"contentType\":\"application/x-mpegurl\""))
+        assertTrue(loadJson.contains("\"contentType\":\"application/vnd.apple.mpegurl\""))
+        assertTrue(loadJson.contains("\"hlsSegmentFormat\":\"TS\""))
+        assertTrue(loadJson.contains("\"hlsVideoSegmentFormat\":\"MPEG2_TS\""))
         assertTrue(loadJson.contains("\"title\":\"Globo News HD\""))
+
+        val failDetail = GoogleCastProtocol.parseLoadFailureDetail(
+            """{"type":"LOAD_FAILED","reason":"MEDIA_SRC_NOT_SUPPORTED","detailedErrorCode":104}""",
+        )
+        assertEquals("LOAD_FAILED • MEDIA_SRC_NOT_SUPPORTED • code=104", failDetail)
 
         val mediaStatusPayload = """
             {

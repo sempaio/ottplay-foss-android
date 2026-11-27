@@ -103,28 +103,41 @@ internal class GoogleCastClient {
             sessionId = appStatus.sessionId
             appStatus.volumeLevel?.let { volume01 = it.coerceIn(0.0, 1.0) }
 
-            // 3. Connect to receiver media transport
+            // 3. Connect to receiver media transport & wait for CC1AD845 JS MediaManager boot
             sendMessage(appStatus.transportId, GoogleCastProtocol.NS_CONNECTION, GoogleCastProtocol.buildConnectJson())
+            Thread.sleep(900L)
+            sendMessage(appStatus.transportId, GoogleCastProtocol.NS_MEDIA, GoogleCastProtocol.buildGetStatusJson(requestSeq.getAndIncrement()))
+            Thread.sleep(250L)
 
-            // 4. Load media stream
-            val loadFuture = CompletableFuture<Result<CastMediaStatus>>()
-            pendingLoad = loadFuture
-            sendMessage(
-                appStatus.transportId,
-                GoogleCastProtocol.NS_MEDIA,
-                GoogleCastProtocol.buildLoadMediaJson(
-                    requestId = requestSeq.getAndIncrement(),
-                    mediaUrl = mediaUrl,
-                    title = title,
-                    contentType = contentType,
-                    isLive = isLive,
-                    startPositionSec = startPositionMs / 1000.0,
-                ),
-            )
+            // 4. Load media stream (retry once if CC1AD845 was still cold-booting)
+            var loadOutcome: Result<CastMediaStatus>? = null
+            for (attempt in 1..2) {
+                val loadFuture = CompletableFuture<Result<CastMediaStatus>>()
+                pendingLoad = loadFuture
+                sendMessage(
+                    appStatus.transportId,
+                    GoogleCastProtocol.NS_MEDIA,
+                    GoogleCastProtocol.buildLoadMediaJson(
+                        requestId = requestSeq.getAndIncrement(),
+                        mediaUrl = mediaUrl,
+                        title = title,
+                        contentType = contentType,
+                        isLive = isLive,
+                        startPositionSec = startPositionMs / 1000.0,
+                    ),
+                )
+                val waitSec = if (attempt == 1) 6L else 10L
+                loadOutcome = runCatching { loadFuture.get(waitSec, TimeUnit.SECONDS) }.getOrNull()
+                pendingLoad = null
+                if (loadOutcome != null) break
+                Thread.sleep(700L)
+            }
 
-            val loadOutcome = runCatching { loadFuture.get(12, TimeUnit.SECONDS) }.getOrNull()
-            pendingLoad = null
-            if (loadOutcome != null && loadOutcome.isFailure) {
+            if (loadOutcome == null) {
+                disconnect(stopApp = true)
+                return Result.failure(IllegalStateException("Chromecast abriu a tela mas não respondeu ao carregamento do vídeo."))
+            }
+            if (loadOutcome.isFailure) {
                 disconnect(stopApp = true)
                 return Result.failure(loadOutcome.exceptionOrNull() ?: IllegalStateException("Falha ao carregar no Chromecast."))
             }
@@ -280,7 +293,8 @@ internal class GoogleCastClient {
             GoogleCastProtocol.NS_MEDIA -> {
                 val type = GoogleCastProtocol.parseMessageType(msg.payloadUtf8)
                 if (type == "LOAD_FAILED" || type == "INVALID_REQUEST") {
-                    pendingLoad?.complete(Result.failure(IllegalStateException("Chromecast recusou a mídia ($type).")))
+                    val detail = GoogleCastProtocol.parseLoadFailureDetail(msg.payloadUtf8)
+                    pendingLoad?.complete(Result.failure(IllegalStateException("Chromecast recusou a mídia ($detail).")))
                     return
                 }
                 GoogleCastProtocol.parseMediaStatus(msg.payloadUtf8)?.let { media ->

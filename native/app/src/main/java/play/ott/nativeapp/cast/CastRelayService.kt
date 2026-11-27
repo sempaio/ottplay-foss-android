@@ -8,10 +8,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -73,14 +75,17 @@ class CastRelayService : Service() {
                 ensureChannel()
                 val notification = buildNotification(tvName, mediaTitle, isPlaying)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-                    )
+                    val fgsTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    runCatching {
+                        startForeground(NOTIFICATION_ID, notification, fgsTypes)
+                    }.onFailure {
+                        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                    }
                 } else {
                     startForeground(NOTIFICATION_ID, notification)
                 }
+                isServiceActive = true
                 ensureWatchdogRunning()
                 return START_STICKY
             }
@@ -91,7 +96,7 @@ class CastRelayService : Service() {
         if (watchdogJob?.isActive == true) return
         watchdogJob = serviceScope.launch {
             while (isActive) {
-                delay(5_000L)
+                delay(3_000L)
                 if (!CastSessionHost.isCastingActive) {
                     stopSelfCleanly()
                     break
@@ -102,6 +107,7 @@ class CastRelayService : Service() {
     }
 
     override fun onDestroy() {
+        isServiceActive = false
         watchdogJob?.cancel()
         releaseLocks()
         serviceScope.cancel()
@@ -109,6 +115,7 @@ class CastRelayService : Service() {
     }
 
     private fun stopSelfCleanly() {
+        isServiceActive = false
         watchdogJob?.cancel()
         watchdogJob = null
         releaseLocks()
@@ -211,6 +218,8 @@ class CastRelayService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setContentIntent(openPending)
             .addAction(0, if (isPlaying) "Pausar" else "Retomar", togglePending)
@@ -219,6 +228,10 @@ class CastRelayService : Service() {
     }
 
     companion object {
+        @Volatile
+        var isServiceActive: Boolean = false
+            private set
+
         private const val CHANNEL_ID = "starlink_cast_relay_v1"
         private const val NOTIFICATION_ID = 4108
         private const val ACTION_START_OR_UPDATE = "play.ott.nativeapp.cast.START_OR_UPDATE"
@@ -242,8 +255,40 @@ class CastRelayService : Service() {
 
         fun stop(context: Context) {
             val appCtx = context.applicationContext
+            isServiceActive = false
             runCatching {
                 appCtx.stopService(Intent(appCtx, CastRelayService::class.java))
+            }
+        }
+    }
+}
+
+/**
+ * Checks and requests Android's unrestricted background battery exemption so OEM App Freezers
+ * do not throttle the local Wi-Fi DLNA/Cast relay 30 seconds after the user minimizes the app.
+ */
+internal object CastPowerPolicy {
+    fun isBatteryUnrestricted(context: Context): Boolean {
+        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
+        return runCatching { pm.isIgnoringBatteryOptimizations(context.packageName) }.getOrDefault(true)
+    }
+
+    fun requestUnrestrictedBattery(context: Context) {
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val opened = runCatching {
+            context.startActivity(direct)
+            true
+        }.getOrDefault(false)
+        if (!opened) {
+            runCatching {
+                context.startActivity(
+                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    },
+                )
             }
         }
     }

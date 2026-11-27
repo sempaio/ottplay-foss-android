@@ -238,17 +238,15 @@ internal class UniversalCastController {
             )
         }
 
-        // For VOD direct HTTP CDN (non-Cloudflare Worker) -> Chromecast pulls straight from CDN;
-        // for Live -> CORS-enabled LAN HLS manifest!
-        val directVod = target.directHttpVodUrl?.takeIf { !isLive }
-        val mediaUrl = when {
-            isLive -> target.chromecastHlsUrl ?: target.localUrl
-            directVod != null -> directVod
-            else -> target.localUrl
+        // Always serve via our CORS-enabled LAN proxy on Chromecast so VOD never hits CORS or
+        // Cloudflare Worker ~90s drops, and Live HLS gets Access-Control-Allow-Origin: * + TS format!
+        val mediaUrl = if (isLive) {
+            target.chromecastHlsUrl ?: target.localUrl
+        } else {
+            target.localUrl
         }
-        val useDirectVod = directVod != null && mediaUrl == directVod
         val contentType = when {
-            isLive && mediaUrl.endsWith(".m3u8", ignoreCase = true) -> "application/x-mpegurl"
+            isLive && mediaUrl.endsWith(".m3u8", ignoreCase = true) -> "application/vnd.apple.mpegurl"
             isLive -> "video/mp2t"
             else -> target.mimeType
         }
@@ -262,22 +260,7 @@ internal class UniversalCastController {
             startPositionMs = startPositionMs,
         )
         if (res.isSuccess) {
-            if (useDirectVod) lanProxy.clearStream()
             return CastAttemptResult(true, mediaUrl, initialVolume = res.getOrNull())
-        }
-        // Fallback: if Chromecast couldn't pull direct VOD URL, retry via LAN proxy with CORS headers
-        if (useDirectVod && mediaUrl != target.localUrl) {
-            val retry = googleCastClient.connectAndLoad(
-                device = device,
-                mediaUrl = target.localUrl,
-                title = title,
-                contentType = target.mimeType,
-                isLive = false,
-                startPositionMs = startPositionMs,
-            )
-            if (retry.isSuccess) {
-                return CastAttemptResult(true, target.localUrl, initialVolume = retry.getOrNull())
-            }
         }
         lanProxy.clearStream()
         return CastAttemptResult(
@@ -581,7 +564,7 @@ internal class UniversalCastController {
         val dropped = after.tvTransportState.equals("STOPPED", ignoreCase = true) ||
             after.tvTransportState.equals("NO_MEDIA_PRESENT", ignoreCase = true)
 
-        if (dropped && elapsedSinceStart > 15_000L) {
+        if (dropped && elapsedSinceStart > 15_000L && after.proxyStats.activeClients == 0) {
             consecutiveStoppedTicks++
             // Avoid auto-reconnecting if a VOD movie genuinely finished near the end
             val nearVodEnd = !after.castingIsLive && after.tvDurationMs > 30_000L &&
