@@ -2,14 +2,14 @@
 
 - **Worktree ativa:** `E:\painelcliente_test\_worktrees\everycine-artwork-20261123`
 - **Branch:** `fix/everycine-current-source-20261123` (remote GitHub `starlink`: `https://github.com/sempaio/ottplay-foss-android.git`)
-- **Versão publicada oficial:** **`0.3.18`** (`versionCode = 26` em `native/version.properties`)
-- **APK oficial publicado:** `E:\painelcliente_test\projeto\data\app_releases\STARLINK-EveryCine-Official-0.3.18-20261127.apk`
+- **Versão publicada oficial:** **`0.3.19`** (`versionCode = 27` em `native/version.properties`)
+- **APK oficial publicado:** `E:\painelcliente_test\projeto\data\app_releases\STARLINK-EveryCine-Official-0.3.19-20261127.apk`
   - **Tamanho:** `6.595.561` bytes (`6.3 MB`)
-  - **SHA-256:** `0040319c0ca9fe0132d837ad45c71e9dd1455e99d6589a7d392897559503d897`
+  - **SHA-256:** `e059ee5f2668e7e48feb19907f8c0225379aaa8b4147ba76edb9e3dd86f693ba`
   - **Certificado oficial (v2/v3):** `21:61:B6:BE:77:0A:73:30:0D:E7:81:89:54:A1:FA:A2:A4:C4:BA:F5:C8:04:55:5A:45:88:D0:60:C9:8B:C7:C0`
-  - **PostgreSQL `app_releases`:** ID `#28`, `force_upgrade = False`, `is_published = True` (`#26` `0.3.16` e `#27` `0.3.17` despublicadas e arquivadas em `_backups/retired_20261127/`)
+  - **PostgreSQL `app_releases`:** ID `#29`, `force_upgrade = False`, `is_published = True` (`#26`–`#28` despublicadas e arquivadas em `_backups/retired_20261127/`)
   - **Entrega WhatsApp Bot e Painel:** `starlink-client-delivery.json` (`slug = starlink-iptv`) -> `https://panel.taila5c5c2.ts.net/client-apps/download/starlink-iptv`
-  - **Atualização automática in-app:** `https://panel.taila5c5c2.ts.net/app/update/latest?package_name=br.starlink.iptv` -> `/app/update/download/28`
+  - **Atualização automática in-app:** `https://panel.taila5c5c2.ts.net/app/update/latest?package_name=br.starlink.iptv` -> `/app/update/download/29`
 
 ---
 
@@ -33,11 +33,12 @@
 
 ---
 
-## Validações Concluídas (`0.3.18`)
+## Validações Concluídas (`0.3.19`)
 
-- `:core:test`, `:app:testLayoutUnitTest` (**234 testes / 41 suítes / 0 falhas**, incluindo `PlaybackTelemetryClientTest` e `TvDpadAndEpgGridTest`), `:app:lintVitalOfficial` e `:app:assembleOfficial` (R8): **BUILD SUCCESSFUL**.
-- `apksigner verify --verbose --print-certs`: certificado oficial v2/v3 confirmado em `STARLINK-EveryCine-Official-0.3.18-20261127.apk` (`br.starlink.iptv`, `versionCode=26`, `versionName="0.3.18"`, `STARLINK IPTV`).
-- Validação HTTPS pública ao vivo (`2026-11-27`): `/app/update/latest?package_name=br.starlink.iptv` (`version: 26`, `0.3.18`), `/app/update/download/28` e `/client-apps/download/starlink-iptv` (bot WhatsApp) entregando `6.595.561` bytes exatos sem `Content-Encoding: gzip` e com SHA-256 idêntico; `starlink_ops.py verify-apps` **100% ok**.
+- `:core:test`, `:app:testLayoutUnitTest` (**235 testes / 41 suítes / 0 falhas**), `:app:lintVitalOfficial` e `:app:assembleOfficial` (R8): **BUILD SUCCESSFUL**.
+- `apksigner verify`: certificado oficial v2/v3 confirmado em `STARLINK-EveryCine-Official-0.3.19-20261127.apk` (`br.starlink.iptv`, `versionCode=27`, `versionName="0.3.19"`, `STARLINK IPTV`).
+- **Correções de estabilidade Samsung TV & 2º plano (`0.3.19`):** `MediaSession` ativa em `STATE_PLAYING` + `MediaStyle` + solicitação de `POST_NOTIFICATIONS` no `CastRelayService`, parada real do ExoPlayer local (`controller.stop()`) ao transmitir, remoção de `Thread.sleep()` no envio ao vivo + pré-fetch de 2 segmentos + `SO_SNDBUF=512KB` + `THREAD_PRIORITY_URGENT_AUDIO`, buffer assíncrono antecipado de `6 MB` (fatias `4 MB`) no VOD + DLNA direto HTTP quando não-Worker, e watchdog silencioso (`12s`, zero SOAP enquanto houver fluxo ativo).
+- Validação HTTPS pública ao vivo (`2026-11-27`): `/app/update/latest?package_name=br.starlink.iptv` (`version: 27`, `0.3.19`), `/app/update/download/29` e `/client-apps/download/starlink-iptv` (bot WhatsApp) entregando `6.595.561` bytes exatos sem `gzip` e SHA-256 idêntico; `starlink_ops.py verify-apps` **100% ok**.
 
 ---
 

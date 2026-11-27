@@ -347,10 +347,17 @@ internal class LanStreamProxyServer(
     @Volatile private var lastBindAddress: String = ""
 
     private val executor = Executors.newCachedThreadPool { r ->
-        Thread(r, "StarlinkCastProxy").apply { isDaemon = true }
+        Thread({
+            // Elevate proxy worker thread priority so Android background cgroups never starve TV sockets
+            runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO) }
+            r.run()
+        }, "StarlinkCastProxy").apply {
+            isDaemon = true
+            priority = Thread.MAX_PRIORITY
+        }
     }
     private val random = SecureRandom()
-    private val nullTsBurst = HlsRemuxCodec.createMpegTsNullBurst(packetCount = 10)
+    private val nullTsBurst = HlsRemuxCodec.createMpegTsNullBurst(packetCount = 4)
 
     /** Short timeouts for playlist/probe/segment/4MB-slice fetches so stalls recover rapidly. */
     private val controlClient: OkHttpClient = OkHttpClient.Builder()
@@ -525,6 +532,7 @@ internal class LanStreamProxyServer(
     private fun handleClient(socket: Socket) {
         socket.soTimeout = 10_000
         socket.tcpNoDelay = true
+        runCatching { socket.sendBufferSize = 512 * 1024 }
         val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.ISO_8859_1))
         val requestLine = reader.readLine() ?: return
         val parts = requestLine.trim().split(' ')
@@ -784,8 +792,9 @@ internal class LanStreamProxyServer(
     }
 
     /**
-     * Pre-fetches and decrypts the newest live HLS segment BEFORE sending SetAVTransportURI to
-     * Samsung/LG TVs so byte 0 streams in < 5 ms (prevents Samsung "Problema de conexão de rede").
+     * Pre-fetches and decrypts the last 2 live HLS segments (~8–10s cushion) BEFORE sending
+     * SetAVTransportURI to Samsung/LG TVs so byte 0 streams in < 5 ms AND AVPlay fills its
+     * hardware decode buffer immediately (eliminates both connection errors and initial stutters).
      */
     private fun prefetchInitialLiveSegment(stream: ActiveStream) {
         runCatching {
@@ -802,32 +811,41 @@ internal class LanStreamProxyServer(
             if (parsed.segments.isEmpty()) return
             stream.initialSegmentDurationSec = parsed.targetDurationSec
             val queryDiff = parsed.segments.map { it.uri.substringBefore('?') }.distinct().size < parsed.segments.size
-            // Pre-fetch the 2nd-to-last (or last) segment so playback starts immediately AND next segment is already ready!
-            val startSeg = if (parsed.segments.size >= 2) parsed.segments[parsed.segments.size - 2] else parsed.segments.last()
-            val rawBytes = fetchBytes(startSeg.uri) ?: return
-            val decrypted = if (startSeg.keyMethod == "AES-128" && !startSeg.keyUri.isNullOrBlank()) {
-                val keyBytes = fetchBytes(startSeg.keyUri) ?: return
-                if (keyBytes.size != 16) return
-                HlsRemuxCodec.decryptAes128Cbc(rawBytes, keyBytes, HlsRemuxCodec.buildIvBytes(startSeg.ivHex, startSeg.sequence))
-            } else rawBytes
-            val aligned = HlsRemuxCodec.alignMpegTsPackets(decrypted)
-            if (aligned.isNotEmpty()) {
-                val dedupKey = HlsRemuxCodec.segmentDedupKey(startSeg.uri, queryDiff)
-                stream.initialLiveSegments = listOf(dedupKey to aligned)
+            val keyCache = HashMap<String, ByteArray>()
+            val seedSegments = parsed.segments.takeLast(2)
+            val preloaded = ArrayList<Pair<String, ByteArray>>(seedSegments.size)
+            for (seg in seedSegments) {
+                val rawBytes = fetchBytes(seg.uri) ?: continue
+                val decrypted = if (seg.keyMethod == "AES-128" && !seg.keyUri.isNullOrBlank()) {
+                    val keyBytes = keyCache[seg.keyUri] ?: fetchBytes(seg.keyUri)?.also { fetched ->
+                        if (fetched.size == 16) keyCache[seg.keyUri] = fetched
+                    }
+                    if (keyBytes == null || keyBytes.size != 16) continue
+                    HlsRemuxCodec.decryptAes128Cbc(rawBytes, keyBytes, HlsRemuxCodec.buildIvBytes(seg.ivHex, seg.sequence))
+                } else rawBytes
+                val aligned = HlsRemuxCodec.alignMpegTsPackets(decrypted)
+                if (aligned.isNotEmpty()) {
+                    preloaded.add(HlsRemuxCodec.segmentDedupKey(seg.uri, queryDiff) to aligned)
+                }
+            }
+            if (preloaded.isNotEmpty()) {
+                stream.initialLiveSegments = preloaded
             }
         }
     }
 
     /**
-     * Async producer-consumer HLS -> 188-byte aligned MPEG-TS live streamer:
-     * - Emits the pre-fetched initial segment IMMEDIATELY (< 5 ms!) so Samsung TV never times out on connect.
-     * - Paces subsequent segments smoothly (~65% of segment duration) so TCP never goes dead silent for
-     *   8–10 seconds between live segments — eliminating both 10s freezes AND fake Null Packet glitches!
+     * Sleep-free async producer-consumer HLS -> 188-byte aligned MPEG-TS live streamer:
+     * - Emits the pre-fetched 2-segment cushion IMMEDIATELY (< 5 ms!) so Samsung AVPlay locks fast.
+     * - Never uses `Thread.sleep()` chunk pacing on the writer thread (Android background timer-slack
+     *   stretches `Thread.sleep()` and starves Samsung's buffer); instead relies on the 512 KB kernel
+     *   TCP send buffer + TV TCP backpressure for jitter-free real-time delivery even when minimized!
+     * - Emits a minimal 4-packet Null-TS heartbeat ONLY if upstream stalls > 2.5s.
      */
     private fun streamHlsAsMpegTs(stream: ActiveStream, out: OutputStream) {
         data class QueuedSegment(val bytes: ByteArray, val durationSec: Int, val immediate: Boolean)
 
-        val queue = LinkedBlockingQueue<QueuedSegment>(8)
+        val queue = LinkedBlockingQueue<QueuedSegment>(12)
         val producerAlive = AtomicBoolean(true)
         val clientAlive = AtomicBoolean(true)
 
@@ -892,9 +910,9 @@ internal class LanStreamProxyServer(
                         firstFetch = false
                         parsed.segments.takeLast(2)
                     } else if (!firstFetch && seenKeys.size == preloaded.size && preloaded.isNotEmpty() && parsed.segments.size > 2) {
-                        // Start right after preloaded segment (no stale backlog dump)
-                        val preloadIdx = parsed.segments.indexOfFirst { seg ->
-                            val qd = parsed.segments.map { it.uri.substringBefore('?') }.distinct().size < parsed.segments.size
+                        // Start right after the last preloaded segment (no stale backlog dump)
+                        val qd = parsed.segments.map { it.uri.substringBefore('?') }.distinct().size < parsed.segments.size
+                        val preloadIdx = parsed.segments.indexOfLast { seg ->
                             HlsRemuxCodec.segmentDedupKey(seg.uri, qd) in seenKeys
                         }
                         if (preloadIdx >= 0) parsed.segments.drop(preloadIdx + 1) else parsed.segments.takeLast(2)
@@ -960,27 +978,28 @@ internal class LanStreamProxyServer(
                 // Exit producer cleanly
             } finally {
                 producerAlive.set(false)
+                // Wake consumer immediately on clean producer exit (no 1.5s poll tail wait)
+                queue.offer(QueuedSegment(ByteArray(0), 0, immediate = false))
             }
         }
 
         try {
-            var writtenSegments = 0
+            var lastWriteMs = System.currentTimeMillis()
             while (running.get() && activeStream.get()?.token == stream.token) {
                 val item = queue.poll(1_500L, TimeUnit.MILLISECONDS)
                 if (item != null) {
-                    if (item.immediate || writtenSegments == 0 || queue.size >= 2) {
-                        // First segment (or when behind) streams immediately for zero-latency picture!
-                        writeChunkedToTv(out, item.bytes)
-                    } else {
-                        // Smoothly pace segment over ~65% of its real duration so TV always receives steady
-                        // MPEG-TS packets with zero 10-second silence gaps!
-                        writePacedToTv(out, item.bytes, (item.durationSec * 650L).coerceIn(1_200L, 6_500L), stream.token)
-                    }
+                    if (item.bytes.isEmpty()) break
+                    writeChunkedToTv(out, item.bytes)
+                    lastWriteMs = System.currentTimeMillis()
                     bytesSentCounter.addAndGet(item.bytes.size.toLong())
                     chunksSentCounter.incrementAndGet()
-                    writtenSegments++
                 } else if (!producerAlive.get() && queue.isEmpty()) {
                     break
+                } else if (System.currentTimeMillis() - lastWriteMs >= 2_500L) {
+                    // Only send minimal 4-packet Null-TS keep-alive if upstream stalled > 2.5s
+                    out.write(nullTsBurst)
+                    out.flush()
+                    lastWriteMs = System.currentTimeMillis()
                 }
             }
         } catch (_: IOException) {
@@ -991,26 +1010,9 @@ internal class LanStreamProxyServer(
         }
     }
 
-    private fun writePacedToTv(out: OutputStream, data: ByteArray, targetDurationMs: Long, token: String) {
-        // Align chunk step strictly on 188-byte TS packet boundary (~32 KB = 174 packets)
-        val step = 188 * 174
-        val chunks = ((data.size + step - 1) / step).coerceAtLeast(1)
-        val delayPerChunk = (targetDurationMs / chunks).coerceIn(15L, 250L)
-        var offset = 0
-        while (offset < data.size && running.get() && activeStream.get()?.token == token) {
-            val len = minOf(step, data.size - offset)
-            out.write(data, offset, len)
-            out.flush()
-            offset += len
-            if (offset < data.size) {
-                runCatching { Thread.sleep(delayPerChunk) }
-            }
-        }
-    }
-
     private fun writeChunkedToTv(out: OutputStream, data: ByteArray) {
         var offset = 0
-        val step = 32 * 1024
+        val step = 64 * 1024
         while (offset < data.size) {
             val len = minOf(step, data.size - offset)
             out.write(data, offset, len)
@@ -1077,72 +1079,100 @@ internal class LanStreamProxyServer(
             out.write(headerBlock.toByteArray(Charsets.ISO_8859_1))
             out.flush()
 
-            // Instant-byte streaming in 2 MB Range slices with readTimeout = 0 (streamingClient):
-            // - First byte reaches Samsung / LG / Chromecast in < 80ms (instant MP4 moov probe & seek!).
-            // - Zero 15s readTimeout when TV pauses or fills its decode buffer.
-            // - Automatically stitches across Cloudflare Worker ~90s drops & refreshes expired M81 redirects!
-            var cursor = range.start
-            val buffer = ByteArray(64 * 1024)
-            var sliceRetries = 0
+            // True async double-buffered VOD streamer (6 MB RAM read-ahead + 4 MB Range slices):
+            // - First 64 KB chunk reaches Samsung/LG/Chromecast immediately (< 80 ms) for instant MP4 moov probe & seek.
+            // - Background producer prefetches the NEXT 4 MB Range slice BEFORE the TV finishes the current one,
+            //   eliminating all stop-and-wait HTTP gaps between slices even when the phone is minimized!
+            // - Automatically stitches across Cloudflare Worker ~90s drops & refreshes expired M81 redirects.
+            val readAheadQueue = LinkedBlockingQueue<ByteArray>(VOD_READAHEAD_CHUNKS)
+            val tvAlive = AtomicBoolean(true)
+            val eofSentinel = ByteArray(0)
 
-            while (cursor <= range.end && running.get() && activeStream.get()?.token == stream.token) {
-                val sliceEnd = minOf(cursor + VOD_SLICE_BYTES - 1L, range.end)
-                val targetUrl = stream.resolvedUpstreamUrl
-                var sliceProgress = 0L
-                var tvSocketClosed = false
-
+            val producer = executor.submit {
+                var cursor = range.start
+                val readBuf = ByteArray(VOD_CHUNK_BYTES)
+                var sliceRetries = 0
                 try {
-                    val req = Request.Builder()
-                        .url(targetUrl)
-                        .header("User-Agent", "OTT-play-Android/1.0")
-                        .header("Range", "bytes=$cursor-$sliceEnd")
-                        .get()
-                        .build()
-                    streamingClient.newCall(req).execute().use { resp ->
-                        if (resp.code == 206 || (resp.code == 200 && cursor == 0L)) {
-                            val input = BufferedInputStream(resp.body.byteStream(), 64 * 1024)
-                            val expectedMax = (sliceEnd - cursor) + 1L
-                            while (sliceProgress < expectedMax && running.get() && activeStream.get()?.token == stream.token) {
-                                val toRead = minOf(buffer.size.toLong(), expectedMax - sliceProgress).toInt()
-                                val n = input.read(buffer, 0, toRead)
-                                if (n <= 0) break
-                                try {
-                                    out.write(buffer, 0, n)
-                                } catch (_: IOException) {
-                                    tvSocketClosed = true
-                                    break
+                    while (cursor <= range.end && tvAlive.get() && running.get() && activeStream.get()?.token == stream.token) {
+                        val sliceEnd = minOf(cursor + VOD_SLICE_BYTES - 1L, range.end)
+                        val targetUrl = stream.resolvedUpstreamUrl
+                        var sliceProgress = 0L
+
+                        try {
+                            val req = Request.Builder()
+                                .url(targetUrl)
+                                .header("User-Agent", "OTT-play-Android/1.0")
+                                .header("Range", "bytes=$cursor-$sliceEnd")
+                                .get()
+                                .build()
+                            streamingClient.newCall(req).execute().use { resp ->
+                                if (resp.code == 206 || (resp.code == 200 && cursor == 0L)) {
+                                    val input = BufferedInputStream(resp.body.byteStream(), VOD_CHUNK_BYTES)
+                                    val expectedMax = (sliceEnd - cursor) + 1L
+                                    while (sliceProgress < expectedMax && tvAlive.get() && running.get() && activeStream.get()?.token == stream.token) {
+                                        val toRead = minOf(readBuf.size.toLong(), expectedMax - sliceProgress).toInt()
+                                        val n = input.read(readBuf, 0, toRead)
+                                        if (n <= 0) break
+                                        val copy = readBuf.copyOf(n)
+                                        var offered = false
+                                        while (tvAlive.get() && running.get() && activeStream.get()?.token == stream.token) {
+                                            if (readAheadQueue.offer(copy, 250L, TimeUnit.MILLISECONDS)) {
+                                                offered = true
+                                                break
+                                            }
+                                        }
+                                        if (!offered) break
+                                        cursor += n
+                                        sliceProgress += n
+                                    }
+                                    if (sliceProgress > 0L) {
+                                        chunksSentCounter.incrementAndGet()
+                                        sliceRetries = 0
+                                    }
                                 }
-                                cursor += n
-                                sliceProgress += n
-                                bytesSentCounter.addAndGet(n.toLong())
                             }
-                            if (!tvSocketClosed) {
-                                runCatching { out.flush() }.onFailure { tvSocketClosed = true }
+                        } catch (_: Exception) {
+                            // Upstream hiccup / Cloudflare drop -> resume cleanly from exact `cursor`
+                        }
+
+                        if (!tvAlive.get()) break
+                        if (sliceProgress == 0L) {
+                            sliceRetries++
+                            reconnectCounter.incrementAndGet()
+                            if (sliceRetries > 6) break
+                            val refreshed = probeUpstream(stream.originalUpstreamUrl, isLive = false)
+                            if (refreshed.finalUrl.isNotBlank()) {
+                                stream.resolvedUpstreamUrl = refreshed.finalUrl
                             }
-                            if (sliceProgress > 0L) {
-                                chunksSentCounter.incrementAndGet()
-                                sliceRetries = 0
-                            }
-                        } else {
-                            sliceProgress = 0L
+                            runCatching { Thread.sleep(250L * sliceRetries) }
                         }
                     }
-                } catch (_: Exception) {
-                    // Upstream hiccup / Cloudflare drop -> resume from exact `cursor` below
-                }
-
-                if (tvSocketClosed) return
-
-                if (sliceProgress == 0L) {
-                    sliceRetries++
-                    reconnectCounter.incrementAndGet()
-                    if (sliceRetries > 5) return
-                    val refreshed = probeUpstream(stream.originalUpstreamUrl, isLive = false)
-                    if (refreshed.finalUrl.isNotBlank()) {
-                        stream.resolvedUpstreamUrl = refreshed.finalUrl
+                } finally {
+                    // Signal clean EOF to writer thread
+                    while (tvAlive.get() && !readAheadQueue.offer(eofSentinel, 200L, TimeUnit.MILLISECONDS)) {
+                        if (!running.get()) break
                     }
-                    runCatching { Thread.sleep(300L * sliceRetries) }
                 }
+            }
+
+            try {
+                while (running.get() && activeStream.get()?.token == stream.token) {
+                    val chunk = readAheadQueue.poll(1_000L, TimeUnit.MILLISECONDS) ?: continue
+                    if (chunk.isEmpty()) break
+                    out.write(chunk)
+                    bytesSentCounter.addAndGet(chunk.size.toLong())
+                    // Flush whenever queue is temporarily empty so TV gets instant first bytes & smooth tail
+                    if (readAheadQueue.isEmpty()) {
+                        out.flush()
+                    }
+                }
+                runCatching { out.flush() }
+            } catch (_: IOException) {
+                // Normal when Samsung/LG closes socket on seek/stop
+            } finally {
+                tvAlive.set(false)
+                producer.cancel(true)
+                readAheadQueue.clear()
             }
             return
         }
@@ -1313,6 +1343,8 @@ internal class LanStreamProxyServer(
     }
 
     companion object {
-        private const val VOD_SLICE_BYTES = 2L * 1024L * 1024L
+        private const val VOD_SLICE_BYTES = 4L * 1024L * 1024L
+        private const val VOD_CHUNK_BYTES = 64 * 1024
+        private const val VOD_READAHEAD_CHUNKS = 96 // 96 * 64 KB = 6 MB async read-ahead cushion
     }
 }

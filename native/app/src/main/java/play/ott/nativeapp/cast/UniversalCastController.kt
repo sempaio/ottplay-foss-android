@@ -72,6 +72,7 @@ internal class UniversalCastController {
     @Volatile private var castStartedAtMs: Long = 0L
     @Volatile private var consecutiveStoppedTicks: Int = 0
     @Volatile private var reconnectingInFlight: Boolean = false
+    @Volatile private var lastWatchdogBytesSent: Long = -1L
 
     private val lanHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -166,6 +167,7 @@ internal class UniversalCastController {
                 val vol = outcome.initialVolume ?: state.value.tvVolume
                 castStartedAtMs = System.currentTimeMillis()
                 consecutiveStoppedTicks = 0
+                lastWatchdogBytesSent = -1L
                 mutableState.update {
                     it.copy(
                         connectedDevice = device,
@@ -402,9 +404,29 @@ internal class UniversalCastController {
             Thread.sleep(250L)
         }
 
-        // Always use the local Wi-Fi proxy for DLNA:
-        // - Live: continuous 188-byte aligned MPEG-TS with Null Packet keep-alive + AES-128 decryption.
-        // - VOD: 4 MB Range-stitched stream defeating Cloudflare Worker ~90s single-connection drops!
+        // 1. Try direct HTTP CDN mode first for non-Cloudflare-Worker VOD:
+        //    Samsung/LG TVs pull directly from the CDN with ZERO phone relay — works even with phone turned off!
+        val directVod = castTarget.directHttpVodUrl
+        if (!isLive && !directVod.isNullOrBlank()) {
+            val directAttempt = tryDlnaSetUriAndPlay(
+                device = device,
+                mediaUrl = directVod,
+                title = title,
+                isLive = false,
+                mimeType = castTarget.mimeType,
+                dlnaFeatures = castTarget.dlnaFeatures,
+                contentLength = castTarget.contentLength,
+                startPositionMs = startPositionMs,
+            )
+            if (directAttempt.first) {
+                lanProxy.clearStream()
+                val vol = queryDlnaVolume(device)
+                return CastAttemptResult(true, directVod, initialVolume = vol, isDirectMode = true)
+            }
+        }
+
+        // 2. Resilient local Wi-Fi proxy for Live TV (2-segment pre-fetch, sleep-free MPEG-TS + AES-128)
+        //    and HTTPS / Cloudflare Worker VOD (6 MB async read-ahead + 4 MB Range stitching):
         val proxyAttempt = tryDlnaSetUriAndPlay(
             device = device,
             mediaUrl = castTarget.localUrl,
@@ -425,7 +447,7 @@ internal class UniversalCastController {
             )
         }
         val vol = queryDlnaVolume(device)
-        return CastAttemptResult(true, castTarget.localUrl, initialVolume = vol)
+        return CastAttemptResult(true, castTarget.localUrl, initialVolume = vol, isDirectMode = false)
     }
 
     private fun tryDlnaSetUriAndPlay(
@@ -660,6 +682,22 @@ internal class UniversalCastController {
         val before = state.value
         val device = before.connectedDevice ?: return
         if (reconnectingInFlight || before.busyAction != null) return
+
+        // Silent fast-path: if Samsung/LG is actively pulling bytes from our local proxy right now,
+        // skip SOAP XML polling completely so we never add CPU/Wi-Fi contention on the Smart TV!
+        if (device.protocol == CastProtocol.DLNA && !before.castingDirectMode) {
+            val liveStats = lanProxy.currentStats()
+            if (liveStats.activeClients > 0 && liveStats.bytesSent > lastWatchdogBytesSent) {
+                lastWatchdogBytesSent = liveStats.bytesSent
+                consecutiveStoppedTicks = 0
+                mutableState.update { prev ->
+                    prev.copy(proxyStats = liveStats, tvTransportState = "PLAYING")
+                }
+                return
+            }
+            lastWatchdogBytesSent = liveStats.bytesSent
+        }
+
         pollPosition()
         if (device.protocol != CastProtocol.DLNA) return
 

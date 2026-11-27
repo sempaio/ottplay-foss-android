@@ -183,7 +183,9 @@ internal fun EveryCineVisualApp(
             url = resolveCurrentStreamUrl(entry, controller)
         }
         if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
-            controller?.pause()
+            // Stop local ExoPlayer completely while casting so it frees the upstream IPTV connection
+            // slot (max_connections=1) and stops saturating the phone's Wi-Fi radio with 60s buffering!
+            controller?.stop()
             castController.castMedia(
                 context = rootContext,
                 device = device,
@@ -276,7 +278,7 @@ internal fun EveryCineVisualApp(
                             lastCastEntryId = null
                             castScope.launch {
                                 castController.disconnect(rootContext)
-                                controller?.play()
+                                onAction(AppAction.Play(playing))
                             }
                         },
                         onBack = { fullscreen = false },
@@ -444,7 +446,8 @@ internal fun EveryCineVisualApp(
                     val streamUrl = resolveCurrentStreamUrl(currentPlaying, controller)
                     val posMs = if (currentPlaying.kind == MediaKind.LIVE) 0L else (controller?.currentPosition ?: 0L)
                     lastCastEntryId = currentPlaying.id
-                    controller?.pause()
+                    // Stop local ExoPlayer completely so it releases the upstream IPTV connection & Wi-Fi radio
+                    controller?.stop()
                     castScope.launch {
                         val ok = castController.castMedia(
                             context = rootContext,
@@ -457,6 +460,9 @@ internal fun EveryCineVisualApp(
                         if (ok) {
                             showCastDialog = false
                             fullscreen = true
+                        } else {
+                            // Restore local playback cleanly if TV rejected the connection
+                            onAction(AppAction.Play(currentPlaying))
                         }
                     }
                 }
@@ -465,7 +471,7 @@ internal fun EveryCineVisualApp(
                 lastCastEntryId = null
                 castScope.launch {
                     castController.disconnect(rootContext)
-                    controller?.play()
+                    if (currentPlaying != null) onAction(AppAction.Play(currentPlaying))
                 }
             },
             onExternalCastApp = {

@@ -379,4 +379,76 @@ class LanStreamProxyTest {
             pool.shutdownNow()
         }
     }
+
+    @Test fun liveProxyPrefetchesTwoSegmentsAndStreamsImmediatelyWithoutSleepStalls() {
+        val segA = ByteArray(188 * 4) { idx -> if (idx % 188 == 0) 0x47.toByte() else 0x11.toByte() }
+        val segB = ByteArray(188 * 4) { idx -> if (idx % 188 == 0) 0x47.toByte() else 0x22.toByte() }
+        val running = AtomicBoolean(true)
+        val upstream = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+        val pool = Executors.newCachedThreadPool()
+        val upstreamPort = upstream.localPort
+
+        pool.execute {
+            while (running.get() && !upstream.isClosed) {
+                val sock = runCatching { upstream.accept() }.getOrNull() ?: break
+                pool.execute {
+                    sock.use { s ->
+                        val reqLine = s.getInputStream().bufferedReader().readLine().orEmpty()
+                        val path = reqLine.split(' ').getOrNull(1).orEmpty()
+                        val out = s.getOutputStream()
+                        when (path) {
+                            "/live-hls/u/p/200.m3u8" -> {
+                                val body = """
+                                    #EXTM3U
+                                    #EXT-X-VERSION:3
+                                    #EXT-X-TARGETDURATION:6
+                                    #EXT-X-MEDIA-SEQUENCE:10
+                                    #EXTINF:6,
+                                    http://127.0.0.1:$upstreamPort/seg10.ts
+                                    #EXTINF:6,
+                                    http://127.0.0.1:$upstreamPort/seg11.ts
+                                    #EXT-X-ENDLIST
+                                """.trimIndent().toByteArray()
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(body)
+                            }
+                            "/seg10.ts" -> {
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nContent-Length: ${segA.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(segA)
+                            }
+                            "/seg11.ts" -> {
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nContent-Length: ${segB.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(segB)
+                            }
+                            else -> out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                        }
+                        out.flush()
+                    }
+                }
+            }
+        }
+
+        val proxy = LanStreamProxyServer(allowLoopbackForTest = true)
+        try {
+            val target = proxy.prepareStream(
+                upstreamUrl = "http://127.0.0.1:$upstreamPort/live-hls/u/p/200.m3u8",
+                isLive = true,
+                localLanIp = "127.0.0.1",
+            )
+            val t0 = System.currentTimeMillis()
+            val received = OkHttpClient().newCall(Request.Builder().url(target.localUrl).get().build()).execute().use { resp ->
+                assertEquals(200, resp.code)
+                resp.body.bytes()
+            }
+            val elapsed = System.currentTimeMillis() - t0
+            assertArrayEquals(segA + segB, received)
+            // Must finish well under 1.5s because sleep-based pacing was removed!
+            assertTrue("Expected sleep-free streaming (<1500ms), took ${elapsed}ms", elapsed < 1500L)
+        } finally {
+            running.set(false)
+            proxy.shutdown()
+            runCatching { upstream.close() }
+            pool.shutdownNow()
+        }
+    }
 }

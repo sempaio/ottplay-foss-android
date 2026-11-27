@@ -1,6 +1,12 @@
 package play.ott.nativeapp.cast
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -296,16 +302,35 @@ internal fun CastingActiveOverlay(
     modifier: Modifier = Modifier,
 ) {
     val device = castState.connectedDevice ?: return
+    val overlayContext = LocalContext.current
     var scrubbing by remember { mutableStateOf(false) }
     var scrubMs by remember { mutableFloatStateOf(castState.tvPositionMs.toFloat()) }
 
+    // On Android 13+, request POST_NOTIFICATIONS once so the active MediaSession foreground
+    // control stays pinned on the lockscreen and prevents OEM background throttling.
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    LaunchedEffect(device.avTransportControlUrl) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                overlayContext,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                runCatching { notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+            }
+        }
+    }
+
     LaunchedEffect(device.avTransportControlUrl, castState.isPlayingOnTv) {
-        // Only poll from UI if CastRelayService background poller is not already running
+        // Only poll from UI if CastRelayService background poller is not already running,
+        // OR gently on VOD (every 5s) so the seek bar stays up to date while the user views this screen.
         while (true) {
-            if (!CastRelayService.isServiceActive) {
+            if (!CastRelayService.isServiceActive || !castState.castingIsLive) {
                 onPollPosition()
             }
-            delay(4_000L)
+            delay(5_000L)
         }
     }
 
