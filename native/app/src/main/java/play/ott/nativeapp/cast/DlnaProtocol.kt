@@ -164,33 +164,47 @@ internal object DlnaProtocol {
         return "$scheme://$host$portSuffix/live-hls/$user/$pass/$streamId.m3u8$querySuffix"
     }
 
-    fun inferProtocolInfo(mediaUrl: String, isLive: Boolean): String {
+    fun inferProtocolInfo(
+        mediaUrl: String,
+        isLive: Boolean,
+        mimeOverride: String? = null,
+        dlnaFeatures: String? = null,
+    ): String {
         val path = runCatching { URI(mediaUrl).rawPath }.getOrNull().orEmpty().lowercase(Locale.ROOT)
-        val mime = when {
+        val mime = mimeOverride?.takeIf { it.isNotBlank() } ?: when {
             path.endsWith(".m3u8") -> "application/vnd.apple.mpegurl"
             path.endsWith(".ts") -> "video/mp2t"
             path.endsWith(".mkv") -> "video/x-matroska"
             path.endsWith(".webm") -> "video/webm"
             path.endsWith(".mp4") -> "video/mp4"
-            isLive -> "application/vnd.apple.mpegurl"
+            isLive -> "video/mp2t"
             else -> "video/mp4"
         }
-        return "http-get:*:$mime:*"
+        val features = dlnaFeatures?.takeIf { it.isNotBlank() } ?: "*"
+        return "http-get:*:$mime:$features"
     }
 
-    fun buildDidlLiteMetadata(title: String, mediaUrl: String, isLive: Boolean): String {
+    fun buildDidlLiteMetadata(
+        title: String,
+        mediaUrl: String,
+        isLive: Boolean,
+        mimeOverride: String? = null,
+        dlnaFeatures: String? = null,
+        contentLength: Long? = null,
+    ): String {
         val safeTitle = escapeXml(title.ifBlank { "STARLINK TV" })
         val safeUrl = escapeXml(mediaUrl)
-        val protocolInfo = escapeXml(inferProtocolInfo(mediaUrl, isLive))
-        val upnpClass = if (isLive) "object.item.videoItem.videoBroadcast" else "object.item.videoItem"
+        val protocolInfo = escapeXml(inferProtocolInfo(mediaUrl, isLive, mimeOverride, dlnaFeatures))
+        val sizeAttr = if (!isLive && contentLength != null && contentLength > 0L) " size=\"$contentLength\"" else ""
+        // Always use object.item.videoItem: Samsung Tizen / LG webOS DMRs reject videoBroadcast with UPnP 714.
         return "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" " +
             "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" " +
             "xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" " +
             "xmlns:dlna=\"urn:schemas-dlna-org:metadata-1-0/\">" +
             "<item id=\"0\" parentID=\"-1\" restricted=\"1\">" +
             "<dc:title>$safeTitle</dc:title>" +
-            "<upnp:class>$upnpClass</upnp:class>" +
-            "<res protocolInfo=\"$protocolInfo\">$safeUrl</res>" +
+            "<upnp:class>object.item.videoItem</upnp:class>" +
+            "<res protocolInfo=\"$protocolInfo\"$sizeAttr>$safeUrl</res>" +
             "</item></DIDL-Lite>"
     }
 
@@ -207,12 +221,28 @@ internal object DlnaProtocol {
         title: String,
         isLive: Boolean,
         includeMetadata: Boolean = true,
+        mimeOverride: String? = null,
+        dlnaFeatures: String? = null,
+        contentLength: Long? = null,
     ): String {
-        val metadata = if (includeMetadata) escapeXml(buildDidlLiteMetadata(title, mediaUrl, isLive)) else ""
+        val metadata = if (includeMetadata) {
+            escapeXml(buildDidlLiteMetadata(title, mediaUrl, isLive, mimeOverride, dlnaFeatures, contentLength))
+        } else ""
         val body = "<InstanceID>0</InstanceID>" +
             "<CurrentURI>${escapeXml(mediaUrl)}</CurrentURI>" +
             "<CurrentURIMetaData>$metadata</CurrentURIMetaData>"
         return buildSoapEnvelope(AV_TRANSPORT_SERVICE, "SetAVTransportURI", body)
+    }
+
+    fun extractSoapFaultSummary(xml: String): String? {
+        val code = extractTagText(xml, "errorCode")?.takeIf { it.isNotBlank() }
+        val desc = extractTagText(xml, "errorDescription")?.takeIf { it.isNotBlank() }
+        return when {
+            code != null && desc != null -> "UPnP $code ($desc)"
+            code != null -> "UPnP $code"
+            desc != null -> desc
+            else -> null
+        }
     }
 
     fun buildPlaySoap(): String = buildSoapEnvelope(
@@ -302,10 +332,51 @@ internal object DlnaProtocol {
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
 
+    /**
+     * Finds the phone's Wi-Fi LAN IPv4 address that routes directly to `targetHost` (the Smart TV),
+     * avoiding 5G/cellular or VPN interfaces on multi-homed Android devices.
+     */
+    internal fun localLanIpv4ForTarget(targetHost: String): String? {
+        // 1. Ask Android's routing table directly via an unconnected-UDP route probe (no packets sent)
+        val routed = runCatching {
+            java.net.DatagramSocket().use { probe ->
+                probe.connect(InetAddress.getByName(targetHost), SSDP_PORT)
+                probe.localAddress?.hostAddress
+            }
+        }.getOrNull()
+        if (routed != null && isPrivateLanHost(routed)) return routed
+
+        // 2. Match interface on the same /24 subnet as targetHost, preferring wlan*
+        val targetPrefix = targetHost.substringBeforeLast('.', "")
+        val interfaces = runCatching {
+            java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+                .filter { it.isUp && !it.isLoopback }
+        }.getOrDefault(emptyList())
+
+        val candidates = interfaces.flatMap { iface ->
+            val name = iface.name.orEmpty().lowercase(Locale.ROOT)
+            val isWifi = name.startsWith("wlan") || name.startsWith("wifi") || name.startsWith("eth")
+            iface.inetAddresses.toList()
+                .filterIsInstance<Inet4Address>()
+                .mapNotNull { addr -> addr.hostAddress?.takeIf(::isPrivateLanHost)?.let { it to isWifi } }
+        }
+        return candidates.firstOrNull { (ip, _) -> targetPrefix.isNotEmpty() && ip.startsWith("$targetPrefix.") }?.first
+            ?: candidates.firstOrNull { (_, isWifi) -> isWifi }?.first
+            ?: candidates.firstOrNull()?.first
+    }
+
     internal fun localLanIpv4Address(): InetAddress? = runCatching {
-        java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
             .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList() }
+        val wifiFirst = interfaces.sortedByDescending { iface ->
+            val n = iface.name.orEmpty().lowercase(Locale.ROOT)
+            when {
+                n.startsWith("wlan") || n.startsWith("wifi") -> 2
+                n.startsWith("eth") -> 1
+                else -> 0
+            }
+        }
+        wifiFirst.flatMap { it.inetAddresses.toList() }
             .firstOrNull { it is Inet4Address && isPrivateLanHost(it.hostAddress.orEmpty()) }
     }.getOrNull()
 }

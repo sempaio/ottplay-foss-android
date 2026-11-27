@@ -54,6 +54,7 @@ internal data class CastSessionState(
 internal class UniversalCastController {
     private val mutableState = MutableStateFlow(CastSessionState())
     val state: StateFlow<CastSessionState> = mutableState.asStateFlow()
+    private val lanProxy = LanStreamProxyServer()
 
     private val lanHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -123,10 +124,22 @@ internal class UniversalCastController {
             )
         }
         return try {
-            val resolvedUrl = withContext(Dispatchers.IO) {
-                resolvePlayableCastUrl(rawUrl, isLive)
-            }
             val result = withContext(Dispatchers.IO) {
+                val rewrittenUrl = DlnaProtocol.rewriteMediaUrlForCast(rawUrl, isLive)
+                val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
+                val castTarget = if (phoneWifiIp != null) {
+                    lanProxy.prepareStream(rewrittenUrl, isLive, phoneWifiIp)
+                } else {
+                    val directUrl = resolvePlayableCastUrl(rawUrl, isLive)
+                    ProxiedCastTarget(
+                        localUrl = directUrl,
+                        mimeType = if (isLive) "video/mp2t" else "video/mp4",
+                        dlnaFeatures = "*",
+                        contentLength = null,
+                        isLive = isLive,
+                    )
+                }
+
                 // Best-effort Stop clears stale state on Samsung / LG renderers
                 runCatching {
                     postSoap(
@@ -137,25 +150,58 @@ internal class UniversalCastController {
                     )
                 }
 
-                // Try full DIDL-Lite metadata first; fall back to minimal empty metadata for strict/older TVs
-                val setUriPrimary = postSoap(
-                    device.avTransportControlUrl,
-                    DlnaProtocol.AV_TRANSPORT_SERVICE,
-                    "SetAVTransportURI",
-                    DlnaProtocol.buildSetAvTransportUriSoap(resolvedUrl, title, isLive, includeMetadata = true),
+                // Try Samsung/LG-standard DLNA profile first, then generic MIME, then empty metadata
+                val attempts = listOf(
+                    DlnaProtocol.buildSetAvTransportUriSoap(
+                        mediaUrl = castTarget.localUrl,
+                        title = title,
+                        isLive = isLive,
+                        includeMetadata = true,
+                        mimeOverride = castTarget.mimeType,
+                        dlnaFeatures = castTarget.dlnaFeatures,
+                        contentLength = castTarget.contentLength,
+                    ),
+                    DlnaProtocol.buildSetAvTransportUriSoap(
+                        mediaUrl = castTarget.localUrl,
+                        title = title,
+                        isLive = isLive,
+                        includeMetadata = true,
+                        mimeOverride = if (isLive) "video/mpeg" else castTarget.mimeType,
+                        dlnaFeatures = "*",
+                        contentLength = castTarget.contentLength,
+                    ),
+                    DlnaProtocol.buildSetAvTransportUriSoap(
+                        mediaUrl = castTarget.localUrl,
+                        title = title,
+                        isLive = isLive,
+                        includeMetadata = false,
+                    ),
                 )
-                val setUriOk = if (setUriPrimary.isSuccessful) {
-                    true
-                } else {
-                    postSoap(
+
+                var setUriOk = false
+                var lastFault: String? = null
+                for (soapBody in attempts) {
+                    val resp = postSoap(
                         device.avTransportControlUrl,
                         DlnaProtocol.AV_TRANSPORT_SERVICE,
                         "SetAVTransportURI",
-                        DlnaProtocol.buildSetAvTransportUriSoap(resolvedUrl, title, isLive, includeMetadata = false),
-                    ).isSuccessful
+                        soapBody,
+                    )
+                    if (resp.isSuccessful) {
+                        setUriOk = true
+                        break
+                    }
+                    lastFault = DlnaProtocol.extractSoapFaultSummary(resp.body) ?: "HTTP ${resp.code}"
                 }
+
                 if (!setUriOk) {
-                    return@withContext false to "A TV recusou o formato deste vídeo. Tente Espelhar Tela ou Web Video Caster."
+                    lanProxy.clearStream()
+                    val detail = lastFault?.let { " ($it)" }.orEmpty()
+                    return@withContext Triple(
+                        false,
+                        "A TV recusou o vídeo$detail. Tente Espelhar Tela ou Web Video Caster.",
+                        castTarget.localUrl,
+                    )
                 }
 
                 val playRes = postSoap(
@@ -165,7 +211,13 @@ internal class UniversalCastController {
                     DlnaProtocol.buildPlaySoap(),
                 )
                 if (!playRes.isSuccessful) {
-                    return@withContext false to "A TV não iniciou a reprodução (HTTP ${playRes.code})."
+                    lanProxy.clearStream()
+                    val detail = DlnaProtocol.extractSoapFaultSummary(playRes.body) ?: "HTTP ${playRes.code}"
+                    return@withContext Triple(
+                        false,
+                        "A TV não iniciou a reprodução ($detail).",
+                        castTarget.localUrl,
+                    )
                 }
 
                 if (!isLive && startPositionMs > 5_000L) {
@@ -192,7 +244,7 @@ internal class UniversalCastController {
                     }.getOrNull()
                 }
 
-                true to (initialVolume?.toString() ?: "")
+                Triple(true, initialVolume?.toString().orEmpty(), castTarget.localUrl)
             }
 
             if (result.first) {
@@ -201,7 +253,7 @@ internal class UniversalCastController {
                     it.copy(
                         connectedDevice = device,
                         castingTitle = title,
-                        castingUrl = resolvedUrl,
+                        castingUrl = result.third,
                         castingIsLive = isLive,
                         isPlayingOnTv = true,
                         tvPositionMs = startPositionMs.coerceAtLeast(0L),
@@ -224,6 +276,7 @@ internal class UniversalCastController {
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: Exception) {
+            lanProxy.clearStream()
             mutableState.update {
                 it.copy(
                     busyAction = null,
@@ -323,6 +376,7 @@ internal class UniversalCastController {
 
     suspend fun disconnect() {
         val device = state.value.connectedDevice
+        lanProxy.clearStream()
         mutableState.update {
             it.copy(
                 connectedDevice = null,
@@ -351,6 +405,10 @@ internal class UniversalCastController {
 
     fun clearError() {
         mutableState.update { it.copy(errorMessage = null) }
+    }
+
+    fun shutdown() {
+        lanProxy.shutdown()
     }
 
     private suspend fun discoverDlnaDevices(appContext: Context): List<CastDevice> {
@@ -428,7 +486,7 @@ internal class UniversalCastController {
             val req = Request.Builder().url(locationUrl).get().build()
             lanHttpClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return null
-                val xml = resp.body?.string().orEmpty()
+                val xml = resp.body.string()
                 if (xml.isBlank()) return null
                 DlnaProtocol.parseDeviceDescriptionXml(xml, locationUrl)
             }
@@ -476,7 +534,7 @@ internal class UniversalCastController {
             .header("Connection", "close")
             .build()
         lanHttpClient.newCall(req).execute().use { resp ->
-            return SoapResult(resp.isSuccessful, resp.code, resp.body?.string().orEmpty())
+            return SoapResult(resp.isSuccessful, resp.code, resp.body.string())
         }
     }
 

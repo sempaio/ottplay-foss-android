@@ -148,6 +148,9 @@ internal fun EveryCineVisualApp(
     var showCastDialog by rememberSaveable { mutableStateOf(false) }
     var lastCastEntryId by rememberSaveable { mutableStateOf<String?>(null) }
     val castScope = rememberCoroutineScope()
+    DisposableEffect(castController) {
+        onDispose { castController.shutdown() }
+    }
 
     BackHandler(enabled = fullscreen && state.playingEntry != null && !inPictureInPicture) {
         if (castState.connectedDevice != null || state.playingEntry?.kind == MediaKind.LIVE) {
