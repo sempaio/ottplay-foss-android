@@ -122,4 +122,39 @@ class DlnaProtocolTest {
         val vol = DlnaProtocol.buildSetVolumeSoap(140)
         assertTrue(vol.contains("<DesiredVolume>100</DesiredVolume>"))
     }
+
+    @Test fun detectVendorProfileIdentifiesLgSamsungAndGenericAndRedactsUrls() {
+        val lg = CastDevice(
+            id = "uuid:lg",
+            friendlyName = "[LG] webOS TV UN7310",
+            manufacturer = "LG Electronics",
+            modelName = "LG TV",
+            host = "192.168.1.40",
+            locationUrl = "http://192.168.1.40:1770/dmr.xml",
+            avTransportControlUrl = "http://192.168.1.40:1770/AVTransport",
+            renderingControlUrl = null,
+        )
+        val samsung = lg.copy(
+            id = "uuid:sam",
+            friendlyName = "TV Quarto",
+            manufacturer = "Samsung Electronics",
+            modelName = "UN32T4300A",
+        )
+        val generic = lg.copy(
+            id = "uuid:kodi",
+            friendlyName = "Kodi Sala",
+            manufacturer = "XBMC",
+            modelName = "Kodi",
+        )
+        assertEquals(DlnaVendorProfile.LG, DlnaProtocol.detectVendorProfile(lg))
+        assertEquals(DlnaVendorProfile.SAMSUNG, DlnaProtocol.detectVendorProfile(samsung))
+        assertEquals(DlnaVendorProfile.GENERIC, DlnaProtocol.detectVendorProfile(generic))
+
+        val redacted = DlnaProtocol.redactUrlForDiagnostics(
+            "https://panel.example/live-hls/user123/secret999/456.m3u8?token=abcdef123",
+        )
+        assertFalse(redacted.contains("user123"))
+        assertFalse(redacted.contains("secret999"))
+        assertFalse(redacted.contains("abcdef123"))
+    }
 }

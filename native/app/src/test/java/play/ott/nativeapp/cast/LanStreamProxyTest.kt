@@ -451,4 +451,101 @@ class LanStreamProxyTest {
             pool.shutdownNow()
         }
     }
+
+    @Test fun chromecastHlsRelayPrefetchesSegmentsAndRenewsExpiredSubPlaylist() {
+        val seg1 = ByteArray(188 * 2) { idx -> if (idx % 188 == 0) 0x47.toByte() else 0x33.toByte() }
+        val seg2 = ByteArray(188 * 2) { idx -> if (idx % 188 == 0) 0x47.toByte() else 0x44.toByte() }
+        val running = AtomicBoolean(true)
+        val upstream = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+        val pool = Executors.newCachedThreadPool()
+        val upstreamPort = upstream.localPort
+        val masterCalls = java.util.concurrent.atomic.AtomicInteger(0)
+
+        pool.execute {
+            while (running.get() && !upstream.isClosed) {
+                val sock = runCatching { upstream.accept() }.getOrNull() ?: break
+                pool.execute {
+                    sock.use { s ->
+                        val reqLine = s.getInputStream().bufferedReader().readLine().orEmpty()
+                        val path = reqLine.split(' ').getOrNull(1).orEmpty()
+                        val out = s.getOutputStream()
+                        when (path) {
+                            "/live-hls/u/p/300.m3u8" -> {
+                                val callNum = masterCalls.incrementAndGet()
+                                val body = if (callNum <= 2) {
+                                    // Initial master points to an expiring sub-playlist
+                                    """
+                                        #EXTM3U
+                                        #EXT-X-STREAM-INF:BANDWIDTH=1800000
+                                        http://127.0.0.1:$upstreamPort/sub_expired.m3u8
+                                    """.trimIndent().toByteArray()
+                                } else {
+                                    // Renewed master returns fresh media segments directly
+                                    """
+                                        #EXTM3U
+                                        #EXT-X-VERSION:3
+                                        #EXT-X-TARGETDURATION:5
+                                        #EXTINF:5,
+                                        http://127.0.0.1:$upstreamPort/fresh_1.ts
+                                        #EXTINF:5,
+                                        http://127.0.0.1:$upstreamPort/fresh_2.ts
+                                    """.trimIndent().toByteArray()
+                                }
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(body)
+                            }
+                            "/sub_expired.m3u8" -> {
+                                // Simulate expired short-lived upstream token (HTTP 403)
+                                out.write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                            }
+                            "/fresh_1.ts" -> {
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nContent-Length: ${seg1.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(seg1)
+                            }
+                            "/fresh_2.ts" -> {
+                                out.write("HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nContent-Length: ${seg2.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                                out.write(seg2)
+                            }
+                            else -> out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                        }
+                        out.flush()
+                    }
+                }
+            }
+        }
+
+        val proxy = LanStreamProxyServer(allowLoopbackForTest = true)
+        try {
+            val target = proxy.prepareStream(
+                upstreamUrl = "http://127.0.0.1:$upstreamPort/live-hls/u/p/300.m3u8",
+                isLive = true,
+                localLanIp = "127.0.0.1",
+            )
+            val http = OkHttpClient()
+            // 1. Fetch master via relay -> gets rewritten sub_expired URL
+            val master = http.newCall(Request.Builder().url(target.chromecastHlsUrl!!).get().build()).execute().use { it.body.string() }
+            val subUrl = master.lineSequence().first { it.startsWith("http://127.0.0.1:") }
+
+            // 2. Request expired sub-playlist -> proxy auto-renews via /live-hls/ and triggers 2-segment prefetch!
+            val renewedMedia = http.newCall(Request.Builder().url(subUrl).get().build()).execute().use { resp ->
+                assertEquals(200, resp.code)
+                resp.body.string()
+            }
+            val segUrls = renewedMedia.lineSequence().filter { it.startsWith("http://127.0.0.1:") }.toList()
+            assertEquals(2, segUrls.size)
+
+            // Give async prefetch 150ms to populate cache, then verify instant RAM prefetch hit!
+            Thread.sleep(150L)
+            val got1 = http.newCall(Request.Builder().url(segUrls[0]).get().build()).execute().use { it.body.bytes() }
+            val got2 = http.newCall(Request.Builder().url(segUrls[1]).get().build()).execute().use { it.body.bytes() }
+            assertArrayEquals(seg1, got1)
+            assertArrayEquals(seg2, got2)
+            assertTrue("Expected at least 1 prefetch cache hit", proxy.currentStats().prefetchHits >= 1)
+        } finally {
+            running.set(false)
+            proxy.shutdown()
+            runCatching { upstream.close() }
+            pool.shutdownNow()
+        }
+    }
 }

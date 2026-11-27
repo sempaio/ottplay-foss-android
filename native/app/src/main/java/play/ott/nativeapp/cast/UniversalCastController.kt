@@ -46,6 +46,7 @@ internal data class CastSessionState(
     val autoReconnectCount: Int = 0,
     val busyAction: String? = null,
     val errorMessage: String? = null,
+    val diagnosticLog: List<String> = emptyList(),
 )
 
 /**
@@ -73,6 +74,22 @@ internal class UniversalCastController {
     @Volatile private var consecutiveStoppedTicks: Int = 0
     @Volatile private var reconnectingInFlight: Boolean = false
     @Volatile private var lastWatchdogBytesSent: Long = -1L
+    private val diagLock = Any()
+    private val diagBuffer = ArrayDeque<String>(24)
+
+    private fun clearDiag() {
+        synchronized(diagLock) { diagBuffer.clear() }
+    }
+
+    private fun logDiag(entry: String) {
+        val safe = DlnaProtocol.redactUrlForDiagnostics(entry).take(220)
+        val snap = synchronized(diagLock) {
+            if (diagBuffer.size >= 18) diagBuffer.removeFirst()
+            diagBuffer.addLast(safe)
+            diagBuffer.toList()
+        }
+        mutableState.update { it.copy(diagnosticLog = snap) }
+    }
 
     private val lanHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -139,6 +156,14 @@ internal class UniversalCastController {
         isLive: Boolean,
         startPositionMs: Long = 0L,
     ): Boolean {
+        clearDiag()
+        val vendorTag = if (device.protocol == CastProtocol.CHROMECAST) {
+            "CHROMECAST"
+        } else {
+            DlnaProtocol.detectVendorProfile(device).name
+        }
+        logDiag("Alvo: ${device.friendlyName} [$vendorTag] (${device.manufacturer}/${device.modelName}) @ ${device.host}")
+        logDiag("Mídia: ${if (isLive) "AO VIVO" else "VOD"} • início=${startPositionMs / 1000}s")
         mutableState.update {
             it.copy(
                 busyAction = "Conectando em ${device.friendlyName}...",
@@ -238,6 +263,7 @@ internal class UniversalCastController {
         val directCandidate = resolveDirectChromecastCandidate(rewritten, isLive)
         if (directCandidate != null) {
             val (directUrl, directMime) = directCandidate
+            logDiag("[Cast] Tentando modo direto M81/CDN ($directMime)...")
             val directRes = googleCastClient.connectAndLoad(
                 device = device,
                 mediaUrl = directUrl,
@@ -247,6 +273,7 @@ internal class UniversalCastController {
                 startPositionMs = startPositionMs,
             )
             if (directRes.isSuccess) {
+                logDiag("[Cast] Modo direto OK!")
                 lanProxy.clearStream()
                 return CastAttemptResult(
                     success = true,
@@ -255,10 +282,14 @@ internal class UniversalCastController {
                     isDirectMode = true,
                 )
             }
+            logDiag("[Cast] Direto falhou (${directRes.exceptionOrNull()?.message ?: "erro"}), usando relay LAN...")
+        } else {
+            logDiag("[Cast] Origem sem CORS/HTTP direto -> usando relay LAN com prefetch 2x .ts")
         }
 
-        // 2. Fallback to local Wi-Fi CORS proxy (needed for IPTV Brasil HTTP segments without upstream CORS)
+        // 2. Fallback to local Wi-Fi CORS proxy (with async 2-segment prefetch + M81 /live-hls/ renewal!)
         val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
+        logDiag("[Cast] IP LAN local=$phoneWifiIp")
         val target = if (phoneWifiIp != null) {
             lanProxy.prepareStream(rewritten, isLive, phoneWifiIp)
         } else {
@@ -381,8 +412,10 @@ internal class UniversalCastController {
         isLive: Boolean,
         startPositionMs: Long,
     ): CastAttemptResult {
+        val vendor = DlnaProtocol.detectVendorProfile(device)
         val rewrittenUrl = DlnaProtocol.rewriteMediaUrlForCast(rawUrl, isLive)
         val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
+        logDiag("[DLNA/$vendor] IP LAN=$phoneWifiIp")
         val castTarget = if (phoneWifiIp != null) {
             lanProxy.prepareStream(rewrittenUrl, isLive, phoneWifiIp)
         } else {
@@ -397,17 +430,25 @@ internal class UniversalCastController {
                 isLive = isLive,
             )
         }
+        logDiag("[DLNA/$vendor] Proxy mime=${castTarget.mimeType} len=${castTarget.contentLength ?: -1} hls=${castTarget.chromecastHlsUrl != null}")
 
-        // Best-effort Stop clears stale state on Samsung / LG renderers
+        // LG webOS gets its own dedicated multi-profile negotiation cascade with post-Play verification
+        // so Samsung's proven flow remains 100% untouched!
+        if (vendor == DlnaVendorProfile.LG) {
+            return castToLgDlna(device, castTarget, title, isLive, startPositionMs)
+        }
+
+        // Best-effort Stop clears stale state on Samsung / generic renderers
         runCatching {
             postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Stop", DlnaProtocol.buildStopSoap())
             Thread.sleep(250L)
         }
 
         // 1. Try direct HTTP CDN mode first for non-Cloudflare-Worker VOD:
-        //    Samsung/LG TVs pull directly from the CDN with ZERO phone relay — works even with phone turned off!
+        //    Samsung/generic TVs pull directly from the CDN with ZERO phone relay — works even with phone turned off!
         val directVod = castTarget.directHttpVodUrl
         if (!isLive && !directVod.isNullOrBlank()) {
+            logDiag("[DLNA/$vendor] Tentando VOD direto HTTP...")
             val directAttempt = tryDlnaSetUriAndPlay(
                 device = device,
                 mediaUrl = directVod,
@@ -419,10 +460,12 @@ internal class UniversalCastController {
                 startPositionMs = startPositionMs,
             )
             if (directAttempt.first) {
+                logDiag("[DLNA/$vendor] VOD direto HTTP aceito!")
                 lanProxy.clearStream()
                 val vol = queryDlnaVolume(device)
                 return CastAttemptResult(true, directVod, initialVolume = vol, isDirectMode = true)
             }
+            logDiag("[DLNA/$vendor] VOD direto recusado (${directAttempt.second ?: "erro"}), usando proxy 6MB...")
         }
 
         // 2. Resilient local Wi-Fi proxy for Live TV (2-segment pre-fetch, sleep-free MPEG-TS + AES-128)
@@ -438,16 +481,225 @@ internal class UniversalCastController {
             startPositionMs = startPositionMs,
         )
         if (!proxyAttempt.first) {
+            logDiag("[DLNA/$vendor] Proxy falhou: ${proxyAttempt.second ?: "erro"}")
             lanProxy.clearStream()
             val detail = proxyAttempt.second?.let { " ($it)" }.orEmpty()
             return CastAttemptResult(
                 success = false,
                 effectiveUrl = castTarget.localUrl,
-                error = "A TV recusou o vídeo$detail. Tente novamente ou use Web Video Caster.",
+                error = "A TV recusou o vídeo$detail. Tente novamente ou abra Diagnóstico.",
             )
         }
+        logDiag("[DLNA/$vendor] Reprodução iniciada via proxy!")
         val vol = queryDlnaVolume(device)
         return CastAttemptResult(true, castTarget.localUrl, initialVolume = vol, isDirectMode = false)
+    }
+
+    private data class LgDlnaCandidate(
+        val label: String,
+        val mediaUrl: String,
+        val mimeType: String,
+        val dlnaFeatures: String,
+        val includeMetadata: Boolean,
+        val isDirect: Boolean = false,
+    )
+
+    /**
+     * Dedicated LG webOS MediaRenderer negotiation:
+     * - Longer Stop settle (350ms) and SetURI->Play settle (650ms) to avoid LG UPnP 701 races.
+     * - Tests MPEG-TS with LG DLNA_PN, native webOS HLS `.m3u8` via proxy, wildcard `*` features,
+     *   and metadata-less fallback.
+     * - Actively verifies `GetTransportInfo` ~1.1s after Play because webOS frequently returns
+     *   HTTP 200 on Play and silently drops to STOPPED when rejecting a profile.
+     */
+    private fun castToLgDlna(
+        device: CastDevice,
+        castTarget: ProxiedCastTarget,
+        title: String,
+        isLive: Boolean,
+        startPositionMs: Long,
+    ): CastAttemptResult {
+        val candidates = ArrayList<LgDlnaCandidate>()
+        if (isLive) {
+            candidates.add(
+                LgDlnaCandidate(
+                    label = "LG-TS+PN",
+                    mediaUrl = castTarget.localUrl,
+                    mimeType = "video/mp2t",
+                    dlnaFeatures = "DLNA.ORG_PN=MPEG_TS_SD_NA_ISO;DLNA.ORG_OP=00;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000",
+                    includeMetadata = true,
+                ),
+            )
+            if (!castTarget.chromecastHlsUrl.isNullOrBlank()) {
+                candidates.add(
+                    LgDlnaCandidate(
+                        label = "LG-HLS-m3u8",
+                        mediaUrl = castTarget.chromecastHlsUrl,
+                        mimeType = "application/vnd.apple.mpegurl",
+                        dlnaFeatures = "*",
+                        includeMetadata = true,
+                    ),
+                )
+            }
+            candidates.add(
+                LgDlnaCandidate(
+                    label = "LG-TS-wild",
+                    mediaUrl = castTarget.localUrl,
+                    mimeType = "video/mp2t",
+                    dlnaFeatures = "*",
+                    includeMetadata = true,
+                ),
+            )
+            candidates.add(
+                LgDlnaCandidate(
+                    label = "LG-MPEG-wild",
+                    mediaUrl = castTarget.localUrl,
+                    mimeType = "video/mpeg",
+                    dlnaFeatures = "*",
+                    includeMetadata = true,
+                ),
+            )
+            candidates.add(
+                LgDlnaCandidate(
+                    label = "LG-TS-nometa",
+                    mediaUrl = castTarget.localUrl,
+                    mimeType = "video/mp2t",
+                    dlnaFeatures = "*",
+                    includeMetadata = false,
+                ),
+            )
+        } else {
+            val directVod = castTarget.directHttpVodUrl
+            if (!directVod.isNullOrBlank()) {
+                candidates.add(
+                    LgDlnaCandidate(
+                        label = "LG-VOD-direto",
+                        mediaUrl = directVod,
+                        mimeType = castTarget.mimeType,
+                        dlnaFeatures = "*",
+                        includeMetadata = true,
+                        isDirect = true,
+                    ),
+                )
+            }
+            candidates.add(
+                LgDlnaCandidate(
+                    label = "LG-VOD-DLNA",
+                    mediaUrl = castTarget.localUrl,
+                    mimeType = castTarget.mimeType,
+                    dlnaFeatures = castTarget.dlnaFeatures,
+                    includeMetadata = true,
+                ),
+            )
+            candidates.add(
+                LgDlnaCandidate(
+                    label = "LG-VOD-wild",
+                    mediaUrl = castTarget.localUrl,
+                    mimeType = castTarget.mimeType,
+                    dlnaFeatures = "*",
+                    includeMetadata = true,
+                ),
+            )
+            candidates.add(
+                LgDlnaCandidate(
+                    label = "LG-VOD-nometa",
+                    mediaUrl = castTarget.localUrl,
+                    mimeType = castTarget.mimeType,
+                    dlnaFeatures = "*",
+                    includeMetadata = false,
+                ),
+            )
+        }
+
+        var lastError: String? = null
+        for ((idx, cand) in candidates.withIndex()) {
+            val stopResp = runCatching {
+                postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Stop", DlnaProtocol.buildStopSoap())
+            }.getOrNull()
+            if (idx == 0) logDiag("[LG] Stop -> HTTP ${stopResp?.code ?: 0}")
+            runCatching { Thread.sleep(350L) }
+
+            val soapBody = DlnaProtocol.buildSetAvTransportUriSoap(
+                mediaUrl = cand.mediaUrl,
+                title = title,
+                isLive = isLive,
+                includeMetadata = cand.includeMetadata,
+                mimeOverride = cand.mimeType,
+                dlnaFeatures = cand.dlnaFeatures,
+                contentLength = if (isLive) null else castTarget.contentLength,
+            )
+            val setResp = runCatching {
+                postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "SetAVTransportURI", soapBody)
+            }.getOrNull()
+            if (setResp == null || !setResp.isSuccessful) {
+                val fault = setResp?.let { DlnaProtocol.extractSoapFaultSummary(it.body) ?: "HTTP ${it.code}" } ?: "sem resposta"
+                lastError = "${cand.label}: SetURI $fault"
+                logDiag("[LG] $lastError")
+                continue
+            }
+
+            // webOS MediaRenderer needs ~650ms to initialize pipeline before accepting Play
+            runCatching { Thread.sleep(650L) }
+            var playResp: SoapResult? = null
+            for (attempt in 1..3) {
+                playResp = runCatching {
+                    postSoap(device.avTransportControlUrl, DlnaProtocol.AV_TRANSPORT_SERVICE, "Play", DlnaProtocol.buildPlaySoap())
+                }.getOrNull()
+                if (playResp?.isSuccessful == true) break
+                val fault = playResp?.let { DlnaProtocol.extractSoapFaultSummary(it.body) ?: "HTTP ${it.code}" } ?: "erro"
+                logDiag("[LG] ${cand.label} Play #$attempt -> $fault")
+                runCatching { Thread.sleep(650L) }
+            }
+            if (playResp?.isSuccessful != true) {
+                val fault = playResp?.let { DlnaProtocol.extractSoapFaultSummary(it.body) ?: "HTTP ${it.code}" } ?: "sem resposta"
+                lastError = "${cand.label}: Play $fault"
+                continue
+            }
+
+            // Post-Play verification: wait 1.1s and verify webOS actually entered PLAYING/TRANSITIONING or pulled bytes
+            runCatching { Thread.sleep(1_100L) }
+            val postState = runCatching {
+                val tr = postSoap(
+                    device.avTransportControlUrl,
+                    DlnaProtocol.AV_TRANSPORT_SERVICE,
+                    "GetTransportInfo",
+                    DlnaProtocol.buildGetTransportInfoSoap(),
+                )
+                if (tr.isSuccessful) DlnaProtocol.extractTagText(tr.body, "CurrentTransportState") else null
+            }.getOrNull().orEmpty()
+            val stats = lanProxy.currentStats()
+            logDiag("[LG] ${cand.label} pós-Play: TV=${postState.ifBlank { "?" }} reqs=${stats.totalRequests} bytes=${stats.bytesSent}")
+
+            val tvActive = postState.equals("PLAYING", ignoreCase = true) ||
+                postState.equals("TRANSITIONING", ignoreCase = true) ||
+                postState.isBlank() ||
+                (!cand.isDirect && (stats.bytesSent > 0L || stats.activeClients > 0))
+            if (tvActive) {
+                if (cand.isDirect) {
+                    lanProxy.clearStream()
+                } else if (!isLive && startPositionMs > 5_000L) {
+                    runCatching {
+                        postSoap(
+                            device.avTransportControlUrl,
+                            DlnaProtocol.AV_TRANSPORT_SERVICE,
+                            "Seek",
+                            DlnaProtocol.buildSeekSoap(startPositionMs),
+                        )
+                    }
+                }
+                val vol = queryDlnaVolume(device)
+                logDiag("[LG] Conectado com sucesso via ${cand.label}!")
+                return CastAttemptResult(true, cand.mediaUrl, initialVolume = vol, isDirectMode = cand.isDirect)
+            }
+            lastError = "${cand.label}: TV entrou em $postState"
+        }
+
+        lanProxy.clearStream()
+        return CastAttemptResult(
+            success = false,
+            effectiveUrl = castTarget.localUrl,
+            error = "LG TV não iniciou o vídeo (${lastError ?: "erro desconhecido"}). Abra 📋 Diagnóstico e copie para análise.",
+        )
     }
 
     private fun tryDlnaSetUriAndPlay(

@@ -1,8 +1,12 @@
 package play.ott.nativeapp.cast
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -215,7 +219,12 @@ internal fun UniversalCastDialog(
                     ) {
                         items(castState.devices, key = { it.avTransportControlUrl }) { device ->
                             val isConnected = castState.connectedDevice?.avTransportControlUrl == device.avTransportControlUrl
-                            val badge = if (device.protocol == CastProtocol.CHROMECAST) "Chromecast" else "Smart TV"
+                            val badge = when {
+                                device.protocol == CastProtocol.CHROMECAST -> "Chromecast"
+                                DlnaProtocol.detectVendorProfile(device) == DlnaVendorProfile.LG -> "LG webOS"
+                                DlnaProtocol.detectVendorProfile(device) == DlnaVendorProfile.SAMSUNG -> "Samsung TV"
+                                else -> "Smart TV"
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -268,6 +277,13 @@ internal fun UniversalCastDialog(
                             }
                         }
                     }
+                }
+
+                if (castState.diagnosticLog.isNotEmpty()) {
+                    CastDiagnosticCard(
+                        logs = castState.diagnosticLog,
+                        initiallyExpanded = !castState.errorMessage.isNullOrBlank(),
+                    )
                 }
 
                 // Secondary option: external cast app (Web Video Caster / VLC)
@@ -431,6 +447,11 @@ internal fun CastingActiveOverlay(
                     append(" • ")
                     append(stats.totalRequests)
                     append(" reqs")
+                    if (stats.prefetchHits > 0) {
+                        append(" • ")
+                        append(stats.prefetchHits)
+                        append(" cache")
+                    }
                     if (stats.bytesSent > 0L) {
                         append(" • ")
                         append("%.1f MB".format(mbSent))
@@ -562,6 +583,10 @@ internal fun CastingActiveOverlay(
                 }
             }
 
+            if (castState.diagnosticLog.isNotEmpty()) {
+                CastDiagnosticCard(logs = castState.diagnosticLog, initiallyExpanded = false)
+            }
+
             // Quick Bottom Actions
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -691,6 +716,66 @@ private fun CastPillButton(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
+    }
+}
+
+@Composable
+private fun CastDiagnosticCard(
+    logs: List<String>,
+    initiallyExpanded: Boolean,
+) {
+    val context = LocalContext.current
+    var expanded by remember(initiallyExpanded) { mutableStateOf(initiallyExpanded) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF0A0F1A))
+            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = if (expanded) "📋 Diagnóstico Cast (${logs.size}) ▴" else "📋 Diagnóstico Cast (${logs.size}) ▾",
+                color = Color(0xFF9FB0C7),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { expanded = !expanded },
+            )
+            Text(
+                text = "Copiar",
+                color = CastCyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        cm?.setPrimaryClip(ClipData.newPlainText("Starlink Cast Diag", logs.joinToString("\n")))
+                        Toast.makeText(context, "Diagnóstico copiado!", Toast.LENGTH_SHORT).show()
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+        if (expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                logs.takeLast(8).forEach { line ->
+                    Text(
+                        text = "• $line",
+                        color = Color(0xFFB8C7DC),
+                        fontSize = 10.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 

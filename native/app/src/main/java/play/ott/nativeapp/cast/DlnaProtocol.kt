@@ -10,6 +10,12 @@ internal enum class CastProtocol {
     CHROMECAST,
 }
 
+internal enum class DlnaVendorProfile {
+    SAMSUNG,
+    LG,
+    GENERIC,
+}
+
 internal data class CastDevice(
     val id: String,
     val friendlyName: String,
@@ -37,6 +43,22 @@ internal object DlnaProtocol {
 
     private val LIVE_PATH_REGEX = Regex("^/live/([^/]+)/([^/]+)/(\\d+)(?:\\.[a-zA-Z0-9]+)?$")
     private val SERVICE_BLOCK_REGEX = Regex("<service(?:\\s[^>]*)?>([\\s\\S]*?)</service>", RegexOption.IGNORE_CASE)
+
+    fun detectVendorProfile(device: CastDevice): DlnaVendorProfile {
+        val sig = "${device.manufacturer} ${device.modelName} ${device.friendlyName} ${device.locationUrl}"
+            .lowercase(Locale.ROOT)
+        return when {
+            sig.contains("webos") || sig.contains("lg electronics") || sig.contains("lge") ||
+                Regex("\\blg\\b").containsMatchIn(sig) || sig.contains("netcast") -> DlnaVendorProfile.LG
+            sig.contains("samsung") || sig.contains("tizen") -> DlnaVendorProfile.SAMSUNG
+            else -> DlnaVendorProfile.GENERIC
+        }
+    }
+
+    /** Removes credentials from URLs before logging into the user-visible diagnostic panel. */
+    fun redactUrlForDiagnostics(url: String): String =
+        url.replace(Regex("/(live|live-hls|movie|series)/[^/]+/[^/]+/"), "/$1/***/***/")
+            .replace(Regex("([?&](?:token|password|pass|username|user|key)=)[^&]+", RegexOption.IGNORE_CASE), "$1***")
 
     fun buildMSearchPacket(searchTarget: String, mxSeconds: Int = 2): String {
         val mx = mxSeconds.coerceIn(1, 5)

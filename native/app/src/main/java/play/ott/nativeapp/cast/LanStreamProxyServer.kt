@@ -14,6 +14,7 @@ import java.net.Socket
 import java.nio.ByteBuffer
 import java.security.SecureRandom
 import java.util.Locale
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
@@ -53,6 +54,7 @@ internal data class ProxyRuntimeStats(
     val upstreamReconnects: Int = 0,
     val activeClients: Int = 0,
     val totalRequests: Int = 0,
+    val prefetchHits: Int = 0,
     val lastHttpSummary: String = "",
     val bindAddress: String = "",
 )
@@ -339,10 +341,13 @@ internal class LanStreamProxyServer(
     private val hlsRelayLock = Any()
     private val hlsRelayUrls = LinkedHashMap<String, String>(256, 0.75f, true)
     private val hlsUrlToId = HashMap<String, String>(256)
+    private val hlsPrefetchLock = Any()
+    private val hlsSegmentPrefetch = LinkedHashMap<String, CompletableFuture<Triple<String, String, ByteArray>?>>(8, 0.75f, true)
     private val bytesSentCounter = AtomicLong(0L)
     private val chunksSentCounter = AtomicInteger(0)
     private val reconnectCounter = AtomicInteger(0)
     private val requestCounter = AtomicInteger(0)
+    private val prefetchHitCounter = AtomicInteger(0)
     @Volatile private var lastHttpSummary: String = ""
     @Volatile private var lastBindAddress: String = ""
 
@@ -382,6 +387,7 @@ internal class LanStreamProxyServer(
         upstreamReconnects = reconnectCounter.get(),
         activeClients = clientSockets.size,
         totalRequests = requestCounter.get(),
+        prefetchHits = prefetchHitCounter.get(),
         lastHttpSummary = lastHttpSummary,
         bindAddress = lastBindAddress,
     )
@@ -410,10 +416,12 @@ internal class LanStreamProxyServer(
             hlsRelayUrls.clear()
             hlsUrlToId.clear()
         }
+        clearPrefetchCache()
         bytesSentCounter.set(0L)
         chunksSentCounter.set(0)
         reconnectCounter.set(0)
         requestCounter.set(0)
+        prefetchHitCounter.set(0)
         lastHttpSummary = ""
         lastBindAddress = "$localLanIp:$port"
 
@@ -476,6 +484,7 @@ internal class LanStreamProxyServer(
             hlsRelayUrls.clear()
             hlsUrlToId.clear()
         }
+        clearPrefetchCache()
         closeActiveClients()
     }
 
@@ -487,9 +496,17 @@ internal class LanStreamProxyServer(
             hlsRelayUrls.clear()
             hlsUrlToId.clear()
         }
+        clearPrefetchCache()
         closeActiveClients()
         runCatching { serverSocket?.close() }
         serverSocket = null
+    }
+
+    private fun clearPrefetchCache() {
+        synchronized(hlsPrefetchLock) {
+            hlsSegmentPrefetch.values.forEach { it.cancel(true) }
+            hlsSegmentPrefetch.clear()
+        }
     }
 
     private fun closeActiveClients() {
@@ -583,7 +600,9 @@ internal class LanStreamProxyServer(
         lastHttpSummary = "$method $subPath"
         when {
             subPath == "live.m3u8" && stream.isLive && stream.isHls -> {
-                handleChromecastHlsManifest(method, stream, stream.resolvedUpstreamUrl, out)
+                // Always fetch the renewable original M81 /live-hls/ URL first so short-lived upstream
+                // tokens never expire mid-stream on Chromecast or LG webOS HLS!
+                handleChromecastHlsManifest(method, stream, stream.originalUpstreamUrl, out)
             }
             subPath.startsWith("res/") -> {
                 val resKey = subPath.removePrefix("res/").substringBefore('.')
@@ -632,6 +651,59 @@ internal class LanStreamProxyServer(
         }
     }
 
+    private fun scheduleHlsSegmentPrefetch(stream: ActiveStream, playlistText: String, baseUrl: String) {
+        if (HlsRemuxCodec.isMasterPlaylist(playlistText)) return
+        val parsed = HlsRemuxCodec.parseMediaPlaylist(playlistText, baseUrl)
+        val targets = parsed.segments.takeLast(2).map { it.uri }
+        if (targets.isEmpty()) return
+        val streamToken = stream.token
+        for (segUrl in targets) {
+            var shouldLaunch = false
+            val future = synchronized(hlsPrefetchLock) {
+                val existing = hlsSegmentPrefetch[segUrl]
+                if (existing != null && !existing.isCancelled) {
+                    existing
+                } else {
+                    while (hlsSegmentPrefetch.size >= 4) {
+                        val oldest = hlsSegmentPrefetch.entries.iterator().next()
+                        hlsSegmentPrefetch.remove(oldest.key)
+                    }
+                    val created = CompletableFuture<Triple<String, String, ByteArray>?>()
+                    hlsSegmentPrefetch[segUrl] = created
+                    shouldLaunch = true
+                    created
+                }
+            }
+            if (shouldLaunch) {
+                executor.execute {
+                    val result = if (running.get() && activeStream.get()?.token == streamToken) {
+                        fetchHlsResourceWithRetry(segUrl)
+                    } else null
+                    future.complete(result)
+                }
+            }
+        }
+    }
+
+    private fun fetchHlsResourceWithRetry(remoteUrl: String): Triple<String, String, ByteArray>? {
+        for (attempt in 1..2) {
+            val req = Request.Builder()
+                .url(remoteUrl)
+                .header("User-Agent", "OTT-play-Android/1.0")
+                .get()
+                .build()
+            val hit = runCatching {
+                controlClient.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    Triple(resp.header("Content-Type").orEmpty(), resp.request.url.toString(), resp.body.bytes())
+                }
+            }.getOrNull()
+            if (hit != null) return hit
+            if (attempt == 1) runCatching { Thread.sleep(200L) }
+        }
+        return null
+    }
+
     private fun handleChromecastHlsManifest(
         method: String,
         stream: ActiveStream,
@@ -642,17 +714,27 @@ internal class LanStreamProxyServer(
             val head = "HTTP/1.1 200 OK\r\n" +
                 "Content-Type: application/vnd.apple.mpegurl\r\n" +
                 "Access-Control-Allow-Origin: *\r\n" +
+                "Access-Control-Expose-Headers: *\r\n" +
+                "transferMode.dlna.org: Streaming\r\n" +
+                "contentFeatures.dlna.org: DLNA.ORG_OP=00;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000\r\n" +
+                "Accept-Ranges: none\r\n" +
                 "Cache-Control: no-cache\r\n" +
                 "Connection: close\r\n\r\n"
             out.write(head.toByteArray(Charsets.ISO_8859_1))
             out.flush()
             return
         }
-        val fetched = fetchText(manifestUrl) ?: fetchText(manifestUrl)
+        val fetched = fetchText(manifestUrl)
+            ?: fetchText(stream.resolvedUpstreamUrl).takeIf { stream.resolvedUpstreamUrl != manifestUrl }
+            ?: fetchText(manifestUrl)
         if (fetched == null) {
             writeSimpleStatus(out, "502 Bad Gateway")
             return
         }
+        // Keep latest resolved URL refreshed and pre-fetch the newest 2 segments asynchronously!
+        stream.resolvedUpstreamUrl = fetched.first
+        scheduleHlsSegmentPrefetch(stream, fetched.second, fetched.first)
+
         val rewritten = HlsRemuxCodec.rewritePlaylistForRelay(fetched.second, fetched.first) { remote ->
             registerHlsRelayUrl(stream, remote)
         }.toByteArray(Charsets.UTF_8)
@@ -661,6 +743,9 @@ internal class LanStreamProxyServer(
             "Content-Length: ${rewritten.size}\r\n" +
             "Access-Control-Allow-Origin: *\r\n" +
             "Access-Control-Expose-Headers: *\r\n" +
+            "transferMode.dlna.org: Streaming\r\n" +
+            "contentFeatures.dlna.org: DLNA.ORG_OP=00;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000\r\n" +
+            "Accept-Ranges: none\r\n" +
             "Cache-Control: no-cache, no-store\r\n" +
             "Connection: close\r\n\r\n"
         out.write(header.toByteArray(Charsets.ISO_8859_1))
@@ -674,28 +759,59 @@ internal class LanStreamProxyServer(
         remoteUrl: String,
         out: OutputStream,
     ) {
-        // Retry once on transient IPTV CDN hiccups so Chromecast Shaka player never aborts on a single blip
-        var fetchedPayload: Triple<String, String, ByteArray>? = null
-        var lastCode = 502
-        for (attempt in 1..2) {
-            val req = Request.Builder()
-                .url(remoteUrl)
-                .header("User-Agent", "OTT-play-Android/1.0")
-                .get()
-                .build()
-            val hit = runCatching {
-                controlClient.newCall(req).execute().use { resp ->
-                    lastCode = resp.code
-                    if (!resp.isSuccessful) return@use null
-                    Triple(resp.header("Content-Type").orEmpty(), resp.request.url.toString(), resp.body.bytes())
-                }
-            }.getOrNull()
-            if (hit != null) {
-                fetchedPayload = hit
-                break
+        // 1. Check async RAM prefetch cache first (< 5 ms instant hit for Chromecast IPTV segments!)
+        val prefetchedFuture = synchronized(hlsPrefetchLock) { hlsSegmentPrefetch[remoteUrl] }
+        var fetchedPayload: Triple<String, String, ByteArray>? = if (prefetchedFuture != null) {
+            runCatching { prefetchedFuture.get(12, TimeUnit.SECONDS) }.getOrNull()?.also {
+                prefetchHitCounter.incrementAndGet()
             }
-            if (attempt == 1) runCatching { Thread.sleep(250L) }
+        } else null
+
+        var lastCode = 502
+        if (fetchedPayload == null) {
+            for (attempt in 1..2) {
+                val req = Request.Builder()
+                    .url(remoteUrl)
+                    .header("User-Agent", "OTT-play-Android/1.0")
+                    .get()
+                    .build()
+                val hit = runCatching {
+                    controlClient.newCall(req).execute().use { resp ->
+                        lastCode = resp.code
+                        if (!resp.isSuccessful) return@use null
+                        Triple(resp.header("Content-Type").orEmpty(), resp.request.url.toString(), resp.body.bytes())
+                    }
+                }.getOrNull()
+                if (hit != null) {
+                    fetchedPayload = hit
+                    break
+                }
+                if (attempt == 1) runCatching { Thread.sleep(200L) }
+            }
         }
+
+        // 2. Auto-renew expired short-lived HLS sub-manifest via renewable M81 /live-hls/ URL!
+        val looksLikeSubPlaylist = remoteUrl.substringBefore('?').lowercase(Locale.ROOT).endsWith(".m3u8") ||
+            remoteUrl.contains("/resource/", ignoreCase = true) ||
+            remoteUrl.contains("/playlist", ignoreCase = true)
+        if (fetchedPayload == null && looksLikeSubPlaylist && lastCode in setOf(401, 403, 404, 410, 502)) {
+            val renewed = fetchText(stream.originalUpstreamUrl)
+            if (renewed != null) {
+                reconnectCounter.incrementAndGet()
+                val finalMedia = if (HlsRemuxCodec.isMasterPlaylist(renewed.second)) {
+                    val picked = HlsRemuxCodec.pickBestVariantUrl(renewed.second, renewed.first)
+                    if (picked != null) fetchText(picked) else renewed
+                } else renewed
+                if (finalMedia != null) {
+                    fetchedPayload = Triple(
+                        "application/vnd.apple.mpegurl",
+                        finalMedia.first,
+                        finalMedia.second.toByteArray(Charsets.UTF_8),
+                    )
+                }
+            }
+        }
+
         if (fetchedPayload == null) {
             writeSimpleStatus(out, "$lastCode Upstream Error")
             return
@@ -706,8 +822,10 @@ internal class LanStreamProxyServer(
             remoteUrl.substringBefore('?').lowercase(Locale.ROOT).endsWith(".m3u8") ||
             (bytes.size < 256_000 && HlsRemuxCodec.isM3u8Playlist(String(bytes, Charsets.UTF_8)))
         val finalBytes = if (isSubPlaylist) {
+            val playlistText = String(bytes, Charsets.UTF_8)
+            scheduleHlsSegmentPrefetch(stream, playlistText, finalUrl)
             HlsRemuxCodec.rewritePlaylistForRelay(
-                String(bytes, Charsets.UTF_8),
+                playlistText,
                 finalUrl,
             ) { remote -> registerHlsRelayUrl(stream, remote) }.toByteArray(Charsets.UTF_8)
         } else {
@@ -719,6 +837,7 @@ internal class LanStreamProxyServer(
             "Content-Length: ${finalBytes.size}\r\n" +
             "Access-Control-Allow-Origin: *\r\n" +
             "Access-Control-Expose-Headers: *\r\n" +
+            "transferMode.dlna.org: Streaming\r\n" +
             "Cache-Control: no-cache\r\n" +
             "Connection: close\r\n\r\n"
         out.write(header.toByteArray(Charsets.ISO_8859_1))
