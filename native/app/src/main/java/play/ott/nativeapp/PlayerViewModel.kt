@@ -100,9 +100,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var loadGeneration = 0L
     private var pending: PendingPlay? = null
     private data class PendingPlay(val entry: MediaEntry, val stream: PlaybackStream, val positionMs: Long)
+    private val telemetryClient = play.ott.nativeapp.data.PlaybackTelemetryClient()
     private val listener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             setErrorText { play.ott.nativeapp.playback.PlaybackErrors.message(getApplication(), error) }
+            val entry = state.value.playingEntry ?: return
+            viewModelScope.launch {
+                val source = availableSources().firstOrNull { it.id == entry.sourceId } ?: return@launch
+                telemetryClient.reportFailure(getApplication(), source, entry, error)
+            }
         }
         override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
             controller?.let { restorePlaybackEntry(it, item) }

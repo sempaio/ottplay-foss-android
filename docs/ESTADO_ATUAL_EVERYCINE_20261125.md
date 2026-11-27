@@ -39,3 +39,11 @@
 - `apksigner verify --verbose --print-certs`: certificado oficial v2/v3 confirmado em `STARLINK-EveryCine-Official-0.3.17-20261127.apk` (`br.starlink.iptv`, `versionCode=25`, `versionName="0.3.17"`, `STARLINK IPTV`).
 - **QA físico confirmado pelo operador (`2026-11-27`):** Player cinema, transmissão para **Samsung TV (`UN32T4300A`)**, **LG TV** e **Google Chromecast (`Sala de estar`)** em filmes, séries e canais ao vivo aprovados para substituir o app oficial.
 - Validação HTTPS pública ao vivo (`2026-11-27`): `/app/update/latest?package_name=br.starlink.iptv` (`version: 25`, `0.3.17`), `/app/update/download/27` e `/client-apps/download/starlink-iptv` (bot WhatsApp) entregando `6.583.273` bytes exatos sem `Content-Encoding: gzip` e com SHA-256 idêntico; `starlink_ops.py verify-apps` **100% ok**.
+
+---
+
+## Evoluções Prontas na Branch para Próximo Release (`0.3.18` — já testadas e no GitHub)
+
+- **Telemetria Passiva de Falhas de Playback (#3):** `PlaybackTelemetryClient.kt` + hook em `PlayerViewModel.kt` (reporte assíncrono anônimo via HTTPS para `/app/telemetry/playback-error` com cooldown local de 5 min e sem URLs/PII).
+- **Navegação TV D-Pad + Nova Grade EPG (#5):** `TvDpadAndEpgGrid.kt` (`TvDpadPolicy` no player fullscreen para zapping/seek/EPG/gaveta por controle remoto, `tvFocusRing` em foco D-Pad e nova `EpgGridGuideDialog` com trilho lateral de canais, barra de progresso ao vivo, minutos restantes e filtros de janela).
+- **CI Automatizado sem Segredos (#6):** `.github/workflows/starlink-everycine-ci.yml` executando `:core:test`, `:app:testLayoutUnitTest`, `:app:compileOfficialKotlin` e `:app:lintVitalOfficial` a cada push/PR, mantendo a keystore oficial 100% isolada fora do repositório.

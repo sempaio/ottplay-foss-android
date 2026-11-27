@@ -486,7 +486,20 @@ internal fun EveryCineVisualApp(
             },
         )
     }
-    state.epgEntry?.let { GuideDialog(it, state.programmes, state.epgLoading, onAction) }
+    state.epgEntry?.let { epgChannel ->
+        val guideChannels = remember(state.entries, epgChannel.group) {
+            val allLive = state.entries.filter { it.kind == MediaKind.LIVE }
+            val sameGroup = allLive.filter { it.group == epgChannel.group }
+            if (sameGroup.size > 1) sameGroup else allLive
+        }
+        EpgGridGuideDialog(
+            entry = epgChannel,
+            liveChannels = guideChannels,
+            programmes = state.programmes,
+            loading = state.epgLoading,
+            onAction = onAction,
+        )
+    }
     state.movieEntry?.let {
         EveryCineMovieDetail(it, state.isBusy, it.id in state.favoriteIds, onAction)
     }

@@ -63,6 +63,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -255,6 +258,75 @@ internal fun CinemaPlayerOverlay(
     Box(
         modifier
             .fillMaxSize()
+            .tvRemoteInput()
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (
+                    TvDpadPolicy.mapPlayerKey(
+                        keyCode = keyEvent.nativeKeyEvent.keyCode,
+                        isLive = isLive,
+                        controlsVisible = controlsVisible,
+                        drawerOpen = drawerMode != CinemaDrawerMode.NONE,
+                        locked = locked,
+                    )
+                ) {
+                    TvPlayerRemoteAction.NEXT_CHANNEL -> {
+                        onNext?.invoke()
+                        bumpHud()
+                        onNext != null
+                    }
+                    TvPlayerRemoteAction.PREVIOUS_CHANNEL -> {
+                        onPrevious?.invoke()
+                        bumpHud()
+                        onPrevious != null
+                    }
+                    TvPlayerRemoteAction.SEEK_FORWARD_10S -> {
+                        if (canSeek) {
+                            val maxSeek = (durationMs - 1000L).coerceAtLeast(0L)
+                            val target = (controller.currentPosition + CinemaPlayerLogic.DOUBLE_TAP_SEEK_MS).coerceAtMost(maxSeek)
+                            controller.seekTo(target)
+                            currentPosMs = target
+                            doubleTapFeedback = true to "+10s ↻"
+                            true
+                        } else false
+                    }
+                    TvPlayerRemoteAction.SEEK_BACK_10S -> {
+                        if (canSeek) {
+                            val target = (controller.currentPosition - CinemaPlayerLogic.DOUBLE_TAP_SEEK_MS).coerceAtLeast(0L)
+                            controller.seekTo(target)
+                            currentPosMs = target
+                            doubleTapFeedback = false to "↺ -10s"
+                            true
+                        } else false
+                    }
+                    TvPlayerRemoteAction.TOGGLE_PLAY_PAUSE -> {
+                        controller?.let { if (it.isPlaying) it.pause() else it.play() }
+                        bumpHud()
+                        true
+                    }
+                    TvPlayerRemoteAction.REVEAL_HUD -> {
+                        if (locked) {
+                            lockHintVisible = true
+                            interactionNonce++
+                        } else {
+                            bumpHud()
+                        }
+                        true
+                    }
+                    TvPlayerRemoteAction.OPEN_EPG -> {
+                        onOpenEpg?.invoke()
+                        onOpenEpg != null
+                    }
+                    TvPlayerRemoteAction.TOGGLE_DRAWER -> {
+                        if (drawerItems.isNotEmpty()) {
+                            val targetDrawer = if (isLive) CinemaDrawerMode.CHANNELS else CinemaDrawerMode.EPISODES
+                            drawerMode = if (drawerMode == targetDrawer) CinemaDrawerMode.NONE else targetDrawer
+                            true
+                        } else false
+                    }
+                    TvPlayerRemoteAction.NONE -> false
+                }
+            }
             .testTag("cinema-player-overlay")
             .onSizeChanged { containerSize = it },
     ) {
@@ -296,9 +368,10 @@ internal fun CinemaPlayerOverlay(
                             }
                         },
                         onLongPress = {
-                            if (locked || !canChangeSpeed || controller == null || !controller.isPlaying) return@detectTapGestures
-                            speedBeforeBoost = controller.playbackParameters.speed
-                            controller.setPlaybackSpeed(CinemaPlayerLogic.LONG_PRESS_BOOST_SPEED)
+                            val activeController = controller ?: return@detectTapGestures
+                            if (locked || !canChangeSpeed || !activeController.isPlaying) return@detectTapGestures
+                            speedBeforeBoost = activeController.playbackParameters.speed
+                            activeController.setPlaybackSpeed(CinemaPlayerLogic.LONG_PRESS_BOOST_SPEED)
                             longPressBoostActive = true
                         },
                         onPress = {
@@ -556,7 +629,7 @@ internal fun CinemaPlayerOverlay(
                             CinemaCircleIconButton(size = 54.dp, onClick = {
                                 bumpHud()
                                 val target = (currentPosMs - CinemaPlayerLogic.DOUBLE_TAP_SEEK_MS).coerceAtLeast(0L)
-                                controller?.seekTo(target)
+                                controller.seekTo(target)
                                 currentPosMs = target
                             }) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -604,7 +677,7 @@ internal fun CinemaPlayerOverlay(
                                 bumpHud()
                                 val maxSeek = (durationMs - 1000L).coerceAtLeast(0L)
                                 val target = (currentPosMs + CinemaPlayerLogic.DOUBLE_TAP_SEEK_MS).coerceAtMost(maxSeek)
-                                controller?.seekTo(target)
+                                controller.seekTo(target)
                                 currentPosMs = target
                             }) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -1,0 +1,73 @@
+name: STARLINK EveryCine Android CI (Unit Tests & Lint — No Signing Secrets)
+
+on:
+  push:
+    branches:
+      - fix/everycine-current-source-20261123
+      - 'feat/**'
+    paths:
+      - 'native/**'
+      - '.github/workflows/starlink-everycine-ci.yml'
+  pull_request:
+    branches:
+      - fix/everycine-current-source-20261123
+    paths:
+      - 'native/**'
+      - '.github/workflows/starlink-everycine-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: starlink-everycine-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests-and-lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Verify no keystores or secrets tracked in Git
+        run: |
+          tracked=$(git ls-files | grep -E '\.(keystore|jks|p12|pfx)$|(^|/)\.env($|\.)' || true)
+          if [ -n "$tracked" ]; then
+            echo "ERROR: Keystore or env file tracked in Git:"
+            echo "$tracked"
+            exit 1
+          fi
+          echo "OK: Keystores and secrets remain isolated outside the repository."
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install compile SDK and build-tools
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+
+      - name: Run core & app unit tests, official compile and vital lint (unsigned)
+        working-directory: native
+        run: ./gradlew --no-daemon --stacktrace :core:test :app:testLayoutUnitTest :app:compileOfficialKotlin :app:lintVitalOfficial
+
+      - name: Upload unit test & lint reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: starlink-everycine-ci-reports
+          path: |
+            native/core/build/reports/tests/
+            native/app/build/reports/tests/
+            native/app/build/reports/lint-results-official.*
+          retention-days: 7
