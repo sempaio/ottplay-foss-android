@@ -131,15 +131,14 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
         Surface(Modifier.tvRemoteInput().fillMaxWidth(.94f).widthIn(max = 860.dp).fillMaxHeight(.91f), shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val seriesCover = ArtworkUrls.normalizeUrl(entry.logo)
-                    if (seriesCover.isNotBlank()) {
-                        coil.compose.AsyncImage(
-                            seriesCover,
-                            contentDescription = entry.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(width = 64.dp, height = 92.dp).clip(RoundedCornerShape(10.dp)),
-                        )
-                    }
+                    EveryCineArtwork(
+                        rawUrl = entry.logo,
+                        title = entry.name,
+                        kind = entry.kind,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(width = 64.dp, height = 92.dp).clip(RoundedCornerShape(10.dp)),
+                        compactPlaceholder = true,
+                    )
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.dialog_series), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -180,7 +179,16 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
                             ) {
                                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     val episodeCover = ArtworkUrls.normalizeUrl(episode.logo)
-                                    if (episodeCover.isNotBlank()) coil.compose.AsyncImage(episodeCover, null, Modifier.widthIn(max = 140.dp).weight(.4f))
+                                    if (episodeCover.isNotBlank()) {
+                                        EveryCineArtwork(
+                                            rawUrl = episodeCover,
+                                            title = episode.name,
+                                            kind = episode.kind,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(width = 96.dp, height = 64.dp).clip(RoundedCornerShape(8.dp)),
+                                            compactPlaceholder = true,
+                                        )
+                                    }
                                     Column(Modifier.weight(1f)) {
                                         episode.episode?.let { Text(stringResource(R.string.dialog_episode, it), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary) }
                                         Text(episode.name, style = MaterialTheme.typography.titleMedium)

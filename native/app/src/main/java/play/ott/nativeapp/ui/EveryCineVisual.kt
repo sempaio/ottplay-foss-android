@@ -170,7 +170,8 @@ internal fun EveryCineVisualApp(
 
     BackHandler(enabled = fullscreen && state.playingEntry != null && !inPictureInPicture) {
         fullscreen = false
-        if (castState.connectedDevice == null && state.playingEntry?.kind != MediaKind.LIVE) {
+        val isLivePlaying = state.playingEntry?.kind == MediaKind.LIVE
+        if (shouldStopOnFullscreenExit(isLivePlaying, page == EveryCinePage.LIVE, castState.connectedDevice != null)) {
             onAction(AppAction.StopPlayback)
         }
     }
@@ -272,7 +273,9 @@ internal fun EveryCineVisualApp(
                     playing, controller, true,
                     onFullscreen = {
                         fullscreen = false
-                        if (!isLive) onAction(AppAction.StopPlayback)
+                        if (shouldStopOnFullscreenExit(isLive, page == EveryCinePage.LIVE, castState.connectedDevice != null)) {
+                            onAction(AppAction.StopPlayback)
+                        }
                     },
                     onPictureInPicture = onPictureInPicture,
                     onStop = {
@@ -765,6 +768,7 @@ private fun EveryCineBottomNavigation(
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 2.dp),
                     )
                 }
             }
@@ -790,21 +794,11 @@ private fun EveryCineHome(
         everyCineSections(content, recent, state.favoriteIds)
     }
     val homeCategories = remember(state.xtreamGroups, state.entries) {
-        if (state.xtreamGroups.isNotEmpty()) {
-            val live = state.xtreamGroups.filter { it.kind == MediaKind.LIVE }
-                .map { MediaKind.LIVE to it.name }.distinct().take(12)
-            val vod = state.xtreamGroups.filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }
-                .map { it.kind to it.name }.distinct().take(16)
-            live + vod
-        } else {
-            state.entries.mapNotNull { e ->
-                e.group.trim().takeIf { it.isNotEmpty() }?.let { e.kind to it }
-            }.distinct().take(24)
-        }
+        everyCineHomeCategoryShortcuts(state.xtreamGroups, state.entries)
     }
     // On cold start with remote Xtream categories, seed Home with the first 2 movie categories
     // so Home shows real banners and poster rails without requiring a manual tap first.
-    LaunchedEffect(isActivePage, state.selectedSourceId, state.xtreamGroups.size) {
+    LaunchedEffect(isActivePage, state.selectedSourceId, state.xtreamGroups) {
         if (isActivePage && state.xtreamGroups.isNotEmpty() &&
             state.entries.none { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }
         ) {
@@ -827,25 +821,27 @@ private fun EveryCineHome(
                 entries = banners,
                 eyebrow = "STARLINK  •  PARA VOCÊ",
                 emptyHeadline = "Seus filmes e séries em um só lugar",
+                loading = state.isBusy && banners.isEmpty(),
+                loadingLabel = "Carregando catálogo...",
                 onClick = { selected ->
                     if (selected != null) openContent(selected, onAction)
                     else onBrowse(MediaKind.MOVIE, "")
                 },
             )
         }
-        if (state.isBusy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        if (state.isBusy) item(key = "loading-bar") { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if (homeCategories.isNotEmpty()) item(key = "categories") {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("Explore as categorias", color = cinemaWhite,
                     fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(homeCategories, key = { it.first.name + it.second }) { group ->
+                    items(homeCategories, key = { it.first.name + ":" + it.second.lowercase() }) { group ->
                         EveryCineCategoryChip(group.second, false) { onBrowse(group.first, group.second) }
                     }
                 }
             }
         }
-        items(sections.size, key = { "rail-" + sections[it].title }) { sectionIndex ->
+        items(sections.size, key = { "rail-$it-" + sections[it].title }) { sectionIndex ->
             val section = sections[sectionIndex]
             Column(Modifier.fillMaxWidth().testTag("everycine-section-" + section.title)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -895,13 +891,15 @@ private val posterFallbackPalettes = listOf(
 )
 
 @Composable
-private fun EveryCineArtwork(
+internal fun EveryCineArtwork(
     rawUrl: String,
     title: String,
     kind: MediaKind,
     contentScale: ContentScale,
     modifier: Modifier = Modifier,
     isBanner: Boolean = false,
+    compactPlaceholder: Boolean = false,
+    imagePadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val primaryUrl = remember(rawUrl) { ArtworkUrls.normalizeUrl(rawUrl) }
     var activeUrl by remember(primaryUrl) { mutableStateOf(primaryUrl) }
@@ -927,39 +925,54 @@ private fun EveryCineArtwork(
                         ),
                 )
             } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 10.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    val initials = remember(title) {
-                        title.split(" ")
-                            .filter { it.isNotBlank() }
-                            .take(2)
-                            .map { it.first().uppercaseChar() }
-                            .joinToString("")
-                            .ifBlank { if (kind == MediaKind.SERIES) "SR" else "FL" }
-                    }
+                val initials = remember(title, kind) {
+                    title.split(" ")
+                        .filter { it.isNotBlank() }
+                        .take(2)
+                        .map { it.first().uppercaseChar() }
+                        .joinToString("")
+                        .ifBlank {
+                            when (kind) {
+                                MediaKind.LIVE -> "TV"
+                                MediaKind.SERIES -> "SR"
+                                else -> "FL"
+                            }
+                        }
+                }
+                if (compactPlaceholder) {
                     Text(
                         initials,
-                        color = cinemaAccent.copy(alpha = if (failed) 0.85f else 0.45f),
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black,
+                        color = if (kind == MediaKind.LIVE) Color(0xFFA5B4FC) else cinemaAccent.copy(alpha = 0.85f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
                     )
-                    if (failed && title.isNotBlank()) {
-                        Spacer(Modifier.height(6.dp))
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         Text(
-                            title,
-                            color = cinemaWhite.copy(alpha = 0.82f),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 14.sp,
+                            initials,
+                            color = cinemaAccent.copy(alpha = if (failed) 0.85f else 0.45f),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black,
                         )
+                        if (failed && title.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                title,
+                                color = cinemaWhite.copy(alpha = 0.82f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 14.sp,
+                            )
+                        }
                     }
                 }
             }
@@ -969,7 +982,7 @@ private fun EveryCineArtwork(
                 model = activeUrl,
                 contentDescription = if (isBanner) null else title,
                 contentScale = contentScale,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(imagePadding),
                 onSuccess = {
                     loaded = true
                     failed = false
@@ -995,6 +1008,8 @@ private fun EveryCineFeatureBanner(
     onClick: (MediaEntry?) -> Unit,
     eyebrow: String = "STARLINK  •  PARA VOCÊ",
     emptyHeadline: String = "Seus filmes e séries em um só lugar",
+    loading: Boolean = false,
+    loadingLabel: String = "Carregando catálogo...",
 ) {
     val screenHeight = LocalConfiguration.current.screenHeightDp
     val heroHeight = if (screenHeight < 420) 190.dp else 454.dp
@@ -1018,6 +1033,20 @@ private fun EveryCineFeatureBanner(
                     .45f to Color.Black.copy(alpha = .03f),
                     1f to cinemaBlack,
                 )))
+                if (loading && entry == null) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            color = cinemaAccent,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(34.dp),
+                        )
+                        Text(loadingLabel, color = cinemaGrey, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
                 Column(
                     Modifier.align(Alignment.BottomStart).fillMaxWidth()
                         .padding(horizontal = 18.dp, vertical = 30.dp),
@@ -1028,8 +1057,16 @@ private fun EveryCineFeatureBanner(
                     Text(entry?.name ?: emptyHeadline,
                         fontSize = 27.sp, fontWeight = FontWeight.Black, color = cinemaWhite,
                         maxLines = 2, lineHeight = 30.sp, overflow = TextOverflow.Ellipsis)
-                    Text(if (entry != null) "Ver detalhes  ▶" else "Explorar catálogo  ›",
-                        color = cinemaWhite, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text(
+                        when {
+                            entry != null -> "Ver detalhes  ▶"
+                            loading -> loadingLabel
+                            else -> "Explorar catálogo  ›"
+                        },
+                        color = cinemaWhite,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                    )
                 }
             }
         }
@@ -1195,41 +1232,18 @@ private fun EveryCineGlobalSearchResults(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        // Badge / Poster (initials shown until logo loads or if URL fails)
-                        val normalizedSearchLogo = remember(item.logo) { ArtworkUrls.normalizeUrl(item.logo) }
-                        var searchLogoLoaded by remember(normalizedSearchLogo) { mutableStateOf(false) }
-                        Box(
-                            Modifier
+                        // Badge / Poster with URL normalization, HTTPS retry, and initials fallback
+                        EveryCineArtwork(
+                            rawUrl = item.logo,
+                            title = item.name,
+                            kind = item.kind,
+                            contentScale = if (item.kind == MediaKind.LIVE) ContentScale.Fit else ContentScale.Crop,
+                            modifier = Modifier
                                 .size(if (item.kind == MediaKind.LIVE) 50.dp else 45.dp, 50.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF1B1B22)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!searchLogoLoaded) {
-                                val initials = item.name.split(" ")
-                                    .filter { it.isNotBlank() }
-                                    .take(2)
-                                    .map { it.first().uppercaseChar() }
-                                    .joinToString("")
-                                    .ifBlank { "TV" }
-                                Text(
-                                    initials,
-                                    color = Color(0xFFA5B4FC),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            if (normalizedSearchLogo.isNotBlank()) {
-                                AsyncImage(
-                                    normalizedSearchLogo,
-                                    contentDescription = item.name,
-                                    modifier = Modifier.fillMaxSize().padding(if (item.kind == MediaKind.LIVE) 3.dp else 0.dp),
-                                    contentScale = if (item.kind == MediaKind.LIVE) ContentScale.Fit else ContentScale.Crop,
-                                    onSuccess = { searchLogoLoaded = true },
-                                    onError = { searchLogoLoaded = false },
-                                )
-                            }
-                        }
+                                .clip(RoundedCornerShape(8.dp)),
+                            compactPlaceholder = true,
+                            imagePadding = PaddingValues(if (item.kind == MediaKind.LIVE) 3.dp else 0.dp),
+                        )
 
                         // Text details
                         Column(Modifier.weight(1f)) {
@@ -1625,40 +1639,18 @@ private fun EveryCineChannelRows(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                // Channel Logo with Fallback Acronym Badge (shown when blank or failed)
-                val normalizedChannelLogo = remember(channel.logo) { ArtworkUrls.normalizeUrl(channel.logo) }
-                var channelLogoLoaded by remember(normalizedChannelLogo) { mutableStateOf(false) }
-                Box(
-                    Modifier
+                // Channel Logo with URL normalization, HTTPS retry, and initials fallback
+                EveryCineArtwork(
+                    rawUrl = channel.logo,
+                    title = channel.name,
+                    kind = MediaKind.LIVE,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
                         .size(48.dp)
-                        .background(Color(0xFF18181E), RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!channelLogoLoaded) {
-                        val initials = channel.name.split(" ")
-                            .filter { it.isNotBlank() }
-                            .take(2)
-                            .map { it.first().uppercaseChar() }
-                            .joinToString("")
-                            .ifBlank { "TV" }
-                        Text(
-                            initials,
-                            color = Color(0xFFA5B4FC),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    if (normalizedChannelLogo.isNotBlank()) {
-                        AsyncImage(
-                            normalizedChannelLogo,
-                            contentDescription = channel.name,
-                            modifier = Modifier.fillMaxSize().padding(4.dp),
-                            contentScale = ContentScale.Fit,
-                            onSuccess = { channelLogoLoaded = true },
-                            onError = { channelLogoLoaded = false },
-                        )
-                    }
-                }
+                        .clip(RoundedCornerShape(8.dp)),
+                    compactPlaceholder = true,
+                    imagePadding = PaddingValues(4.dp),
+                )
 
                 // Name and Subtitle
                 Column(Modifier.weight(1f)) {
@@ -1757,7 +1749,7 @@ private fun EveryCineMediaShowcase(
 
     // Auto-load initial showcase categories (or the explicitly chosen category) on demand,
     // strictly when this tab is active so off-screen pager pages never cancel each other.
-    LaunchedEffect(isActivePage, selectedCategory, showcaseDepth, state.selectedSourceId, remoteKindGroups.size) {
+    LaunchedEffect(isActivePage, selectedCategory, showcaseDepth, state.selectedSourceId, remoteKindGroups) {
         if (!isActivePage || !hasRemoteCategories) return@LaunchedEffect
         if (selectedCategory.isBlank()) {
             val missingIds = everyCineShowcaseGroupIdsToLoad(
@@ -1810,18 +1802,25 @@ private fun EveryCineMediaShowcase(
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (state.isBusy && banners.isEmpty()) item(key = "top-loading-bar") {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
             item(key = "banner") {
                 EveryCineFeatureBanner(
                     entries = banners,
                     eyebrow = eyebrow,
                     emptyHeadline = emptyHeadline,
+                    loading = state.isBusy && banners.isEmpty(),
+                    loadingLabel = loadingLabel,
                     onClick = { selected ->
                         if (selected != null) openContent(selected, onAction)
                         else categories.firstOrNull()?.let(onSelectCategory)
                     },
                 )
             }
-            if (state.isBusy) item(key = "loading-bar") { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            if (state.isBusy && banners.isNotEmpty()) item(key = "loading-bar") {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
             if (categories.isNotEmpty()) item(key = "categories") {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(
@@ -1844,8 +1843,11 @@ private fun EveryCineMediaShowcase(
                     }
                 }
             }
-            items(sections.size, key = { "rail-" + kind.name + "-" + sections[it].title }) { sectionIndex ->
+            items(sections.size, key = { "rail-${kind.name}-$it-" + sections[it].title }) { sectionIndex ->
                 val section = sections[sectionIndex]
+                val isProfileSection = section.title == "Continuar assistindo" || section.title == "Minha lista"
+                val canOpenAll = isProfileSection ||
+                    section.entries.any { it.group.trim().equals(section.title, ignoreCase = true) }
                 Column(Modifier.fillMaxWidth().testTag("everycine-section-" + section.title)) {
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -1860,18 +1862,20 @@ private fun EveryCineMediaShowcase(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
-                            "Ver tudo",
-                            color = cinemaGrey,
-                            fontSize = 13.sp,
-                            modifier = Modifier.clickable {
-                                if (section.title == "Continuar assistindo" || section.title == "Minha lista") {
-                                    onOpenProfile()
-                                } else {
-                                    onSelectCategory(section.title)
-                                }
-                            }.padding(6.dp),
-                        )
+                        if (canOpenAll) {
+                            Text(
+                                "Ver tudo",
+                                color = cinemaGrey,
+                                fontSize = 13.sp,
+                                modifier = Modifier.clickable {
+                                    if (isProfileSection) {
+                                        onOpenProfile()
+                                    } else {
+                                        onSelectCategory(section.title)
+                                    }
+                                }.padding(6.dp),
+                            )
+                        }
                     }
                     Spacer(Modifier.height(14.dp))
                     LazyRow(

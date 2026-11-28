@@ -20,7 +20,16 @@ internal fun MovieDialog(entry: MediaEntry, loading: Boolean, favorite: Boolean,
             Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(entry.name, style = MaterialTheme.typography.headlineMedium)
                 val normalizedCover = play.ott.nativeapp.core.ArtworkUrls.normalizeUrl(entry.logo)
-                if (normalizedCover.isNotBlank()) coil.compose.AsyncImage(normalizedCover, null, Modifier.fillMaxWidth().heightIn(max = 200.dp))
+                if (normalizedCover.isNotBlank()) {
+                    EveryCineArtwork(
+                        rawUrl = normalizedCover,
+                        title = entry.name,
+                        kind = entry.kind,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().height(200.dp),
+                        isBanner = true,
+                    )
+                }
                 Text(entry.group, color = MaterialTheme.colorScheme.secondary)
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (entry.description.isNotBlank()) Text(entry.description)

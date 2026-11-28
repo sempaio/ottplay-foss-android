@@ -41,14 +41,20 @@ internal fun everyCineSections(
         val selected = entries.asSequence().filter { it.kind == kind }.take(20).toList()
         if (selected.isNotEmpty()) sections += EveryCineSection(label, selected)
     }
-    // Keep the number of rails bounded; never allocate an unlimited category feed.
-    val seen = HashSet<String>()
+    // Keep the number of rails bounded; never allocate an unlimited category feed,
+    // and never emit a category rail whose title collides with a built-in section
+    // (e.g. an upstream group literally named "Filmes" or "Séries"), which would
+    // duplicate LazyColumn keys and crash Home.
+    val seen = sections.mapTo(HashSet()) { it.title.lowercase() }
     entries.asSequence()
         .filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }
-        .map { it.group.trim() }.filter { it.isNotEmpty() && seen.add(it) }
+        .map { it.group.trim() }.filter { it.isNotEmpty() && seen.add(it.lowercase()) }
         .take(8).forEach { category ->
             val selected = entries.asSequence()
-                .filter { (it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES) && it.group.trim() == category }
+                .filter {
+                    (it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES) &&
+                        it.group.trim().equals(category, ignoreCase = true)
+                }
                 .take(20).toList()
             if (selected.isNotEmpty()) sections += EveryCineSection(category, selected)
         }
@@ -99,16 +105,16 @@ internal fun everyCineKindSections(
     }
 
     val orderedGroups = ArrayList<String>(grouped.size)
-    val addedKeys = HashSet<String>()
+    val addedKeys = sections.mapTo(HashSet()) { it.title.lowercase() }
     val byLower = grouped.keys.associateBy { it.lowercase() }
     preferredCategoryOrder.forEach { preferred ->
         val matched = byLower[preferred.trim().lowercase()]
-        if (matched != null && addedKeys.add(matched)) {
+        if (matched != null && addedKeys.add(matched.lowercase())) {
             orderedGroups.add(matched)
         }
     }
     grouped.keys.forEach { existing ->
-        if (addedKeys.add(existing)) orderedGroups.add(existing)
+        if (addedKeys.add(existing.lowercase())) orderedGroups.add(existing)
     }
 
     orderedGroups.asSequence().take(maxCategoryRails).forEach { category ->
@@ -227,3 +233,35 @@ internal fun everyCineVisible(
         (category.isBlank() || it.group.equals(category, ignoreCase = true)) &&
         (query.isBlank() || it.name.contains(query, ignoreCase = true) || it.group.contains(query, ignoreCase = true))
 }
+
+/**
+ * Balances Home's "Explore as categorias" shortcuts across Live, Movies and Series so
+ * large Movie category lists never crowd Series out of Home shortcuts.
+ */
+internal fun everyCineHomeCategoryShortcuts(
+    xtreamGroups: List<XtreamGroup>,
+    entries: List<MediaEntry>,
+): List<Pair<MediaKind, String>> {
+    if (xtreamGroups.isNotEmpty()) {
+        val live = xtreamGroups.asSequence().filter { it.kind == MediaKind.LIVE && it.name.isNotBlank() }
+            .map { MediaKind.LIVE to it.name.trim() }.distinctBy { it.first to it.second.lowercase() }.take(8).toList()
+        val movies = xtreamGroups.asSequence().filter { it.kind == MediaKind.MOVIE && it.name.isNotBlank() }
+            .map { MediaKind.MOVIE to it.name.trim() }.distinctBy { it.first to it.second.lowercase() }.take(8).toList()
+        val series = xtreamGroups.asSequence().filter { it.kind == MediaKind.SERIES && it.name.isNotBlank() }
+            .map { MediaKind.SERIES to it.name.trim() }.distinctBy { it.first to it.second.lowercase() }.take(8).toList()
+        return live + movies + series
+    }
+    return entries.mapNotNull { entry ->
+        entry.group.trim().takeIf { it.isNotEmpty() }?.let { entry.kind to it }
+    }.distinctBy { it.first to it.second.lowercase() }.take(24)
+}
+
+/**
+ * Exiting fullscreen should keep playback running only when casting to TV or returning
+ * to the Live tab where the inline live player remains visible.
+ */
+internal fun shouldStopOnFullscreenExit(
+    isLive: Boolean,
+    isOnLivePage: Boolean,
+    isCastingToTv: Boolean,
+): Boolean = !isCastingToTv && (!isLive || !isOnLivePage)

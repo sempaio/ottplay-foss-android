@@ -40,6 +40,19 @@ class XtreamDetailRecoveryTest {
         assertEquals(listOf(poster, poster, poster), result.map { it.logo })
     }
 
+    @Test fun `live channels sharing a brand logo are never wiped by withoutSharedArtwork`() {
+        val espnLogo = "https://panel.taila5c5c2.ts.net/channel-logo/espn.png"
+        val recordLogo = "https://panel.taila5c5c2.ts.net/channel-logo/record.png"
+        val entries = listOf(
+            live.copy(id = "l1", name = "ESPN 1 FHD", logo = espnLogo),
+            live.copy(id = "l2", name = "ESPN 2 FHD", logo = espnLogo),
+            live.copy(id = "l3", name = "RecordTV RJ FHD", logo = recordLogo),
+            live.copy(id = "l4", name = "RecordTV Itapoan HD", logo = recordLogo),
+        )
+        val result = XtreamProvider(ProviderHttp(OkHttpClient(), RemoteTransportPolicy(false))).withoutSharedArtwork(entries)
+        assertEquals(listOf(espnLogo, espnLogo, recordLogo, recordLogo), result.map { it.logo })
+    }
+
     @Test fun `M81 metadata_source tmdb poster is accepted when listing cover was blank`() = runBlocking {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val action = chain.request().url.queryParameter("action")

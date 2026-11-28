@@ -104,7 +104,8 @@ internal class XtreamProvider(private val http: ProviderHttp) {
                 headerOrigins = headerOrigins(config.headers, config.url),
             )
         }
-        Catalog(withoutSharedArtwork(entries), listOf(config.epgUrl.ifBlank { routes.epg() }))
+        val filtered = if (group.kind == MediaKind.LIVE) entries else withoutSharedArtwork(entries)
+        Catalog(filtered, listOf(config.epgUrl.ifBlank { routes.epg() }))
     }
 
     /** Full-catalog remote search across live channels, movies and series in a single request. */
@@ -262,12 +263,18 @@ internal class XtreamProvider(private val http: ProviderHttp) {
         )
     }
 
-    /** A source logo reused for distinct titles is not a trustworthy poster. */
+    /**
+     * A VOD/series poster reused across distinct titles is not a trustworthy cover.
+     * Live channels are intentionally excluded because regional affiliates and numbered
+     * feeds (e.g. Globo SP/RJ, ESPN 1/2/3, Premiere 1..8) legitimately share one brand logo.
+     */
     internal fun withoutSharedArtwork(entries: List<MediaEntry>): List<MediaEntry> {
-        val titlesByLogo = entries.asSequence().filter { it.logo.isNotBlank() }
+        val titlesByLogo = entries.asSequence()
+            .filter { it.kind != MediaKind.LIVE && it.logo.isNotBlank() }
             .groupBy({ it.logo }, { ArtworkUrls.normalizeTitleForArtworkDedupe(it.name) })
         val shared = titlesByLogo.filterValues { names -> names.distinct().size > 1 }.keys
-        return entries.map { if (it.logo in shared) it.copy(logo = "") else it }
+        if (shared.isEmpty()) return entries
+        return entries.map { if (it.kind != MediaKind.LIVE && it.logo in shared) it.copy(logo = "") else it }
     }
 
     suspend fun shortEpg(config: SourceConfig, entry: MediaEntry): List<Programme> {

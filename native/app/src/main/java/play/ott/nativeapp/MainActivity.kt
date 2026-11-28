@@ -134,12 +134,14 @@ open class MainActivity : AppCompatActivity() {
             inPictureInPicture = isInPictureInPictureMode,
             smallestScreenWidthDp = resources.configuration.smallestScreenWidthDp,
         )
-        if (target != null && (
-                requestedOrientation != target ||
-                    (!enabled && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
-            )
-        ) {
-            requestedOrientation = target
+        if (target != null) {
+            if (requestedOrientation != target) {
+                requestedOrientation = target
+            } else if (!enabled && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                // Force WindowManager to re-evaluate if an OEM dropped a prior portrait request during transition.
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                requestedOrientation = target
+            }
         }
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -187,6 +189,11 @@ open class MainActivity : AppCompatActivity() {
         super.onResume()
         if (!fullScreen) setFullscreen(false)
         model.checkUpdateOnResume()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && !fullScreen) setFullscreen(false)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

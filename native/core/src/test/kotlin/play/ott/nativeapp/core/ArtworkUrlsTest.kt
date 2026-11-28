@@ -16,12 +16,20 @@ class ArtworkUrlsTest {
             "https://panel.taila5c5c2.ts.net/channel-logo/22b118cc173f893f08dc.png",
             ArtworkUrls.normalizeUrl("http://panel.taila5c5c2.ts.net/channel-logo/22b118cc173f893f08dc.png"),
         )
+        assertEquals(
+            "https://topxz.live/logos/Documentarios/HGTV.png",
+            ArtworkUrls.normalizeUrl("http://topxz.live/logos/Documentarios/HGTV.png"),
+        )
     }
 
     @Test fun rescuesDeadTmdbMirrorPathsToOfficialTmdb() {
         assertEquals(
             "https://image.tmdb.org/t/p/w600_and_h900_bestv2/9LNp4wA2DzZhdYUbTan3shbC8j8.jpg",
             ArtworkUrls.normalizeUrl("http://timg.bdta.pro/t/p/w600_and_h900_bestv2/9LNp4wA2DzZhdYUbTan3shbC8j8.jpg"),
+        )
+        assertEquals(
+            "https://image.tmdb.org/t/p/w1066_and_h600_face/eXxKVF10yJErWut4A6LFLs3O5jx.jpg",
+            ArtworkUrls.normalizeUrl("http://timg.bdta.pro/t/p/w1066_and_h600_face/eXxKVF10yJErWut4A6LFLs3O5jx.jpg"),
         )
     }
 
@@ -85,5 +93,25 @@ class ArtworkUrlsTest {
         assertTrue(ArtworkUrls.isTrustedDetailPoster("https://image.tmdb.org/t/p/w500/x.jpg", "", ""))
         assertFalse(ArtworkUrls.isTrustedDetailPoster("https://untrusted.example/shared.jpg", "", ""))
         assertFalse(ArtworkUrls.isTrustedDetailPoster("", "tmdb", "tmdb"))
+    }
+
+    @Test fun categoryArtworkRefreshTargetsLegacyUrlsAndHighBlankRatioWithoutThrashing() {
+        assertFalse(ArtworkUrls.needsArtworkRefresh(""))
+        assertFalse(ArtworkUrls.needsArtworkRefresh("https://image.tmdb.org/t/p/w500/ok.jpg"))
+        assertTrue(ArtworkUrls.needsArtworkRefresh("http://image.tmdb.org/t/p/w500/old.jpg"))
+        assertTrue(ArtworkUrls.needsArtworkRefresh("http://timg.bdta.pro/t/p/w500/dead.jpg"))
+        assertTrue(ArtworkUrls.needsArtworkRefresh("//image.tmdb.org/t/p/w500/rel.jpg"))
+
+        // 1 legitimately missing cover out of 10 must keep the normal 30-min cache TTL.
+        val healthy = List(9) { "https://image.tmdb.org/t/p/w500/ok$it.jpg" } + ""
+        assertFalse(ArtworkUrls.shouldRefreshCategoryArtwork(healthy))
+
+        // >=25% blank across >=4 items indicates a legacy wiped cache and should refresh quickly.
+        val wiped = listOf("https://image.tmdb.org/t/p/w500/a.jpg", "", "", "https://image.tmdb.org/t/p/w500/b.jpg")
+        assertTrue(ArtworkUrls.shouldRefreshCategoryArtwork(wiped))
+
+        // Any legacy HTTP TMDB URL triggers refresh even when no covers are blank.
+        val legacyHttp = listOf("https://image.tmdb.org/t/p/w500/a.jpg", "http://image.tmdb.org/t/p/w500/b.jpg")
+        assertTrue(ArtworkUrls.shouldRefreshCategoryArtwork(legacyHttp))
     }
 }

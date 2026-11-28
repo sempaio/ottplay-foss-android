@@ -514,23 +514,34 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 changedVisited = true
             }
         }
-        if (changedVisited) {
-            updateState { it.copy(entries = visitedXtreamEntries()) }
-        } else if (state.value.entries.any { it.id == updated.id && it.sourceId == updated.sourceId && it.logo != logo }) {
+        val changedSearch = state.value.searchResults.any {
+            it.id == updated.id && it.sourceId == updated.sourceId && it.logo != logo
+        }
+        val changedEntries = !changedVisited && state.value.entries.any {
+            it.id == updated.id && it.sourceId == updated.sourceId && it.logo != logo
+        }
+        if (changedVisited || changedEntries || changedSearch) {
             updateState { current ->
-                current.copy(entries = current.entries.map { entry ->
-                    if (entry.id == updated.id && entry.sourceId == updated.sourceId) entry.copy(logo = logo) else entry
-                })
+                current.copy(
+                    entries = when {
+                        changedVisited -> visitedXtreamEntries()
+                        changedEntries -> current.entries.map { entry ->
+                            if (entry.id == updated.id && entry.sourceId == updated.sourceId) entry.copy(logo = logo) else entry
+                        }
+                        else -> current.entries
+                    },
+                    searchResults = if (changedSearch) {
+                        current.searchResults.map { entry ->
+                            if (entry.id == updated.id && entry.sourceId == updated.sourceId) entry.copy(logo = logo) else entry
+                        }
+                    } else current.searchResults,
+                )
             }
         }
     }
 
-    private fun visitedXtreamEntries(): List<MediaEntry> {
-        // Limit cumulative memory, but never silently truncate an opened category.
-        while (visitedGroups.size > 32 ||
-            (visitedGroups.size > 1 && visitedGroups.values.sumOf { it.size } > 20_000)) {
-            visitedGroups.remove(visitedGroups.keys.first())
-        }
+    private fun visitedXtreamEntries(protectedKeys: Set<String> = emptySet()): List<MediaEntry> {
+        trimVisitedGroups(visitedGroups, protectedKeys)
         // The same stream may be listed under two provider categories.
         // Never emit duplicate Compose card keys or delete the original stream IDs.
         return visitedGroups.values.flatten().distinctBy { it.sourceId to it.id }
@@ -585,6 +596,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             state.value.xtreamGroups.firstOrNull { it.kind == kind && it.id == categoryId }
         }
         if (groups.isEmpty()) return
+        val requestedKeys = groups.mapTo(LinkedHashSet()) { id + ":" + it.kind + ":" + it.id }
+        if (requestedKeys.all { visitedGroups.containsKey(it) }) {
+            // All requested groups are already hot in memory: refresh LRU order without
+            // cancelling any in-flight job or flashing a busy bar.
+            for (key in requestedKeys) {
+                val existing = visitedGroups.remove(key)
+                if (existing != null) visitedGroups[key] = existing
+            }
+            val currentEntries = visitedXtreamEntries(requestedKeys)
+            if (state.value.entries.size != currentEntries.size) {
+                updateState { it.copy(entries = currentEntries) }
+            }
+            return
+        }
         groupJob?.cancel()
         val sequence = ++groupSequence
         val generation = loadGeneration
@@ -606,7 +631,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         val existing = visitedGroups.remove(key)
                         if (existing != null) visitedGroups[key] = existing
                         shown = true
-                        updateState { it.copy(entries = visitedXtreamEntries()) }
+                        updateState { it.copy(entries = visitedXtreamEntries(requestedKeys)) }
                         continue
                     }
                     val cached = try { repository.cachedXtreamCategory(source, group) }
@@ -620,11 +645,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         visitedGroups.remove(key)
                         visitedGroups[key] = normalizedEntries
                         shown = true
-                        updateState { it.copy(entries = visitedXtreamEntries()) }
+                        updateState { it.copy(entries = visitedXtreamEntries(requestedKeys)) }
                         val hasLegacyTsLive = group.kind == MediaKind.LIVE &&
                             cached.value.entries.any { it.url.endsWith(".ts", ignoreCase = true) }
-                        val hasLegacyArtwork = group.kind != MediaKind.LIVE &&
-                            cached.value.entries.any { ArtworkUrls.needsArtworkRefresh(it.logo) }
+                        val hasLegacyArtwork = ArtworkUrls.shouldRefreshCategoryArtwork(
+                            cached.value.entries.map { it.logo },
+                        )
                         val ttlMs = if (hasLegacyTsLive || hasLegacyArtwork) 60_000L else 30 * 60_000L
                         if (cached.ageMillis < ttlMs) continue
                     }
@@ -639,7 +665,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     visitedGroups.remove(key)
                     visitedGroups[key] = catalog.entries
                     shown = true
-                    updateState { it.copy(entries = visitedXtreamEntries()) }
+                    updateState { it.copy(entries = visitedXtreamEntries(requestedKeys)) }
                     pendingWrites += group to catalog
                 }
                 if (!shown) firstFailure?.let { showError(it) }
@@ -682,10 +708,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         catch (e: CancellationException) { throw e }
                         catch (_: Exception) { null }
                     if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
-                    val hasCached = cached != null && cached.value.isNotEmpty()
+                    val cachedGroups = cached?.value.orEmpty()
+                    val hasCached = cachedGroups.isNotEmpty()
                     if (hasCached) {
-                        updateState { it.copy(xtreamGroups = cached!!.value, entries = emptyList(), isBusy = false) }
-                        if (!refresh && cached!!.ageMillis < 60_000L) return@launch
+                        updateState { it.copy(xtreamGroups = cachedGroups, entries = visitedXtreamEntries(), isBusy = false) }
+                        if (!refresh && (cached?.ageMillis ?: Long.MAX_VALUE) < 60_000L) return@launch
                     }
                     val groups = try {
                         repository.xtreamCategories(source)
@@ -697,10 +724,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     ensureActive()
                     if (state.value.selectedSourceId != id || generation != loadGeneration) return@launch
-                    if (cached != null && groups != cached.value) {
+                    val categoriesChanged = !hasCached || groups != cachedGroups
+                    if (categoriesChanged) {
                         visitedGroups.clear()
                     }
-                    updateState { it.copy(xtreamGroups = groups, entries = emptyList(), isBusy = false) }
+                    updateState {
+                        it.copy(
+                            xtreamGroups = groups,
+                            entries = if (categoriesChanged) emptyList() else visitedXtreamEntries(),
+                            isBusy = false,
+                        )
+                    }
                     try { repository.saveXtreamCategories(source, groups) }
                     catch (e: CancellationException) { throw e }
                     catch (_: Exception) { /* Do not hide categories if local persistence failed. */ }
@@ -855,8 +889,29 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         setErrorText { message(resource) }
     }
 
-    private companion object {
+    internal companion object {
         const val EXTRA_ENTRY = "play.ott.nativeapp.entry"
         val entryJson = Json { ignoreUnknownKeys = true }
+        const val MAX_VISITED_GROUPS = 40
+        const val MAX_VISITED_ENTRIES = 45_000
+
+        /**
+         * Bounds in-memory visited Xtream groups while never evicting keys belonging to the
+         * active request batch, so a single very large category (e.g. 26k movies) cannot
+         * self-evict sibling showcase rails mid-load.
+         */
+        fun trimVisitedGroups(
+            visited: LinkedHashMap<String, List<MediaEntry>>,
+            protectedKeys: Set<String> = emptySet(),
+            maxGroups: Int = MAX_VISITED_GROUPS,
+            maxEntries: Int = MAX_VISITED_ENTRIES,
+        ) {
+            var totalEntries = visited.values.sumOf { it.size }
+            while (visited.size > maxGroups || (visited.size > 1 && totalEntries > maxEntries)) {
+                val victim = visited.keys.firstOrNull { it !in protectedKeys } ?: break
+                val removed = visited.remove(victim)
+                if (removed != null) totalEntries -= removed.size
+            }
+        }
     }
 }

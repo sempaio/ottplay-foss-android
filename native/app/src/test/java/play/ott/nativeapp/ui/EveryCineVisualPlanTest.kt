@@ -177,4 +177,76 @@ class EveryCineVisualPlanTest {
         assertEquals(movie, everyCineFeatured(emptyList(), listOf(RecentPlayback(movie, 1200))))
         assertNull(everyCineFeatured(emptyList(), emptyList()))
     }
+
+    @Test fun homeSectionsNeverEmitDuplicateTitlesWhenCategoryMatchesBuiltInName() {
+        val entries = listOf(
+            media("m1", MediaKind.MOVIE, "Filmes"),
+            media("m2", MediaKind.MOVIE, "FILMES | Lançamentos"),
+            media("s1", MediaKind.SERIES, "Séries"),
+            media("s2", MediaKind.SERIES, "SÉRIES | Drama"),
+            media("l1", MediaKind.LIVE, "TV ao vivo"),
+        )
+        val sections = everyCineSections(entries, emptyList(), emptySet())
+        val titles = sections.map { it.title }
+        assertEquals(titles.map { it.lowercase() }.distinct().size, titles.size, "Duplicate rail titles crash LazyColumn: $titles")
+        assertTrue("Filmes" in titles)
+        assertTrue("Séries" in titles)
+        assertTrue("FILMES | Lançamentos" in titles)
+        assertTrue("SÉRIES | Drama" in titles)
+    }
+
+    @Test fun kindSectionsNeverCollideWithReservedSyntheticTitles() {
+        val m1 = media("m1", MediaKind.MOVIE, "Continuar assistindo")
+        val m2 = media("m2", MediaKind.MOVIE, "Minha lista")
+        val m3 = media("m3", MediaKind.MOVIE, "FILMES | Ação")
+        val sections = everyCineKindSections(
+            entries = listOf(m1, m2, m3),
+            recent = listOf(RecentPlayback(m1, 3000L)),
+            favoriteIds = setOf("m2"),
+            kind = MediaKind.MOVIE,
+            preferredCategoryOrder = listOf("Continuar assistindo", "Minha lista", "FILMES | Ação"),
+        )
+        val titles = sections.map { it.title }
+        assertEquals(titles.map { it.lowercase() }.distinct().size, titles.size, "Duplicate kind rail titles: $titles")
+        assertEquals(listOf("Continuar assistindo", "Minha lista", "FILMES | Ação"), titles)
+    }
+
+    @Test fun homeCategoryShortcutsBalancesLiveMoviesAndSeries() {
+        val groups = (1..15).map { XtreamGroup("l$it", "Live $it", MediaKind.LIVE) } +
+            (1..20).map { XtreamGroup("m$it", "Movie $it", MediaKind.MOVIE) } +
+            (1..12).map { XtreamGroup("s$it", "Series $it", MediaKind.SERIES) }
+        val shortcuts = everyCineHomeCategoryShortcuts(groups, emptyList())
+        assertEquals(8, shortcuts.count { it.first == MediaKind.LIVE })
+        assertEquals(8, shortcuts.count { it.first == MediaKind.MOVIE })
+        assertEquals(8, shortcuts.count { it.first == MediaKind.SERIES })
+    }
+
+    @Test fun fullscreenExitStopsLiveOnlyWhenNotOnLiveTabAndNotCasting() {
+        assertFalse(shouldStopOnFullscreenExit(isLive = true, isOnLivePage = true, isCastingToTv = false))
+        assertTrue(shouldStopOnFullscreenExit(isLive = true, isOnLivePage = false, isCastingToTv = false))
+        assertTrue(shouldStopOnFullscreenExit(isLive = false, isOnLivePage = true, isCastingToTv = false))
+        assertTrue(shouldStopOnFullscreenExit(isLive = false, isOnLivePage = false, isCastingToTv = false))
+        assertFalse(shouldStopOnFullscreenExit(isLive = true, isOnLivePage = false, isCastingToTv = true))
+        assertFalse(shouldStopOnFullscreenExit(isLive = false, isOnLivePage = false, isCastingToTv = true))
+    }
+
+    @Test fun visitedGroupsEvictionProtectsActiveShowcaseBatchAgainstGiantCategory() {
+        val visited = LinkedHashMap<String, List<MediaEntry>>()
+        visited["old:live:1"] = List(500) { media("l-$it", MediaKind.LIVE, "Esportes") }
+        visited["m81:MOVIE:1"] = List(1_235) { media("launch-$it", MediaKind.MOVIE, "FILMES | Lançamentos") }
+        visited["m81:MOVIE:2"] = List(26_692) { media("all-$it", MediaKind.MOVIE, "Filmes") }
+        visited["m81:MOVIE:3"] = List(38) { media("anime-$it", MediaKind.MOVIE, "Anime") }
+        visited["m81:MOVIE:4"] = List(14) { media("cinema-$it", MediaKind.MOVIE, "Cinema") }
+        val activeBatch = setOf("m81:MOVIE:1", "m81:MOVIE:2", "m81:MOVIE:3", "m81:MOVIE:4")
+
+        play.ott.nativeapp.PlayerViewModel.trimVisitedGroups(
+            visited = visited,
+            protectedKeys = activeBatch,
+            maxGroups = 40,
+            maxEntries = 20_000,
+        )
+
+        assertFalse("old:live:1" in visited, "Older non-protected group should be evicted first")
+        assertEquals(activeBatch, visited.keys, "Active showcase batch must never self-evict mid-load")
+    }
 }

@@ -40,7 +40,7 @@ object M3uParser {
                     drm.unsupportedReason?.let(notes::add)
                     converted.putIfAbsent(entry.id, MediaEntry(entry.id, config.id, entry.name, entry.url,
                         kind = if (entry.movie) MediaKind.MOVIE else MediaKind.LIVE,
-                        group = entry.group, logo = entry.logo, epgId = entry.epgId,
+                        group = entry.group, logo = ArtworkUrls.normalizeUrl(entry.logo), epgId = entry.epgId,
                         headers = mergedHeaders(config.headers, entryHeaders),
                         catchup = entry.archive?.let { Catchup(it.mode, it.source, it.days) },
                         drm = drm.drm, mimeType = drm.mimeType, playbackUnsupportedReason = drm.unsupportedReason,

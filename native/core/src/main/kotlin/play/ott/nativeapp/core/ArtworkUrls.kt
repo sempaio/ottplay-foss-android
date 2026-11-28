@@ -12,6 +12,7 @@ object ArtworkUrls {
         "image.tmdb.org",
         "media.themoviedb.org",
         "panel.taila5c5c2.ts.net",
+        "topxz.live",
         "upload.wikimedia.org",
         "lh3.googleusercontent.com",
         "1.bp.blogspot.com",
@@ -27,15 +28,15 @@ object ArtworkUrls {
         "media.themoviedb.org",
     )
 
-    /** Matches standard TMDB image paths such as /t/p/w600_and_h900_bestv2/<hash>.jpg. */
+    /** Matches standard TMDB image paths such as /t/p/w600_and_h900_bestv2/<hash>.jpg or w1066_and_h600_face/<hash>.jpg. */
     private val TMDB_POSTER_PATH_RE = Regex(
-        """^/t/p/(?:original|w\d+(?:_and_h\d+_bestv2)?)/[A-Za-z0-9._-]+\.(?:jpg|jpeg|png|webp)$""",
+        """^/t/p/(?:original|(?:w|h)\d+(?:_and_h\d+(?:_bestv2|_face|_multi_faces)?)?)/[A-Za-z0-9._-]+\.(?:jpg|jpeg|png|webp)$""",
         RegexOption.IGNORE_CASE,
     )
 
     private val COMBINING_MARKS_RE = Regex("""\p{Mn}+""")
     private val EDITION_TAGS_RE = Regex(
-        """(\[[^\]]*]|\((?:19|20)\d{2}\)|\((?:dub|leg|dublado|legendado|nacional|dual|4k|fhd|hd|sd|cam|hdr|uhd|3d|h265|hevc|parte\s*\d+)[^)]*\)|\b(?:4k|uhd|fhd|hd|sd|hdr|cam|dub|leg|dublado|legendado|dual|nacional|lancamento|h265|hevc)\b|\.\d{1,3}(?=\s|$))""",
+        """(\[[^\]]*]|\((?:19|20)\d{2}\)|\((?:dub|leg|dublado|legendado|nacional|dual|4k|fhd|hd|sd|cam|hdr|uhd|3d|h\.?265|hevc|hybrid|1080p|720p|parte\s*\d+)[^)]*\)|\b(?:4k|uhd|fhd|hd|sd|hdr|cam|camrip|hdcam|dub|leg|dublado|legendado|dual\s+audio|dual|nacional|lancamento|h\.?265|x265|x264|hevc|hybrid|1080p|720p|bluray|web-?dl|webrip)\b|\.\d{1,3}(?=\s|$))""",
         RegexOption.IGNORE_CASE,
     )
     private val TRAILING_YEAR_RE = Regex("""(?:\s+|-)(?:19|20)\d{2}$""")
@@ -132,14 +133,32 @@ object ArtworkUrls {
         return host in TRUSTED_TMDB_HOSTS
     }
 
-    /** True when a cached VOD/series entry still carries legacy HTTP TMDB or dead mirror artwork. */
+    /**
+     * True when a cached artwork URL still uses legacy HTTP on an HTTPS-upgradeable host,
+     * protocol-relative syntax, or a dead non-TMDB mirror serving `/t/p/...`.
+     * Blank logos alone do NOT return true so categories with 1-2 legitimately coverless titles
+     * still benefit from normal 30-minute caching.
+     */
     fun needsArtworkRefresh(logo: String): Boolean {
         val trimmed = logo.trim()
-        if (trimmed.isEmpty()) return true
-        val parsed = trimmed.toHttpUrlOrNull() ?: return true
+        if (trimmed.isEmpty()) return false
+        if (trimmed.startsWith("//")) return true
+        val parsed = trimmed.toHttpUrlOrNull() ?: return false
         val hostLower = parsed.host.lowercase()
         if (!parsed.isHttps && hostLower in HTTPS_UPGRADE_HOSTS) return true
         if (hostLower !in TRUSTED_TMDB_HOSTS && TMDB_POSTER_PATH_RE.matches(parsed.encodedPath)) return true
         return false
+    }
+
+    /**
+     * True when a cached category either contains legacy un-normalized artwork URLs or has
+     * a high ratio of blank logos (>=25% across >=4 items), catching legacy caches whose covers
+     * were wiped by old over-aggressive deduplication without thrashing healthy categories.
+     */
+    fun shouldRefreshCategoryArtwork(logos: List<String>): Boolean {
+        if (logos.any(::needsArtworkRefresh)) return true
+        if (logos.size < 4) return false
+        val blankCount = logos.count { it.isBlank() }
+        return blankCount * 4 >= logos.size
     }
 }

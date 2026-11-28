@@ -150,6 +150,21 @@ class ScreenOrientationPolicyTest {
             }
             activity.onConfigurationChanged(strayLandscape)
             assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
+
+            // Returning window focus after a system overlay (e.g. Android Cast/Mirroring prompt)
+            // must also restore portrait if orientation drifted.
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            activity.resources.configuration.orientation = Configuration.ORIENTATION_LANDSCAPE
+            activity.onWindowFocusChanged(true)
+            assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
+
+            // OEM stuck-landscape recovery: even when requestedOrientation is already PORTRAIT
+            // while configuration reports LANDSCAPE, setFullscreen(false) forces WMS re-evaluation
+            // and ends locked in PORTRAIT.
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            activity.resources.configuration.orientation = Configuration.ORIENTATION_LANDSCAPE
+            activity.setFullscreen(false)
+            assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
         } finally {
             controller.pause().stop().destroy()
         }

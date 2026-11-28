@@ -416,11 +416,27 @@ internal fun PosterCard(entry: MediaEntry, onClick: () -> Unit, modifier: Modifi
         Box(Modifier.fillMaxWidth().aspectRatio(if (landscape) 16f / 9 else 2f / 3)
             .background(Brush.linearGradient(listOf(Color(0xFF12344B), Color(0xFF251330)))), contentAlignment = Alignment.Center) {
             val normalizedLogo = remember(entry.logo) { play.ott.nativeapp.core.ArtworkUrls.normalizeUrl(entry.logo) }
+            var activeLogo by remember(normalizedLogo) { mutableStateOf(normalizedLogo) }
+            var triedHttps by remember(normalizedLogo) { mutableStateOf(false) }
             var artworkReady by remember(normalizedLogo) { mutableStateOf(false) }
             if (!artworkReady) Text(entry.name.take(2).uppercase(),
                 Modifier.testTag("poster-placeholder-${entry.id}"), color = MaterialTheme.colorScheme.secondary)
-            if (normalizedLogo.isNotBlank()) AsyncImage(normalizedLogo, null, Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit, onSuccess = { artworkReady = true }, onError = { artworkReady = false })
+            if (activeLogo.isNotBlank()) AsyncImage(
+                activeLogo,
+                null,
+                Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+                onSuccess = { artworkReady = true },
+                onError = {
+                    val upgrade = if (!triedHttps) play.ott.nativeapp.core.ArtworkUrls.httpsUpgradeCandidate(activeLogo) else null
+                    if (upgrade != null && upgrade != activeLogo) {
+                        triedHttps = true
+                        activeLogo = upgrade
+                    } else {
+                        artworkReady = false
+                    }
+                },
+            )
         }
         Text(entry.name, Modifier.padding(10.dp), maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
     }

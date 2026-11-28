@@ -276,8 +276,8 @@ fun OttNativeApp(
         Surface(modifier = Modifier.tvRemoteInput().fillMaxSize().then(if (inPictureInPicture) Modifier else Modifier.safeDrawingPadding()), color = MaterialTheme.colorScheme.background) {
             Box(Modifier.fillMaxSize()) {
                 if ((fullscreen || inPictureInPicture) && state.playingEntry != null) {
-                    NativePlayerPane(state.playingEntry, controller, true, { onAction(AppAction.StopPlayback) }, onPictureInPicture,
-                        { onAction(AppAction.StopPlayback) }, { onAction(AppAction.Play(state.playingEntry)) },
+                    NativePlayerPane(state.playingEntry, controller, true, { fullscreen = false; onAction(AppAction.StopPlayback) }, onPictureInPicture,
+                        { fullscreen = false; onAction(AppAction.StopPlayback) }, { onAction(AppAction.Play(state.playingEntry)) },
                         { audio, preference -> onAction(AppAction.SetTrackPreference(audio, preference)) }, Modifier.fillMaxSize(), inPictureInPicture)
                 } else {
                     BoxWithConstraints(Modifier.fillMaxSize()) {

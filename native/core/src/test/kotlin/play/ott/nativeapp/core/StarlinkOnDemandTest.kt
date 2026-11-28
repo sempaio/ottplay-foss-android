@@ -100,4 +100,22 @@ class StarlinkOnDemandTest {
             assertEquals("https://image.tmdb.org/t/p/w600_and_h900_bestv2/9LNp4wA2DzZhdYUbTan3shbC8j8.jpg", entries[2].logo)
         }
     }
+
+    @Test fun liveCategoryPreservesSharedBrandLogosAcrossChannels() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val config = SourceConfig("managed", "STARLINK", SourceKind.XTREAM,
+                server.url("/").toString(), "user", "password")
+            val repo = ProviderRepository()
+            server.enqueue(MockResponse().setBody(
+                """[
+                    {"stream_id":101,"name":"Premiere 1 FHD","category_id":"esportes","container_extension":"m3u8","stream_icon":"http://panel.taila5c5c2.ts.net/channel-logo/premiere.png"},
+                    {"stream_id":102,"name":"Premiere 2 FHD","category_id":"esportes","container_extension":"m3u8","stream_icon":"https://panel.taila5c5c2.ts.net/channel-logo/premiere.png"}
+                ]"""))
+            val entries = repo.xtreamCategory(config, XtreamGroup("esportes", "Esportes", MediaKind.LIVE)).entries
+            assertEquals(2, entries.size)
+            assertEquals("https://panel.taila5c5c2.ts.net/channel-logo/premiere.png", entries[0].logo)
+            assertEquals("https://panel.taila5c5c2.ts.net/channel-logo/premiere.png", entries[1].logo)
+        }
+    }
 }
