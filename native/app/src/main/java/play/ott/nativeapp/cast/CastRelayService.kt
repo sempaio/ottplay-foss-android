@@ -55,16 +55,19 @@ class CastRelayService : Service() {
                     val tv = st.connectedDevice?.friendlyName
                     if (tv != null) {
                         updateMediaSession(tv, st.castingTitle, st.isPlayingOnTv)
-                        updateNotification(tv, st.castingTitle, st.isPlayingOnTv)
+                        updateNotification(tv, st.castingTitle, st.isPlayingOnTv, st.castingDirectMode)
                     }
                 }
                 return START_NOT_STICKY
             }
             ACTION_DISCONNECT -> {
                 serviceScope.launch {
-                    CastSessionHost.controller.disconnect(applicationContext)
+                    try {
+                        CastSessionHost.controller.disconnect(applicationContext)
+                    } finally {
+                        stopSelfCleanly()
+                    }
                 }
-                stopSelfCleanly()
                 return START_NOT_STICKY
             }
             ACTION_STOP_SERVICE -> {
@@ -78,12 +81,22 @@ class CastRelayService : Service() {
                 val mediaTitle = intent?.getStringExtra(EXTRA_MEDIA_TITLE)
                     ?: CastSessionHost.controller.state.value.castingTitle
                 val isPlaying = intent?.getBooleanExtra(EXTRA_IS_PLAYING, true) ?: true
+                val isDirectMode = intent?.getBooleanExtra(
+                    EXTRA_DIRECT_MODE,
+                    CastSessionHost.controller.state.value.castingDirectMode,
+                ) ?: CastSessionHost.controller.state.value.castingDirectMode
 
-                acquireLocks()
+                // Hold PARTIAL_WAKE_LOCK & WifiLock ONLY when the phone LAN bridge is actually streaming!
+                // In Direct Cloud/CDN mode, the TV pulls directly from the CDN so we save battery.
+                if (isDirectMode) {
+                    releaseLocks()
+                } else {
+                    acquireLocks()
+                }
                 ensureMediaSession()
                 updateMediaSession(tvName, mediaTitle, isPlaying)
                 ensureChannel()
-                val notification = buildNotification(tvName, mediaTitle, isPlaying)
+                val notification = buildNotification(tvName, mediaTitle, isPlaying, isDirectMode)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val fgsTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
@@ -123,9 +136,12 @@ class CastRelayService : Service() {
 
                 override fun onStop() {
                     serviceScope.launch {
-                        CastSessionHost.controller.disconnect(applicationContext)
+                        try {
+                            CastSessionHost.controller.disconnect(applicationContext)
+                        } finally {
+                            stopSelfCleanly()
+                        }
                     }
-                    stopSelfCleanly()
                 }
             },
         )
@@ -257,12 +273,22 @@ class CastRelayService : Service() {
         }
     }
 
-    private fun updateNotification(tvName: String, mediaTitle: String, isPlaying: Boolean) {
+    private fun updateNotification(
+        tvName: String,
+        mediaTitle: String,
+        isPlaying: Boolean,
+        isDirectMode: Boolean,
+    ) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-        manager.notify(NOTIFICATION_ID, buildNotification(tvName, mediaTitle, isPlaying))
+        manager.notify(NOTIFICATION_ID, buildNotification(tvName, mediaTitle, isPlaying, isDirectMode))
     }
 
-    private fun buildNotification(tvName: String, mediaTitle: String, isPlaying: Boolean): Notification {
+    private fun buildNotification(
+        tvName: String,
+        mediaTitle: String,
+        isPlaying: Boolean,
+        isDirectMode: Boolean,
+    ): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -289,7 +315,6 @@ class CastRelayService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val isDirectMode = CastSessionHost.controller.state.value.castingDirectMode
         val notifTitle = if (isDirectMode) "☁️ Direto em $tvName" else "Transmitindo para $tvName"
         val notifText = if (isDirectMode) {
             val titlePart = mediaTitle.ifBlank { "Reproduzindo direto na TV" }
@@ -351,14 +376,22 @@ class CastRelayService : Service() {
         private const val EXTRA_TV_NAME = "tv_name"
         private const val EXTRA_MEDIA_TITLE = "media_title"
         private const val EXTRA_IS_PLAYING = "is_playing"
+        private const val EXTRA_DIRECT_MODE = "direct_mode"
 
-        fun startOrUpdate(context: Context, tvName: String, mediaTitle: String, isPlaying: Boolean) {
+        fun startOrUpdate(
+            context: Context,
+            tvName: String,
+            mediaTitle: String,
+            isPlaying: Boolean,
+            isDirectMode: Boolean = false,
+        ) {
             val appCtx = context.applicationContext
             val intent = Intent(appCtx, CastRelayService::class.java).apply {
                 action = ACTION_START_OR_UPDATE
                 putExtra(EXTRA_TV_NAME, tvName)
                 putExtra(EXTRA_MEDIA_TITLE, mediaTitle)
                 putExtra(EXTRA_IS_PLAYING, isPlaying)
+                putExtra(EXTRA_DIRECT_MODE, isDirectMode)
             }
             runCatching { ContextCompat.startForegroundService(appCtx, intent) }
         }

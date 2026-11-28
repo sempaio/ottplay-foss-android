@@ -27,18 +27,20 @@ internal data class CastDevice(
     val renderingControlUrl: String?,
     val protocol: CastProtocol = CastProtocol.DLNA,
     val port: Int = 8009,
+    val connectionManagerControlUrl: String? = null,
 )
 
 /**
  * Pure, dependency-free UPnP / DLNA protocol codec (SSDP M-SEARCH, device XML parsing,
- * DIDL-Lite metadata, AVTransport:1 & RenderingControl:1 SOAP 1.1 envelopes, and M81
- * stream URL normalization for Smart TV renderers).
+ * DIDL-Lite metadata, AVTransport:1, RenderingControl:1 & ConnectionManager:1 SOAP 1.1 envelopes,
+ * and M81 stream URL normalization for Smart TV renderers).
  */
 internal object DlnaProtocol {
     const val SSDP_ADDRESS = "239.255.255.250"
     const val SSDP_PORT = 1900
     const val AV_TRANSPORT_SERVICE = "urn:schemas-upnp-org:service:AVTransport:1"
     const val RENDERING_CONTROL_SERVICE = "urn:schemas-upnp-org:service:RenderingControl:1"
+    const val CONNECTION_MANAGER_SERVICE = "urn:schemas-upnp-org:service:ConnectionManager:1"
     const val MEDIA_RENDERER_DEVICE = "urn:schemas-upnp-org:device:MediaRenderer:1"
 
     private val LIVE_PATH_REGEX = Regex("^/live/([^/]+)/([^/]+)/(\\d+)(?:\\.[a-zA-Z0-9]+)?$")
@@ -120,6 +122,7 @@ internal object DlnaProtocol {
         val urlBase = extractTagText(xml, "URLBase")?.takeIf { it.isNotBlank() } ?: locationUrl
         var avTransportUrl: String? = null
         var renderingControlUrl: String? = null
+        var connectionManagerUrl: String? = null
 
         for (match in SERVICE_BLOCK_REGEX.findAll(xml)) {
             val block = match.groupValues[1]
@@ -134,6 +137,9 @@ internal object DlnaProtocol {
                 }
                 serviceType.contains("RenderingControl", ignoreCase = true) && renderingControlUrl == null -> {
                     renderingControlUrl = resolved
+                }
+                serviceType.contains("ConnectionManager", ignoreCase = true) && connectionManagerUrl == null -> {
+                    connectionManagerUrl = resolved
                 }
             }
         }
@@ -157,6 +163,7 @@ internal object DlnaProtocol {
             locationUrl = locationUrl,
             avTransportControlUrl = finalAvUrl,
             renderingControlUrl = renderingControlUrl,
+            connectionManagerControlUrl = connectionManagerUrl,
         )
     }
 
@@ -320,6 +327,12 @@ internal object DlnaProtocol {
         RENDERING_CONTROL_SERVICE,
         "GetVolume",
         "<InstanceID>0</InstanceID><Channel>Master</Channel>",
+    )
+
+    fun buildGetProtocolInfoSoap(): String = buildSoapEnvelope(
+        CONNECTION_MANAGER_SERVICE,
+        "GetProtocolInfo",
+        "",
     )
 
     fun formatUpnpTime(ms: Long): String {
