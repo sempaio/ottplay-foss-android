@@ -26,6 +26,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import play.ott.nativeapp.MainActivity
 import play.ott.nativeapp.R
 
@@ -39,14 +40,25 @@ import play.ott.nativeapp.R
  */
 class CastRelayService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val lockGuard = Any()
     private var watchdogJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var mediaSession: MediaSession? = null
 
+    internal fun isWakeLockHeldForTest(): Boolean = synchronized(lockGuard) { wakeLock?.isHeld == true }
+
+    internal fun isWifiLockHeldForTest(): Boolean = synchronized(lockGuard) { wifiLock?.isHeld == true }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Never spin up phantom locks/notifications if Android restarts the service with a null intent
+        // and there is no active in-memory cast session.
+        if (intent == null && !CastSessionHost.isCastingActive) {
+            stopSelfCleanly()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_TOGGLE_PLAY_PAUSE -> {
                 serviceScope.launch {
@@ -54,8 +66,11 @@ class CastRelayService : Service() {
                     val st = CastSessionHost.controller.state.value
                     val tv = st.connectedDevice?.friendlyName
                     if (tv != null) {
-                        updateMediaSession(tv, st.castingTitle, st.isPlayingOnTv)
-                        updateNotification(tv, st.castingTitle, st.isPlayingOnTv, st.castingDirectMode)
+                        withContext(Dispatchers.Main) {
+                            if (st.castingDirectMode) releaseLocks() else acquireLocks()
+                            updateMediaSession(tv, st.castingTitle, st.isPlayingOnTv)
+                            updateNotification(tv, st.castingTitle, st.isPlayingOnTv, st.castingDirectMode)
+                        }
                     }
                 }
                 return START_NOT_STICKY
@@ -65,7 +80,11 @@ class CastRelayService : Service() {
                     try {
                         CastSessionHost.controller.disconnect(applicationContext)
                     } finally {
-                        stopSelfCleanly()
+                        withContext(Dispatchers.Main) {
+                            if (!CastSessionHost.isCastingActive) {
+                                stopSelfCleanly()
+                            }
+                        }
                     }
                 }
                 return START_NOT_STICKY
@@ -110,7 +129,7 @@ class CastRelayService : Service() {
                 }
                 isServiceActive = true
                 ensureWatchdogRunning()
-                return START_STICKY
+                return START_NOT_STICKY
             }
         }
     }
@@ -139,7 +158,11 @@ class CastRelayService : Service() {
                         try {
                             CastSessionHost.controller.disconnect(applicationContext)
                         } finally {
-                            stopSelfCleanly()
+                            withContext(Dispatchers.Main) {
+                                if (!CastSessionHost.isCastingActive) {
+                                    stopSelfCleanly()
+                                }
+                            }
                         }
                     }
                 }
@@ -177,7 +200,11 @@ class CastRelayService : Service() {
                 // Gentle 12s interval avoids hammering Samsung/LG embedded UPnP daemons while streaming
                 delay(12_000L)
                 if (!CastSessionHost.isCastingActive) {
-                    stopSelfCleanly()
+                    withContext(Dispatchers.Main) {
+                        if (!CastSessionHost.isCastingActive) {
+                            stopSelfCleanly()
+                        }
+                    }
                     break
                 }
                 runCatching { CastSessionHost.controller.watchdogTick(applicationContext) }
@@ -220,37 +247,41 @@ class CastRelayService : Service() {
     }
 
     private fun acquireLocks() {
-        if (wakeLock?.isHeld != true) {
-            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
-            wakeLock = runCatching {
-                pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Starlink:CastRelayWakeLock")?.apply {
-                    setReferenceCounted(false)
-                    acquire(6 * 60 * 60 * 1000L) // max 6h safety timeout
-                }
-            }.getOrNull()
-        }
-        if (wifiLock?.isHeld != true) {
-            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-            } else {
-                @Suppress("DEPRECATION")
-                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+        synchronized(lockGuard) {
+            if (wakeLock?.isHeld != true) {
+                val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                wakeLock = runCatching {
+                    pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Starlink:CastRelayWakeLock")?.apply {
+                        setReferenceCounted(false)
+                        acquire(6 * 60 * 60 * 1000L) // max 6h safety timeout
+                    }
+                }.getOrNull()
             }
-            wifiLock = runCatching {
-                wm?.createWifiLock(mode, "Starlink:CastRelayWifiLock")?.apply {
-                    setReferenceCounted(false)
-                    acquire()
+            if (wifiLock?.isHeld != true) {
+                val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF
                 }
-            }.getOrNull()
+                wifiLock = runCatching {
+                    wm?.createWifiLock(mode, "Starlink:CastRelayWifiLock")?.apply {
+                        setReferenceCounted(false)
+                        acquire()
+                    }
+                }.getOrNull()
+            }
         }
     }
 
     private fun releaseLocks() {
-        runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
-        wakeLock = null
-        runCatching { if (wifiLock?.isHeld == true) wifiLock?.release() }
-        wifiLock = null
+        synchronized(lockGuard) {
+            runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+            wakeLock = null
+            runCatching { if (wifiLock?.isHeld == true) wifiLock?.release() }
+            wifiLock = null
+        }
     }
 
     private fun ensureChannel() {
@@ -369,14 +400,14 @@ class CastRelayService : Service() {
 
         private const val CHANNEL_ID = "starlink_cast_relay_v2"
         private const val NOTIFICATION_ID = 4108
-        private const val ACTION_START_OR_UPDATE = "play.ott.nativeapp.cast.START_OR_UPDATE"
-        private const val ACTION_TOGGLE_PLAY_PAUSE = "play.ott.nativeapp.cast.TOGGLE_PLAY_PAUSE"
-        private const val ACTION_DISCONNECT = "play.ott.nativeapp.cast.DISCONNECT"
-        private const val ACTION_STOP_SERVICE = "play.ott.nativeapp.cast.STOP_SERVICE"
-        private const val EXTRA_TV_NAME = "tv_name"
-        private const val EXTRA_MEDIA_TITLE = "media_title"
-        private const val EXTRA_IS_PLAYING = "is_playing"
-        private const val EXTRA_DIRECT_MODE = "direct_mode"
+        internal const val ACTION_START_OR_UPDATE = "play.ott.nativeapp.cast.START_OR_UPDATE"
+        internal const val ACTION_TOGGLE_PLAY_PAUSE = "play.ott.nativeapp.cast.TOGGLE_PLAY_PAUSE"
+        internal const val ACTION_DISCONNECT = "play.ott.nativeapp.cast.DISCONNECT"
+        internal const val ACTION_STOP_SERVICE = "play.ott.nativeapp.cast.STOP_SERVICE"
+        internal const val EXTRA_TV_NAME = "tv_name"
+        internal const val EXTRA_MEDIA_TITLE = "media_title"
+        internal const val EXTRA_IS_PLAYING = "is_playing"
+        internal const val EXTRA_DIRECT_MODE = "direct_mode"
 
         fun startOrUpdate(
             context: Context,

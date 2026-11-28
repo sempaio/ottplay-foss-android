@@ -1,6 +1,7 @@
 package play.ott.nativeapp.cast
 
 import okhttp3.Dns
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -114,35 +115,55 @@ internal object UpstreamUrlSecurity {
     private val IPV6_LITERAL_CHARS = Regex("^[0-9a-f:.]+$")
     private val NUMERIC_OR_HEX_LABEL = Regex("^(?:\\d+|0x[0-9a-f]+)$")
 
+    private fun normalizeHost(raw: String): String =
+        raw.trim().removePrefix("[").removeSuffix("]").trimEnd('.').lowercase(Locale.ROOT)
+
     fun isAllowedUpstreamUrl(
         rawUrl: String,
         allowLoopbackForTest: Boolean = false,
         resolveDns: Boolean = false,
     ): Boolean {
-        val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return false
-        val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return false
-        if (scheme != "http" && scheme != "https") return false
-        val host = uri.host?.trim()?.removePrefix("[")?.removeSuffix("]")?.lowercase(Locale.ROOT)
+        val trimmed = rawUrl.trim()
+        val uri = runCatching { URI(trimmed) }.getOrNull() ?: return false
+        val httpUrl = trimmed.toHttpUrlOrNull() ?: return false
+        val uriScheme = uri.scheme?.lowercase(Locale.ROOT) ?: return false
+        val httpScheme = httpUrl.scheme.lowercase(Locale.ROOT)
+        if ((uriScheme != "http" && uriScheme != "https") || uriScheme != httpScheme) return false
+
+        val rawUriHost = uri.host?.trim()?.removePrefix("[")?.removeSuffix("]")
             ?.takeIf { it.isNotBlank() } ?: return false
+        val rawHttpHost = httpUrl.host.trim().removePrefix("[").removeSuffix("]")
+            .takeIf { it.isNotBlank() } ?: return false
 
         // Reject IPv6 zone IDs or percent-encoded host obfuscation
-        if (host.contains('%')) return false
+        if (rawUriHost.contains('%') || rawHttpHost.contains('%')) return false
 
-        if (isLoopbackHostLiteral(host)) {
-            return allowLoopbackForTest
+        val uriHost = normalizeHost(rawUriHost)
+        val httpHost = normalizeHost(rawHttpHost)
+        if (uriHost.isBlank() || httpHost.isBlank()) return false
+
+        // Validate BOTH raw URI host and OkHttp canonical host to eliminate parser differentials
+        // and block obfuscated IP literals (e.g., 2130706433, 127.1, 0177.0.0.1, localhost.)
+        for (candidateHost in listOf(uriHost, httpHost).distinct()) {
+            if (isLoopbackHostLiteral(candidateHost)) {
+                if (!allowLoopbackForTest) return false
+            } else if (isBlockedHostLiteral(candidateHost, allowLoopbackForTest = allowLoopbackForTest)) {
+                return false
+            }
         }
-        if (isBlockedHostLiteral(host, allowLoopbackForTest = allowLoopbackForTest)) return false
 
         if (resolveDns) {
-            val resolved = runCatching { InetAddress.getAllByName(host) }.getOrNull()
-            if (resolved != null && resolved.any { isBlockedAddress(it, allowLoopbackForTest) }) {
+            val resolved = runCatching { InetAddress.getAllByName(httpHost) }.getOrNull()
+            if (resolved.isNullOrEmpty() || resolved.any { isBlockedAddress(it, allowLoopbackForTest) }) {
                 return false
             }
         }
         return true
     }
 
-    internal fun isLoopbackHostLiteral(normalizedHost: String): Boolean {
+    internal fun isLoopbackHostLiteral(rawHost: String): Boolean {
+        val normalizedHost = normalizeHost(rawHost)
+        if (normalizedHost.isBlank()) return false
         if (normalizedHost == "localhost" ||
             normalizedHost.endsWith(".localhost") ||
             normalizedHost == "::1" ||
@@ -159,16 +180,18 @@ internal object UpstreamUrlSecurity {
         }
         if (normalizedHost.contains(':') && IPV6_LITERAL_CHARS.matches(normalizedHost)) {
             val parsed = runCatching { InetAddress.getByName("[$normalizedHost]") }.getOrNull()
-            if (parsed != null && parsed.isLoopbackAddress) return true
+            if (parsed is Inet6Address && parsed.isLoopbackAddress) return true
         }
         return false
     }
 
     internal fun isBlockedHostLiteral(
-        normalizedHost: String,
+        rawHost: String,
         allowLoopbackForTest: Boolean = false,
     ): Boolean {
-        if (normalizedHost.contains('%') ||
+        if (rawHost.contains('%')) return true
+        val normalizedHost = normalizeHost(rawHost)
+        if (normalizedHost.isBlank() ||
             normalizedHost == "0.0.0.0" ||
             normalizedHost == "::" ||
             normalizedHost.endsWith(".local") ||
@@ -176,11 +199,13 @@ internal object UpstreamUrlSecurity {
         ) {
             return true
         }
-        // Check IPv6 literal (including IPv4-mapped ::ffff:172.16.0.1, ::ffff:7f00:1, ULA fc00::/7, link-local fe80::/10)
+        // Check IPv6 literal (including IPv4-mapped, IPv4-compatible, IPv4-translated, NAT64, 6to4, Teredo, ULA, link-local)
         if (normalizedHost.contains(':')) {
             if (!IPV6_LITERAL_CHARS.matches(normalizedHost)) return true
             val parsed = runCatching { InetAddress.getByName("[$normalizedHost]") }.getOrNull() ?: return true
-            return isBlockedAddress(parsed, allowLoopbackForTest)
+            // Java unwraps ::ffff:a.b.c.d into Inet4Address; never allow IPv4-mapped loopback even in test mode
+            val effectiveAllowLoopback = allowLoopbackForTest && parsed is Inet6Address
+            return isBlockedAddress(parsed, effectiveAllowLoopback)
         }
         // Check dotted / integer / octal / hex IPv4 literals
         val parts = normalizedHost.split('.')
@@ -223,21 +248,65 @@ internal object UpstreamUrlSecurity {
         }
         if (addr is Inet6Address) {
             val bytes = addr.address
-            val firstByte = bytes[0].toInt() and 0xFF
+            val b0 = bytes[0].toInt() and 0xFF
+            val b1 = bytes[1].toInt() and 0xFF
+            val b2 = bytes[2].toInt() and 0xFF
+            val b3 = bytes[3].toInt() and 0xFF
+            val b4 = bytes[4].toInt() and 0xFF
+            val b5 = bytes[5].toInt() and 0xFF
             // Unique Local Address fc00::/7
-            if ((firstByte and 0xFE) == 0xFC) return true
+            if ((b0 and 0xFE) == 0xFC) return true
             // Link-local fe80::/10
-            val secondByte = bytes[1].toInt() and 0xFF
-            if (firstByte == 0xFE && (secondByte and 0xC0) == 0x80) return true
-            // IPv4-mapped ::ffff:0:0/96 (in case JVM kept Inet6Address wrapper)
-            val isIpv4Mapped = (0 until 10).all { bytes[it] == 0.toByte() } &&
-                bytes[10] == 0xFF.toByte() && bytes[11] == 0xFF.toByte()
-            if (isIpv4Mapped) {
-                val v4 = InetAddress.getByAddress(bytes.copyOfRange(12, 16))
-                return isBlockedAddress(v4, allowLoopbackForTest)
+            if (b0 == 0xFE && (b1 and 0xC0) == 0x80) return true
+            // NAT64 local-use prefix 64:ff9b:1::/48 (RFC 8215)
+            if (b0 == 0x00 && b1 == 0x64 && b2 == 0xFF && b3 == 0x9B && b4 == 0x00 && b5 == 0x01) {
+                return true
+            }
+            // Extract embedded IPv4 from transition/compatibility mechanisms (never allow wrapped loopback)
+            val embeddedIpv4 = extractEmbeddedIpv4(bytes)
+            if (embeddedIpv4 != null) {
+                return isBlockedAddress(embeddedIpv4, allowLoopbackForTest = false)
             }
         }
         return false
+    }
+
+    private fun extractEmbeddedIpv4(bytes: ByteArray): InetAddress? {
+        if (bytes.size != 16) return null
+        val zero0to7 = (0 until 8).all { bytes[it] == 0.toByte() }
+        val zero8to9 = bytes[8] == 0.toByte() && bytes[9] == 0.toByte()
+        val zero10to11 = bytes[10] == 0.toByte() && bytes[11] == 0.toByte()
+        // 1. IPv4-mapped ::ffff:a.b.c.d
+        if (zero0to7 && zero8to9 && bytes[10] == 0xFF.toByte() && bytes[11] == 0xFF.toByte()) {
+            return InetAddress.getByAddress(bytes.copyOfRange(12, 16))
+        }
+        // 2. Deprecated IPv4-compatible ::a.b.c.d (excluding :: and ::1 already checked above)
+        if (zero0to7 && zero8to9 && zero10to11) {
+            return InetAddress.getByAddress(bytes.copyOfRange(12, 16))
+        }
+        // 3. IPv4-translated ::ffff:0:a.b.c.d (RFC 2765)
+        if (zero0to7 && bytes[8] == 0xFF.toByte() && bytes[9] == 0xFF.toByte() && zero10to11) {
+            return InetAddress.getByAddress(bytes.copyOfRange(12, 16))
+        }
+        // 4. NAT64 Well-Known Prefix 64:ff9b::a.b.c.d (RFC 6052)
+        if (bytes[0] == 0x00.toByte() && bytes[1] == 0x64.toByte() &&
+            bytes[2] == 0xFF.toByte() && bytes[3] == 0x9B.toByte() &&
+            (4 until 12).all { bytes[it] == 0.toByte() }
+        ) {
+            return InetAddress.getByAddress(bytes.copyOfRange(12, 16))
+        }
+        // 5. 6to4 2002:AABB:CCDD::/48 (RFC 3056)
+        if (bytes[0] == 0x20.toByte() && bytes[1] == 0x02.toByte()) {
+            return InetAddress.getByAddress(bytes.copyOfRange(2, 6))
+        }
+        // 6. Teredo 2001:0000::/32 (RFC 4380) — client IPv4 is bitwise-inverted in bytes 12..15
+        if (bytes[0] == 0x20.toByte() && bytes[1] == 0x01.toByte() &&
+            bytes[2] == 0x00.toByte() && bytes[3] == 0x00.toByte()
+        ) {
+            val inverted = ByteArray(4) { i -> (bytes[12 + i].toInt() xor 0xFF).toByte() }
+            return InetAddress.getByAddress(inverted)
+        }
+        return null
     }
 
     /**
@@ -248,7 +317,11 @@ internal object UpstreamUrlSecurity {
         allowLoopbackForTest: Boolean = false,
         onBlocked: (String) -> Unit = {},
     ): Dns = Dns { hostname ->
-        val normalized = hostname.trim().removePrefix("[").removeSuffix("]").lowercase(Locale.ROOT)
+        val normalized = normalizeHost(hostname)
+        if (normalized.isBlank() || hostname.contains('%')) {
+            onBlocked("Redirect/URL inválida bloqueada por segurança (anti-SSRF)")
+            throw UnknownHostException("Blocked unsafe upstream host: $hostname")
+        }
         val isLoopbackLit = isLoopbackHostLiteral(normalized)
         if (isLoopbackLit && !allowLoopbackForTest) {
             onBlocked("Redirect/URL loopback bloqueada por segurança (anti-SSRF)")
@@ -259,7 +332,7 @@ internal object UpstreamUrlSecurity {
             throw UnknownHostException("Blocked unsafe upstream host: $hostname")
         }
         val addresses = Dns.SYSTEM.lookup(hostname)
-        if (addresses.any { isBlockedAddress(it, allowLoopbackForTest) }) {
+        if (addresses.isEmpty() || addresses.any { isBlockedAddress(it, allowLoopbackForTest) }) {
             onBlocked("DNS resolveu para IP privado/local bloqueado (anti-SSRF)")
             throw UnknownHostException("Blocked unsafe upstream IP for $hostname")
         }
@@ -283,7 +356,16 @@ internal object UpstreamUrlSecurity {
         }
 
         private fun checkHost(host: String?) {
-            val normalized = host?.trim()?.removePrefix("[")?.removeSuffix("]")?.lowercase(Locale.ROOT) ?: return
+            if (host == null) return
+            if (host.contains('%')) {
+                onBlocked("Redirect/host inválido bloqueado antes da conexão (anti-SSRF)")
+                throw IOException("Blocked unsafe upstream host: $host")
+            }
+            val normalized = normalizeHost(host)
+            if (normalized.isBlank()) {
+                onBlocked("Redirect/host vazio bloqueado antes da conexão (anti-SSRF)")
+                throw IOException("Blocked unsafe upstream host: $host")
+            }
             val isLoopbackLit = isLoopbackHostLiteral(normalized)
             if (isLoopbackLit && !allowLoopbackForTest) {
                 onBlocked("Redirect/host loopback bloqueado antes da conexão (anti-SSRF)")
@@ -295,35 +377,48 @@ internal object UpstreamUrlSecurity {
             }
         }
 
+        private fun resolveAndVerifyAll(host: String): InetAddress {
+            checkHost(host)
+            val all = InetAddress.getAllByName(host)
+            if (all.isEmpty()) throw IOException("Blocked unresolvable upstream host: $host")
+            for (addr in all) {
+                checkAddress(addr)
+            }
+            return all.first()
+        }
+
         override fun createSocket(): Socket = object : Socket() {
             override fun connect(endpoint: SocketAddress?) {
-                validateEndpoint(endpoint)
-                super.connect(endpoint)
+                val safeEndpoint = validateEndpoint(endpoint)
+                super.connect(safeEndpoint)
             }
 
             override fun connect(endpoint: SocketAddress?, timeout: Int) {
-                validateEndpoint(endpoint)
-                super.connect(endpoint, timeout)
+                val safeEndpoint = validateEndpoint(endpoint)
+                super.connect(safeEndpoint, timeout)
             }
 
-            private fun validateEndpoint(endpoint: SocketAddress?) {
-                val isa = endpoint as? InetSocketAddress ?: return
+            private fun validateEndpoint(endpoint: SocketAddress?): InetSocketAddress {
+                val isa = endpoint as? InetSocketAddress
+                    ?: throw IOException("Blocked unsupported upstream SocketAddress")
                 checkHost(isa.hostString)
-                checkAddress(isa.address)
+                val resolvedAddr = isa.address
+                if (isa.isUnresolved || resolvedAddr == null) {
+                    val safeAddr = resolveAndVerifyAll(isa.hostString)
+                    return InetSocketAddress(safeAddr, isa.port)
+                }
+                checkAddress(resolvedAddr)
+                return isa
             }
         }
 
         override fun createSocket(host: String, port: Int): Socket {
-            checkHost(host)
-            val addr = InetAddress.getByName(host)
-            checkAddress(addr)
+            val addr = resolveAndVerifyAll(host)
             return Socket(addr, port)
         }
 
         override fun createSocket(host: String, port: Int, localHost: InetAddress, localPort: Int): Socket {
-            checkHost(host)
-            val addr = InetAddress.getByName(host)
-            checkAddress(addr)
+            val addr = resolveAndVerifyAll(host)
             return Socket(addr, port, localHost, localPort)
         }
 

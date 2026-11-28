@@ -93,7 +93,7 @@ internal class GoogleCastClient {
             connected.set(true)
 
             startReaderLoop(rawSock)
-            startHeartbeatLoop()
+            startHeartbeatLoop(rawSock)
 
             // 1. Connect to Chromecast receiver control channel
             sendMessage(GoogleCastProtocol.RECEIVER_ID, GoogleCastProtocol.NS_CONNECTION, GoogleCastProtocol.buildConnectJson())
@@ -287,7 +287,7 @@ internal class GoogleCastClient {
         executor.execute {
             try {
                 val input = DataInputStream(sslSock.inputStream)
-                while (connected.get() && !sslSock.isClosed) {
+                while (connected.get() && socket === sslSock && !sslSock.isClosed) {
                     val length = input.readInt()
                     if (length <= 0 || length > 1_048_576) break
                     val frame = ByteArray(length)
@@ -298,17 +298,19 @@ internal class GoogleCastClient {
             } catch (_: Exception) {
                 // Socket closed or disconnected
             } finally {
-                connected.set(false)
+                if (socket === sslSock) {
+                    connected.set(false)
+                }
             }
         }
     }
 
-    private fun startHeartbeatLoop() {
+    private fun startHeartbeatLoop(sslSock: SSLSocket) {
         executor.execute {
-            while (connected.get()) {
+            while (connected.get() && socket === sslSock && !sslSock.isClosed) {
                 try {
                     Thread.sleep(5_000L)
-                    if (connected.get()) {
+                    if (connected.get() && socket === sslSock && !sslSock.isClosed) {
                         sendMessage(
                             GoogleCastProtocol.RECEIVER_ID,
                             GoogleCastProtocol.NS_HEARTBEAT,

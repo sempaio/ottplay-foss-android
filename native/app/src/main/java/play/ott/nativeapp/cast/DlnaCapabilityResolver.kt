@@ -46,7 +46,7 @@ internal class DlnaCapabilityResolver(
     fun getCachedSink(deviceId: String): DlnaSinkCapabilities? {
         val entry = sinkCache[deviceId] ?: return null
         if (clockMs() >= entry.expiresAtMs) {
-            sinkCache.remove(deviceId)
+            sinkCache.remove(deviceId, entry)
             return null
         }
         return entry.value
@@ -60,7 +60,7 @@ internal class DlnaCapabilityResolver(
         val key = profileCacheKey(deviceId, isLive, mimeType)
         val entry = workingProfileCache[key] ?: return null
         if (clockMs() >= entry.expiresAtMs) {
-            workingProfileCache.remove(key)
+            workingProfileCache.remove(key, entry)
             return null
         }
         return entry.value
@@ -141,15 +141,52 @@ internal class DlnaCapabilityResolver(
             val entries = sinkCsv.split(',')
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
-            val joined = entries.joinToString("\n").lowercase(Locale.ROOT)
+            var supportsHls = false
+            var supportsMpegTs = false
+            var supportsMp4 = false
+            var supportsMkv = false
+            var supportsWebm = false
+
+            for (entry in entries) {
+                val lower = entry.lowercase(Locale.ROOT)
+                val fields = lower.split(':', limit = 4)
+                val contentFormat = fields.getOrNull(2)?.substringBefore(';')?.trim().orEmpty()
+                val additionalInfo = fields.getOrNull(3).orEmpty()
+
+                if (contentFormat.contains("mpegurl") || lower.contains("m3u8")) {
+                    supportsHls = true
+                }
+                if (contentFormat == "video/mp2t" ||
+                    contentFormat == "video/vnd.dlna.mpeg-tts" ||
+                    contentFormat == "video/mpeg" ||
+                    additionalInfo.contains("mpeg_ts")
+                ) {
+                    supportsMpegTs = true
+                }
+                if (contentFormat == "video/mp4" ||
+                    contentFormat == "video/mpeg4" ||
+                    additionalInfo.contains("avc_mp4")
+                ) {
+                    supportsMp4 = true
+                }
+                if (contentFormat.contains("matroska") ||
+                    contentFormat == "video/mkv" ||
+                    contentFormat == "video/x-mkv"
+                ) {
+                    supportsMkv = true
+                }
+                if (contentFormat == "video/webm") {
+                    supportsWebm = true
+                }
+            }
+
             return DlnaSinkCapabilities(
                 rawProtocols = entries,
-                supportsHls = joined.contains("mpegurl") || joined.contains("m3u8"),
-                supportsMpegTs = joined.contains("video/mp2t") || joined.contains("video/vnd.dlna.mpeg-tts") ||
-                    joined.contains("mpeg_ts") || joined.contains("video/mpeg"),
-                supportsMp4 = joined.contains("video/mp4") || joined.contains("avc_mp4"),
-                supportsMkv = joined.contains("matroska") || joined.contains("video/mkv") || joined.contains("video/x-mkv"),
-                supportsWebm = joined.contains("video/webm"),
+                supportsHls = supportsHls,
+                supportsMpegTs = supportsMpegTs,
+                supportsMp4 = supportsMp4,
+                supportsMkv = supportsMkv,
+                supportsWebm = supportsWebm,
             )
         }
 

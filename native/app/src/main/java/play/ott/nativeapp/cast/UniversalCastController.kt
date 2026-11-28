@@ -27,6 +27,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal data class CastSessionState(
     val scanning: Boolean = false,
@@ -91,7 +92,7 @@ internal class UniversalCastController(
     private val stateCommitLock = Any()
     @Volatile private var castStartedAtMs: Long = 0L
     @Volatile private var consecutiveStoppedTicks: Int = 0
-    @Volatile private var reconnectingInFlight: Boolean = false
+    private val reconnectingInFlight = AtomicBoolean(false)
     @Volatile private var lastWatchdogBytesSent: Long = -1L
     @Volatile private var userPausedLocally: Boolean = false
     private val diagLock = Any()
@@ -102,11 +103,13 @@ internal class UniversalCastController(
         startedAtMs: Long = clockMs(),
     ) {
         synchronized(stateCommitLock) {
-            sessionGeneration.next()
+            val nextGen = sessionGeneration.next()
+            lanProxy.advanceMinimumGeneration(nextGen)
             castStartedAtMs = startedAtMs
             consecutiveStoppedTicks = 0
             lastWatchdogBytesSent = -1L
-            userPausedLocally = !newState.isPlayingOnTv
+            userPausedLocally = !newState.isPlayingOnTv &&
+                newState.tvTransportState.startsWith("PAUSED", ignoreCase = true)
             mutableState.value = newState
         }
     }
@@ -218,19 +221,45 @@ internal class UniversalCastController(
         title: String,
         isLive: Boolean,
         startPositionMs: Long = 0L,
+    ): Boolean = castMediaInternal(
+        context = context,
+        device = device,
+        rawUrl = rawUrl,
+        title = title,
+        isLive = isLive,
+        startPositionMs = startPositionMs,
+        isAutoReconnect = false,
+        requiredCurrentGen = null,
+    )
+
+    private suspend fun castMediaInternal(
+        context: Context?,
+        device: CastDevice,
+        rawUrl: String,
+        title: String,
+        isLive: Boolean,
+        startPositionMs: Long,
+        isAutoReconnect: Boolean,
+        requiredCurrentGen: Long?,
     ): Boolean {
-        val (gen, prevDevice) = synchronized(stateCommitLock) {
+        val claimed = synchronized(stateCommitLock) {
+            if (requiredCurrentGen != null && !sessionGeneration.isCurrent(requiredCurrentGen)) {
+                return@synchronized null
+            }
             val nextGen = sessionGeneration.next()
+            lanProxy.advanceMinimumGeneration(nextGen)
             val prev = mutableState.value.connectedDevice
             clearDiag()
             mutableState.update {
                 it.copy(
+                    autoReconnectCount = if (isAutoReconnect) it.autoReconnectCount + 1 else it.autoReconnectCount,
                     busyAction = "Conectando em ${device.friendlyName}...",
                     errorMessage = null,
                 )
             }
             nextGen to prev
-        }
+        } ?: return false
+        val (gen, prevDevice) = claimed
         val vendorTag = if (device.protocol == CastProtocol.CHROMECAST) {
             "CHROMECAST"
         } else {
@@ -288,7 +317,7 @@ internal class UniversalCastController(
                             tvDurationMs = 0L,
                             tvVolume = vol.coerceIn(0, 100),
                             proxyStats = readProxyStats(),
-                            autoReconnectCount = if (reconnectingInFlight) it.autoReconnectCount else 0,
+                            autoReconnectCount = if (isAutoReconnect) it.autoReconnectCount else 0,
                             busyAction = null,
                             errorMessage = null,
                         )
@@ -339,7 +368,7 @@ internal class UniversalCastController(
                 true
             }
             if (!committed) return false
-            lanProxy.clearStream()
+            lanProxy.clearStream(expectedGeneration = gen)
             if (appContext != null) CastRelayService.stop(appContext)
             logDiagIfCurrent(gen, "[Exceção/${classified.tag}] ${e.message ?: "erro de rede"}")
             false
@@ -390,7 +419,7 @@ internal class UniversalCastController(
                 }
                 if (directRes.isSuccess) {
                     logDiagIfCurrent(sessionGen, "[Cast] Modo direto OK ($label) — TV busca vídeo direto no CDN, celular liberável!")
-                    lanProxy.clearStream()
+                    lanProxy.clearStream(expectedGeneration = sessionGen)
                     return CastAttemptResult(
                         success = true,
                         effectiveUrl = directUrl,
@@ -413,7 +442,7 @@ internal class UniversalCastController(
         val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
         logDiagIfCurrent(sessionGen, "[Cast] IP LAN local=$phoneWifiIp")
         val target = if (phoneWifiIp != null) {
-            lanProxy.prepareStream(rewritten, isLive, phoneWifiIp)
+            lanProxy.prepareStream(rewritten, isLive, phoneWifiIp, sessionGeneration = sessionGen)
         } else {
             val fallbackUrl = resolvePlayableCastUrl(rawUrl, isLive)
             ProxiedCastTarget(
@@ -427,7 +456,7 @@ internal class UniversalCastController(
             )
         }
 
-        if (!sessionGeneration.isCurrent(sessionGen)) {
+        if (target.wasSuperseded || !sessionGeneration.isCurrent(sessionGen)) {
             return CastAttemptResult(false, target.localUrl, error = "Sessão substituída")
         }
 
@@ -456,7 +485,7 @@ internal class UniversalCastController(
         if (res.isSuccess) {
             return CastAttemptResult(true, mediaUrl, initialVolume = res.getOrNull(), isDirectMode = false)
         }
-        lanProxy.clearStream()
+        lanProxy.clearStream(expectedGeneration = sessionGen)
         return CastAttemptResult(
             success = false,
             effectiveUrl = mediaUrl,
@@ -564,7 +593,7 @@ internal class UniversalCastController(
         val phoneWifiIp = DlnaProtocol.localLanIpv4ForTarget(device.host)
         logDiagIfCurrent(sessionGen, "[DLNA/$vendor] IP LAN=$phoneWifiIp")
         val castTarget = if (phoneWifiIp != null) {
-            lanProxy.prepareStream(rewrittenUrl, isLive, phoneWifiIp)
+            lanProxy.prepareStream(rewrittenUrl, isLive, phoneWifiIp, sessionGeneration = sessionGen)
         } else {
             val directUrl = resolvePlayableCastUrl(rawUrl, isLive)
             ProxiedCastTarget(
@@ -577,7 +606,7 @@ internal class UniversalCastController(
                 isLive = isLive,
             )
         }
-        if (!sessionGeneration.isCurrent(sessionGen)) {
+        if (castTarget.wasSuperseded || !sessionGeneration.isCurrent(sessionGen)) {
             return CastAttemptResult(false, castTarget.localUrl, error = "Sessão substituída")
         }
         logDiagIfCurrent(sessionGen, "[DLNA/$vendor] Proxy mime=${castTarget.mimeType} len=${castTarget.contentLength ?: -1} hls=${castTarget.chromecastHlsUrl != null}")
@@ -622,7 +651,7 @@ internal class UniversalCastController(
             if (directAttempt.first) {
                 logDiagIfCurrent(sessionGen, "[DLNA/$vendor] VOD direto HTTP aceito!")
                 dlnaCapabilities.recordWorkingProfile(device.id, false, castTarget.mimeType, "DLNA-VOD-direto")
-                lanProxy.clearStream()
+                lanProxy.clearStream(expectedGeneration = sessionGen)
                 val vol = queryDlnaVolume(device)
                 return CastAttemptResult(true, directVod, initialVolume = vol, isDirectMode = true)
             }
@@ -647,7 +676,7 @@ internal class UniversalCastController(
         }
         if (!proxyAttempt.first) {
             logDiagIfCurrent(sessionGen, "[DLNA/$vendor] Proxy falhou: ${proxyAttempt.second ?: "erro"}")
-            lanProxy.clearStream()
+            lanProxy.clearStream(expectedGeneration = sessionGen)
             val detail = proxyAttempt.second?.let { " ($it)" }.orEmpty()
             return CastAttemptResult(
                 success = false,
@@ -860,7 +889,7 @@ internal class UniversalCastController(
                 }
                 dlnaCapabilities.recordWorkingProfile(device.id, isLive, castTarget.mimeType, cand.label)
                 if (cand.isDirect) {
-                    lanProxy.clearStream()
+                    lanProxy.clearStream(expectedGeneration = sessionGen)
                 } else if (!isLive && startPositionMs > 5_000L) {
                     runCatching {
                         postSoap(
@@ -879,7 +908,7 @@ internal class UniversalCastController(
         }
 
         if (sessionGeneration.isCurrent(sessionGen)) {
-            lanProxy.clearStream()
+            lanProxy.clearStream(expectedGeneration = sessionGen)
         }
         return CastAttemptResult(
             success = false,
@@ -1017,8 +1046,7 @@ internal class UniversalCastController(
     }
 
     suspend fun togglePlayPause(context: Context? = null) {
-        val gen = sessionGeneration.current()
-        val current = state.value
+        val (gen, current) = synchronized(stateCommitLock) { sessionGeneration.current() to mutableState.value }
         val device = current.connectedDevice ?: return
         val nextPlaying = !current.isPlayingOnTv
         val ok = withContext(Dispatchers.IO) {
@@ -1059,8 +1087,7 @@ internal class UniversalCastController(
     }
 
     suspend fun seekTo(targetMs: Long) {
-        val gen = sessionGeneration.current()
-        val current = state.value
+        val (gen, current) = synchronized(stateCommitLock) { sessionGeneration.current() to mutableState.value }
         val device = current.connectedDevice ?: return
         if (current.castingIsLive) return
         val clamped = targetMs.coerceAtLeast(0L).let {
@@ -1093,8 +1120,7 @@ internal class UniversalCastController(
     }
 
     suspend fun adjustVolume(delta: Int) {
-        val gen = sessionGeneration.current()
-        val current = state.value
+        val (gen, current) = synchronized(stateCommitLock) { sessionGeneration.current() to mutableState.value }
         val device = current.connectedDevice ?: return
         val nextVol = (current.tvVolume + delta).coerceIn(0, 100)
         val ok = withContext(Dispatchers.IO) {
@@ -1123,8 +1149,7 @@ internal class UniversalCastController(
     }
 
     suspend fun pollPosition() {
-        val gen = sessionGeneration.current()
-        val current = state.value
+        val (gen, current) = synchronized(stateCommitLock) { sessionGeneration.current() to mutableState.value }
         val device = current.connectedDevice ?: return
         val stats = readProxyStats()
         when (device.protocol) {
@@ -1199,13 +1224,12 @@ internal class UniversalCastController(
     /**
      * Background Cast/DLNA watchdog (invoked every 12s by CastRelayService even with screen locked):
      * refreshes bridge health/position and performs at most ONE quiet auto-recovery if a stable
-     * Bridge session unexpectedly dropped (DLNA STOPPED/NO_MEDIA_PRESENT or Chromecast IDLE ERROR).
+     * Bridge session unexpectedly dropped (DLNA STOPPED/NO_MEDIA_PRESENT or Chromecast IDLE ERROR / stall).
      */
     suspend fun watchdogTick(context: Context?) {
-        val gen = sessionGeneration.current()
-        val before = state.value
+        val (gen, before) = synchronized(stateCommitLock) { sessionGeneration.current() to mutableState.value }
         val device = before.connectedDevice ?: return
-        if (reconnectingInFlight || before.busyAction != null) return
+        if (reconnectingInFlight.get() || before.busyAction != null) return
 
         // Silent fast-path: if TV/Chromecast is actively pulling bytes from our local bridge right now,
         // skip SOAP XML polling completely so we never add CPU/Wi-Fi contention on the Smart TV!
@@ -1227,13 +1251,15 @@ internal class UniversalCastController(
         }
 
         pollPosition()
-        if (!sessionGeneration.isCurrent(gen)) return
+        val after = synchronized(stateCommitLock) {
+            if (!sessionGeneration.isCurrent(gen)) return
+            mutableState.value
+        }
 
-        val after = state.value
-        val priorWasErrorOrInterrupted = before.tvTransportState.contains("ERROR", ignoreCase = true) ||
-            before.tvTransportState.contains("INTERRUPTED", ignoreCase = true)
+        // Respect explicit user pause (local UI button or remote PAUSED / PAUSED_PLAYBACK) without
+        // mistakenly treating Chromecast IDLE drops as a user pause on tick 2!
         val userPaused = userPausedLocally ||
-            (!before.isPlayingOnTv && !priorWasErrorOrInterrupted) ||
+            before.tvTransportState.startsWith("PAUSED", ignoreCase = true) ||
             after.tvTransportState.startsWith("PAUSED", ignoreCase = true)
         if (userPaused) {
             consecutiveStoppedTicks = 0
@@ -1244,13 +1270,17 @@ internal class UniversalCastController(
         val dropped = when (device.protocol) {
             CastProtocol.DLNA -> after.tvTransportState.equals("STOPPED", ignoreCase = true) ||
                 after.tvTransportState.equals("NO_MEDIA_PRESENT", ignoreCase = true)
-            CastProtocol.CHROMECAST -> !after.castingDirectMode && (
-                after.tvTransportState.contains("ERROR", ignoreCase = true) ||
-                    after.tvTransportState.contains("INTERRUPTED", ignoreCase = true) ||
-                    (after.proxyStats.lastActivityMs > 0L &&
-                        (nowMs - after.proxyStats.lastActivityMs) > 25_000L &&
-                        after.proxyStats.activeClients == 0)
-                )
+            CastProtocol.CHROMECAST -> {
+                val normalEnd = after.tvTransportState.contains("FINISHED", ignoreCase = true) ||
+                    after.tvTransportState.contains("CANCELLED", ignoreCase = true)
+                !after.castingDirectMode && !normalEnd && (
+                    after.tvTransportState.contains("ERROR", ignoreCase = true) ||
+                        after.tvTransportState.contains("INTERRUPTED", ignoreCase = true) ||
+                        (after.proxyStats.lastActivityMs > 0L &&
+                            (nowMs - after.proxyStats.lastActivityMs) > 25_000L &&
+                            after.proxyStats.activeClients == 0)
+                    )
+            }
         }
 
         // Only attempt at most ONE quiet auto-recovery if playback had ALREADY stabilized for > 45s
@@ -1264,33 +1294,41 @@ internal class UniversalCastController(
             if (consecutiveStoppedTicks >= 2 && !nearVodEnd && after.autoReconnectCount < 1 && sessionGeneration.isCurrent(gen)) {
                 consecutiveStoppedTicks = 0
                 logDiagIfCurrent(gen, "[Watchdog] Queda detectada em ${device.friendlyName} (${after.tvTransportState}) — tentando 1 reconexão silenciosa")
-                reconnectCurrent(context, isAuto = true)
+                reconnectCurrent(context, isAuto = true, expectedGen = gen)
             }
         } else {
             consecutiveStoppedTicks = 0
         }
     }
 
-    suspend fun reconnectCurrent(context: Context?, isAuto: Boolean = false): Boolean {
-        val current = state.value
+    suspend fun reconnectCurrent(
+        context: Context?,
+        isAuto: Boolean = false,
+        expectedGen: Long? = null,
+    ): Boolean {
+        val (snapGen, current) = synchronized(stateCommitLock) {
+            val g = sessionGeneration.current()
+            if (expectedGen != null && !sessionGeneration.isCurrent(expectedGen)) {
+                return false
+            }
+            g to mutableState.value
+        }
         val device = current.connectedDevice ?: return false
         val sourceUrl = current.rawSourceUrl.ifBlank { return false }
-        if (reconnectingInFlight) return false
-        reconnectingInFlight = true
+        if (!reconnectingInFlight.compareAndSet(false, true)) return false
         return try {
-            if (isAuto) {
-                mutableState.update { it.copy(autoReconnectCount = it.autoReconnectCount + 1) }
-            }
-            castMedia(
+            castMediaInternal(
                 context = context,
                 device = device,
                 rawUrl = sourceUrl,
                 title = current.castingTitle,
                 isLive = current.castingIsLive,
                 startPositionMs = if (current.castingIsLive) 0L else current.tvPositionMs,
+                isAutoReconnect = isAuto,
+                requiredCurrentGen = expectedGen ?: snapGen,
             )
         } finally {
-            reconnectingInFlight = false
+            reconnectingInFlight.set(false)
         }
     }
 
@@ -1305,9 +1343,9 @@ internal class UniversalCastController(
             val current = mutableState.value
             val dev = current.connectedDevice ?: return@synchronized null
             if (!current.castingDirectMode) return@synchronized null
-            sessionGeneration.advance()
+            val closedGen = sessionGeneration.advance()
+            lanProxy.invalidateAndClearUpTo(closedGen)
             consecutiveStoppedTicks = 0
-            reconnectingInFlight = false
             userPausedLocally = false
             mutableState.update {
                 it.copy(
@@ -1328,7 +1366,6 @@ internal class UniversalCastController(
             }
             dev
         } ?: return false
-        lanProxy.clearStream()
         logDiag("[Cast] Celular liberado — ${device.friendlyName} continua reproduzindo sozinho!")
         if (context != null) {
             CastRelayService.stop(context)
@@ -1351,10 +1388,10 @@ internal class UniversalCastController(
      */
     suspend fun disconnect(context: Context? = null) {
         val device = synchronized(stateCommitLock) {
-            sessionGeneration.advance()
+            val closedGen = sessionGeneration.advance()
+            lanProxy.invalidateAndClearUpTo(closedGen)
             val dev = mutableState.value.connectedDevice
             consecutiveStoppedTicks = 0
-            reconnectingInFlight = false
             userPausedLocally = false
             mutableState.update {
                 it.copy(
@@ -1375,7 +1412,6 @@ internal class UniversalCastController(
             }
             dev
         }
-        lanProxy.clearStream()
         if (context != null) {
             CastRelayService.stop(context)
         }

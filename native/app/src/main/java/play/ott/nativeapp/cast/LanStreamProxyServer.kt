@@ -318,6 +318,7 @@ internal data class ProxiedCastTarget(
     val dlnaFeatures: String,
     val contentLength: Long?,
     val isLive: Boolean,
+    val wasSuperseded: Boolean = false,
 )
 
 /**
@@ -334,6 +335,7 @@ internal class LanStreamProxyServer(
 ) {
     private class ActiveStream(
         val token: String,
+        val generation: Long,
         val localOrigin: String,
         val originalUpstreamUrl: String,
         @Volatile var resolvedUpstreamUrl: String,
@@ -346,9 +348,12 @@ internal class LanStreamProxyServer(
         @Volatile var initialMediaPlaylistUrl: String? = null,
         @Volatile var initialSegmentDurationSec: Int = 5,
         @Volatile var initialLiveSegments: List<Pair<String, ByteArray>> = emptyList(),
+        @Volatile var prefetchError: String = "",
     )
 
     private val running = AtomicBoolean(false)
+    private val streamLifecycleLock = Any()
+    private val latestGeneration = AtomicLong(0L)
     private val activeStream = AtomicReference<ActiveStream?>(null)
     private var serverSocket: ServerSocket? = null
     private val clientSockets = CopyOnWriteArrayList<Socket>()
@@ -451,29 +456,47 @@ internal class LanStreamProxyServer(
         return socket.localPort
     }
 
+    fun advanceMinimumGeneration(minGeneration: Long) {
+        if (minGeneration <= 0L) return
+        synchronized(streamLifecycleLock) {
+            if (minGeneration > latestGeneration.get()) {
+                latestGeneration.set(minGeneration)
+            }
+            val current = activeStream.get()
+            if (current != null && current.generation > 0L && current.generation < minGeneration) {
+                clearActiveStateLocked()
+            }
+        }
+    }
+
+    fun invalidateAndClearUpTo(generation: Long) {
+        synchronized(streamLifecycleLock) {
+            if (generation > latestGeneration.get()) {
+                latestGeneration.set(generation)
+            }
+            val current = activeStream.get()
+            if (current == null || current.generation <= generation) {
+                clearActiveStateLocked()
+            }
+        }
+    }
+
     fun prepareStream(
         upstreamUrl: String,
         isLive: Boolean,
         localLanIp: String,
+        sessionGeneration: Long = 0L,
     ): ProxiedCastTarget {
         val port = ensureStarted()
-        closeActiveClients()
-        synchronized(hlsRelayLock) {
-            hlsRelayUrls.clear()
-            hlsUrlToId.clear()
+        if (sessionGeneration > 0L && sessionGeneration < latestGeneration.get()) {
+            return supersededTarget(isLive)
         }
-        clearPrefetchCache()
-        bytesSentCounter.set(0L)
-        chunksSentCounter.set(0)
-        reconnectCounter.set(0)
-        requestCounter.set(0)
-        prefetchHitCounter.set(0)
-        lastActivityMsCounter.set(System.currentTimeMillis())
-        lastHttpSummary = ""
-        lastWriteError = ""
-        lastBindAddress = "$localLanIp:$port"
 
         val probe = probeUpstream(upstreamUrl, isLive)
+        if (sessionGeneration > 0L && sessionGeneration < latestGeneration.get()) {
+            return supersededTarget(isLive)
+        }
+
         val token = randomToken()
         val ext = when {
             isLive -> "live.ts"
@@ -490,6 +513,7 @@ internal class LanStreamProxyServer(
         val localOrigin = "http://$localLanIp:$port"
         val config = ActiveStream(
             token = token,
+            generation = sessionGeneration,
             localOrigin = localOrigin,
             originalUpstreamUrl = upstreamUrl,
             resolvedUpstreamUrl = probe.finalUrl,
@@ -505,7 +529,33 @@ internal class LanStreamProxyServer(
         if (isLive && probe.isHls) {
             prefetchInitialLiveSegment(config)
         }
-        activeStream.set(config)
+
+        // Atomic generation-fenced swap: a stale zap can NEVER kill a newer zap's sockets,
+        // wipe its caches/counters, or overwrite activeStream after disconnect/detach!
+        val installed = synchronized(streamLifecycleLock) {
+            if (!running.get()) return@synchronized false
+            if (sessionGeneration > 0L && sessionGeneration < latestGeneration.get()) {
+                return@synchronized false
+            }
+            if (sessionGeneration > latestGeneration.get()) {
+                latestGeneration.set(sessionGeneration)
+            }
+            clearActiveStateLocked()
+            bytesSentCounter.set(0L)
+            chunksSentCounter.set(0)
+            reconnectCounter.set(0)
+            requestCounter.set(0)
+            prefetchHitCounter.set(0)
+            lastActivityMsCounter.set(System.currentTimeMillis())
+            lastHttpSummary = ""
+            lastWriteError = config.prefetchError
+            lastBindAddress = "$localLanIp:$port"
+            activeStream.set(config)
+            true
+        }
+        if (!installed) {
+            return supersededTarget(isLive)
+        }
 
         val localUrl = "$localOrigin/cast/$token/$ext"
         val castHlsUrl = if (isLive && probe.isHls) "$localOrigin/cast/$token/live.m3u8" else null
@@ -524,10 +574,32 @@ internal class LanStreamProxyServer(
             dlnaFeatures = dlnaFeatures,
             contentLength = config.contentLength,
             isLive = isLive,
+            wasSuperseded = false,
         )
     }
 
-    fun clearStream() {
+    private fun supersededTarget(isLive: Boolean): ProxiedCastTarget = ProxiedCastTarget(
+        localUrl = "",
+        chromecastHlsUrl = null,
+        directHttpVodUrl = null,
+        mimeType = if (isLive) "video/mp2t" else "video/mp4",
+        dlnaFeatures = "*",
+        contentLength = null,
+        isLive = isLive,
+        wasSuperseded = true,
+    )
+
+    fun clearStream(expectedGeneration: Long? = null) {
+        synchronized(streamLifecycleLock) {
+            val current = activeStream.get()
+            if (expectedGeneration != null && current != null && current.generation != expectedGeneration) {
+                return
+            }
+            clearActiveStateLocked()
+        }
+    }
+
+    private fun clearActiveStateLocked() {
         activeStream.set(null)
         synchronized(hlsRelayLock) {
             hlsRelayUrls.clear()
@@ -536,17 +608,17 @@ internal class LanStreamProxyServer(
         clearPrefetchCache()
         closeActiveClients()
     }
+
+    internal fun activeStreamTokenForTest(): String? = activeStream.get()?.token
+
+    internal fun activeStreamGenerationForTest(): Long? = activeStream.get()?.generation
 
     @Synchronized
     fun shutdown() {
         running.set(false)
-        activeStream.set(null)
-        synchronized(hlsRelayLock) {
-            hlsRelayUrls.clear()
-            hlsUrlToId.clear()
+        synchronized(streamLifecycleLock) {
+            clearActiveStateLocked()
         }
-        clearPrefetchCache()
-        closeActiveClients()
         runCatching { serverSocket?.close() }
         serverSocket = null
         runCatching { controlClient.connectionPool.evictAll() }
@@ -587,6 +659,13 @@ internal class LanStreamProxyServer(
                 runCatching { client.close() }
                 continue
             }
+            if (clientSockets.size >= MAX_CONCURRENT_CLIENTS) {
+                runCatching {
+                    writeSimpleStatus(client.getOutputStream(), "503 Service Unavailable")
+                }
+                runCatching { client.close() }
+                continue
+            }
             clientSockets.add(client)
             executor.execute {
                 try {
@@ -613,9 +692,11 @@ internal class LanStreamProxyServer(
         val rawPath = parts[1].substringBefore('?')
 
         val headers = HashMap<String, String>()
-        while (true) {
+        var headerCount = 0
+        while (headerCount < MAX_HTTP_HEADERS) {
             val line = reader.readLine() ?: break
             if (line.isBlank()) break
+            headerCount++
             val colon = line.indexOf(':')
             if (colon > 0) {
                 headers[line.substring(0, colon).trim().lowercase(Locale.ROOT)] = line.substring(colon + 1).trim()
@@ -832,6 +913,7 @@ internal class LanStreamProxyServer(
         } else null
 
         var lastCode = 502
+        var blockedBySecurity = false
         if (fetchedPayload == null) {
             for (attempt in 1..2) {
                 val req = Request.Builder()
@@ -839,7 +921,7 @@ internal class LanStreamProxyServer(
                     .header("User-Agent", "OTT-play-Android/1.0")
                     .get()
                     .build()
-                val hit = runCatching {
+                val hit = try {
                     controlClient.newCall(req).execute().use { resp ->
                         lastCode = resp.code
                         if (!resp.isSuccessful) return@use null
@@ -849,11 +931,20 @@ internal class LanStreamProxyServer(
                         )
                         Triple(resp.header("Content-Type").orEmpty(), resp.request.url.toString(), bodyBytes)
                     }
-                }.getOrNull()
+                } catch (io: IOException) {
+                    if (io.message?.contains("Blocked unsafe", ignoreCase = true) == true) {
+                        blockedBySecurity = true
+                        lastCode = 403
+                    }
+                    null
+                } catch (_: Exception) {
+                    null
+                }
                 if (hit != null) {
                     fetchedPayload = hit
                     break
                 }
+                if (blockedBySecurity) break
                 if (attempt == 1) runCatching { Thread.sleep(200L) }
             }
         }
@@ -965,12 +1056,17 @@ internal class LanStreamProxyServer(
                         out.write(buffer, 0, n)
                         out.flush()
                         bytesSentCounter.addAndGet(n.toLong())
+                        chunksSentCounter.incrementAndGet()
+                        lastActivityMsCounter.set(System.currentTimeMillis())
                     }
                 }
                 reconnectCounter.incrementAndGet()
             } catch (io: IOException) {
                 // Distinguish TV socket drop from upstream error by probing a null packet
-                runCatching { out.write(nullTsBurst); out.flush() }.onFailure { return }
+                runCatching { out.write(nullTsBurst); out.flush() }.onFailure {
+                    lastWriteError = "Conexão encerrada pela TV (${io.message ?: "IO"})"
+                    return
+                }
                 reconnectCounter.incrementAndGet()
                 runCatching { Thread.sleep(600L) }
             } catch (_: InterruptedException) {
@@ -997,11 +1093,11 @@ internal class LanStreamProxyServer(
             }
             val parsed = HlsRemuxCodec.parseMediaPlaylist(resolvedMedia.second, resolvedMedia.first)
             if (parsed.hasUnsupportedEncryption) {
-                lastWriteError = "HLS usa criptografia não suportada (SAMPLE-AES)"
+                stream.prefetchError = "HLS usa criptografia não suportada (SAMPLE-AES)"
                 return
             }
             if (parsed.hasInitMap) {
-                lastWriteError = "HLS fMP4 (#EXT-X-MAP) pode exigir reprodução nativa"
+                stream.prefetchError = "HLS fMP4 (#EXT-X-MAP) pode exigir reprodução nativa"
             }
             if (parsed.segments.isEmpty()) return
             stream.initialSegmentDurationSec = parsed.targetDurationSec
@@ -1058,6 +1154,10 @@ internal class LanStreamProxyServer(
             var firstFetch = preloaded.isEmpty()
             var consecutiveErrors = 0
             var endedRefreshRetries = 0
+            // Persisted across playlist polls so steady-state live streams (1 new segment per poll)
+            // still trigger immediate /live-hls/ manifest renewal after 2 consecutive segment failures!
+            var consecutiveSegFailures = 0
+            val failedKeysAcrossPolls = ArrayList<String>(4)
 
             try {
                 while (running.get() && clientAlive.get() && activeStream.get()?.token == stream.token) {
@@ -1127,9 +1227,8 @@ internal class LanStreamProxyServer(
 
                     val queryDiff = parsed.segments.map { it.uri.substringBefore('?') }.distinct().size < parsed.segments.size
                     var addedCount = 0
-                    var consecutiveSegFailures = 0
+                    var nonTsInitMapSegments = 0
                     var needManifestRefresh = false
-                    val failedKeysThisRound = ArrayList<String>(4)
 
                     for (seg in candidates) {
                         if (!running.get() || !clientAlive.get() || activeStream.get()?.token != stream.token) return@submit
@@ -1142,11 +1241,13 @@ internal class LanStreamProxyServer(
                         val rawBytes = fetchBytes(seg.uri) ?: fetchBytes(seg.uri)
                         if (rawBytes == null) {
                             consecutiveSegFailures++
-                            failedKeysThisRound.add(dedupKey)
-                            // If 2 consecutive .ts segments fail (e.g. rotated/expired CDN token 401/403/410),
+                            failedKeysAcrossPolls.add(dedupKey)
+                            // If 2 consecutive .ts segments fail (even across separate 1-segment polls),
                             // force immediate /live-hls/ manifest renewal and unmark failed keys so renewed URLs play!
                             if (consecutiveSegFailures >= 2) {
-                                seenKeys.removeAll(failedKeysThisRound.toSet())
+                                seenKeys.removeAll(failedKeysAcrossPolls.toSet())
+                                failedKeysAcrossPolls.clear()
+                                consecutiveSegFailures = 0
                                 mediaPlaylistUrl = null
                                 reconnectCounter.incrementAndGet()
                                 lastWriteError = "Segmentos .ts expiraram — renovando playlist HLS"
@@ -1156,7 +1257,7 @@ internal class LanStreamProxyServer(
                             continue
                         }
                         consecutiveSegFailures = 0
-                        failedKeysThisRound.clear()
+                        failedKeysAcrossPolls.clear()
                         val decrypted = if (seg.keyMethod == "AES-128" && !seg.keyUri.isNullOrBlank()) {
                             val keyBytes = keyCache[seg.keyUri] ?: fetchBytes(seg.keyUri)?.also { fetched ->
                                 if (fetched.size == 16) {
@@ -1177,7 +1278,10 @@ internal class LanStreamProxyServer(
                         }
 
                         val alignedTs = HlsRemuxCodec.alignMpegTsPackets(decrypted)
-                        if (alignedTs.isEmpty()) continue
+                        if (alignedTs.isEmpty()) {
+                            if (parsed.hasInitMap) nonTsInitMapSegments++
+                            continue
+                        }
 
                         val isFirst = preloaded.isEmpty() && addedCount == 0 && seenKeys.size == 1
                         while (running.get() && clientAlive.get() && activeStream.get()?.token == stream.token) {
@@ -1186,6 +1290,12 @@ internal class LanStreamProxyServer(
                                 break
                             }
                         }
+                    }
+
+                    // Exit cleanly if an fMP4 (#EXT-X-MAP) playlist only contains non-TS (.m4s) segments
+                    if (parsed.hasInitMap && addedCount == 0 && nonTsInitMapSegments > 0) {
+                        lastWriteError = "HLS fMP4 (#EXT-X-MAP) incompatível com remux MPEG-TS"
+                        break
                     }
 
                     if (needManifestRefresh && (!parsed.isEnded || endedRefreshRetries < 3)) {
@@ -1341,15 +1451,23 @@ internal class LanStreamProxyServer(
                             val call = streamingClient.newCall(req)
                             activeUpstreamCall.set(call)
                             call.execute().use { resp ->
-                                val crStart = resp.header("Content-Range")
-                                    ?.substringAfter("bytes ", "")
-                                    ?.substringBefore('-')
-                                    ?.trim()
-                                    ?.toLongOrNull()
-                                val valid206 = resp.code == 206 && (crStart == null || crStart == cursor)
+                                val rawContentRange = resp.header("Content-Range")
+                                val crStart = rawContentRange?.let {
+                                    CONTENT_RANGE_START_REGEX.find(it)?.groupValues?.get(1)?.toLongOrNull()
+                                }
+                                val hasInvalidContentRange = resp.code == 206 &&
+                                    rawContentRange != null &&
+                                    (crStart == null || crStart != cursor)
+                                val valid206 = resp.code == 206 && !hasInvalidContentRange
                                 if (valid206 || (resp.code == 200 && cursor == 0L)) {
                                     val input = BufferedInputStream(resp.body.byteStream(), VOD_CHUNK_BYTES)
-                                    val expectedMax = (sliceEnd - cursor) + 1L
+                                    // If upstream ignores Range on cursor == 0 and sends 200 OK from byte 0,
+                                    // stream the full requested range on this connection instead of failing at 4 MB.
+                                    val expectedMax = if (resp.code == 200) {
+                                        (range.end - cursor) + 1L
+                                    } else {
+                                        (sliceEnd - cursor) + 1L
+                                    }
                                     while (sliceProgress < expectedMax && tvAlive.get() && running.get() && activeStream.get()?.token == stream.token) {
                                         val toRead = minOf(readBuf.size.toLong(), expectedMax - sliceProgress).toInt()
                                         val n = input.read(readBuf, 0, toRead)
@@ -1373,9 +1491,9 @@ internal class LanStreamProxyServer(
                                 } else if (resp.code == 200 && cursor > 0L) {
                                     ignoredRange200 = true
                                     lastWriteError = "CDN ignorou HTTP Range (200 OK em offset $cursor)"
-                                } else if (resp.code == 206 && crStart != null && crStart != cursor) {
+                                } else if (hasInvalidContentRange) {
                                     ignoredRange200 = true
-                                    lastWriteError = "CDN retornou Content-Range desalinhado ($crStart != $cursor)"
+                                    lastWriteError = "CDN retornou Content-Range desalinhado ($rawContentRange != $cursor)"
                                 }
                             }
                         } catch (_: Exception) {
@@ -1533,8 +1651,8 @@ internal class LanStreamProxyServer(
             controlClient.newCall(rangeReq).execute().use { resp ->
                 if (resp.code == 206 || resp.isSuccessful) {
                     val finalUrl = resp.request.url.toString()
-                    val totalFromRange = resp.header("Content-Range")?.substringAfter('/')?.toLongOrNull()
-                    val length = totalFromRange ?: resp.header("Content-Length")?.toLongOrNull()
+                    val totalFromRange = resp.header("Content-Range")?.substringAfter('/')?.trim()?.toLongOrNull()
+                    val length = totalFromRange ?: resp.header("Content-Length")?.trim()?.toLongOrNull()
                     val rangesOk = resp.code == 206 || resp.header("Accept-Ranges").equals("bytes", ignoreCase = true)
                     val mime = normalizeVodMime(resp.header("Content-Type"), finalUrl)
                     UpstreamProbe(finalUrl, isHls = false, mimeType = mime, contentLength = length, supportsRanges = rangesOk)
@@ -1618,5 +1736,8 @@ internal class LanStreamProxyServer(
         private const val VOD_SLICE_BYTES = 4L * 1024L * 1024L
         private const val VOD_CHUNK_BYTES = 64 * 1024
         private const val VOD_READAHEAD_CHUNKS = 96 // 96 * 64 KB = 6 MB async read-ahead cushion
+        private const val MAX_CONCURRENT_CLIENTS = 32
+        private const val MAX_HTTP_HEADERS = 64
+        private val CONTENT_RANGE_START_REGEX = Regex("bytes\\s+(\\d+)-", RegexOption.IGNORE_CASE)
     }
 }
