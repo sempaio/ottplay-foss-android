@@ -66,6 +66,7 @@ open class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         AppLanguages.onActivityCreated()
         model.onLocaleChanged()
+        setFullscreen(false)
         setContent {
             val state by model.state.collectAsStateWithLifecycle()
             LaunchedEffect(state.backgroundPlayback) { updatePip() }
@@ -123,13 +124,22 @@ open class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun setFullscreen(enabled: Boolean) {
+    internal fun setFullscreen(enabled: Boolean) {
         fullScreen = enabled
-        // Phones should open real videos in immersive landscape, restoring system orientation
-        // when the player closes. TV mode retains the device's native orientation.
-        if (!isTelevision && !isInPictureInPictureMode) {
-            requestedOrientation = if (enabled) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        // Phones open immersive local video in sensor landscape and explicitly lock back to
+        // portrait when leaving fullscreen so the screen never stays stuck sideways.
+        val target = ScreenOrientationPolicy.targetOrientation(
+            fullscreenVideo = enabled,
+            isTelevision = isTelevision,
+            inPictureInPicture = isInPictureInPictureMode,
+            smallestScreenWidthDp = resources.configuration.smallestScreenWidthDp,
+        )
+        if (target != null && (
+                requestedOrientation != target ||
+                    (!enabled && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+            )
+        ) {
+            requestedOrientation = target
         }
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -175,7 +185,17 @@ open class MainActivity : AppCompatActivity() {
     }
     override fun onResume() {
         super.onResume()
+        if (!fullScreen) setFullscreen(false)
         model.checkUpdateOnResume()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!fullScreen && !isTelevision && !isInPictureInPictureMode &&
+            newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        ) {
+            setFullscreen(false)
+        }
     }
 
     override fun onStop() {

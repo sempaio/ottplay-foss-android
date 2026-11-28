@@ -19,7 +19,8 @@ internal fun MovieDialog(entry: MediaEntry, loading: Boolean, favorite: Boolean,
         Surface(Modifier.tvRemoteInput().fillMaxWidth(.94f).widthIn(max = 860.dp).fillMaxHeight(.9f), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(entry.name, style = MaterialTheme.typography.headlineMedium)
-                if (entry.logo.isNotBlank()) coil.compose.AsyncImage(entry.logo, null, Modifier.fillMaxWidth().heightIn(max = 200.dp))
+                val normalizedCover = play.ott.nativeapp.core.ArtworkUrls.normalizeUrl(entry.logo)
+                if (normalizedCover.isNotBlank()) coil.compose.AsyncImage(normalizedCover, null, Modifier.fillMaxWidth().heightIn(max = 200.dp))
                 Text(entry.group, color = MaterialTheme.colorScheme.secondary)
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (entry.description.isNotBlank()) Text(entry.description)

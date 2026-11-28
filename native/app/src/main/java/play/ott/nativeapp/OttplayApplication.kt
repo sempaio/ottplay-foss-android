@@ -9,12 +9,14 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import play.ott.nativeapp.data.NativeRepository
 import play.ott.nativeapp.data.EpgRefreshWorker
-class OttplayApplication : Application(), ImageLoaderFactory {
+open class OttplayApplication : Application(), ImageLoaderFactory {
     val repository: NativeRepository by lazy { NativeRepository(this) }
     private val playbackVisible = MutableStateFlow(false)
     internal val playbackActivityVisible = playbackVisible.asStateFlow()
@@ -47,11 +49,15 @@ class OttplayApplication : Application(), ImageLoaderFactory {
             override fun onActivityPaused(activity: Activity) = Unit
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
         })
+        scheduleEpgRefresh()
+    }
+
+    protected open fun scheduleEpgRefresh() {
         EpgRefreshWorker.schedule(this)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient(AppTransportPolicy.current.secure(OkHttpClient()))
+        .okHttpClient(buildArtworkHttpClient())
         .memoryCache {
             MemoryCache.Builder(this)
                 .maxSizePercent(0.25)
@@ -66,4 +72,38 @@ class OttplayApplication : Application(), ImageLoaderFactory {
         .respectCacheHeaders(false)
         .crossfade(false)
         .build()
+
+    internal companion object {
+        const val ARTWORK_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+
+        fun buildArtworkHttpClient(): OkHttpClient {
+            val dispatcher = Dispatcher().apply {
+                maxRequests = 64
+                maxRequestsPerHost = 12
+            }
+            val base = OkHttpClient.Builder()
+                .dispatcher(dispatcher)
+                .connectTimeout(12, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
+                .callTimeout(25, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .retryOnConnectionFailure(true)
+                .addInterceptor { chain ->
+                    val req = chain.request()
+                    val next = req.newBuilder().apply {
+                        if (req.header("User-Agent").isNullOrBlank()) {
+                            header("User-Agent", ARTWORK_USER_AGENT)
+                        }
+                        if (req.header("Accept").isNullOrBlank()) {
+                            header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+                        }
+                    }.build()
+                    chain.proceed(next)
+                }
+                .build()
+            return AppTransportPolicy.current.secure(base)
+        }
+    }
 }

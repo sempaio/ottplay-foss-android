@@ -260,7 +260,12 @@ fun OttNativeApp(
         if (id == null) { fullscreen = false; autoOpenedEntry = null }
         else if (id != autoOpenedEntry) { fullscreen = true; autoOpenedEntry = id }
     }
-    LaunchedEffect(fullscreen) { onFullscreenChanged(fullscreen) }
+    val videoFullscreen = play.ott.nativeapp.ScreenOrientationPolicy.shouldUseFullscreenVideo(
+        fullscreen = fullscreen,
+        hasPlayingEntry = state.playingEntry != null,
+        isCastingToTv = false,
+    )
+    LaunchedEffect(videoFullscreen) { onFullscreenChanged(videoFullscreen) }
     LaunchedEffect(state.notice) {
         state.notice?.let { snackbar.showSnackbar(it); onAction(AppAction.DismissNotice) }
     }
@@ -675,7 +680,8 @@ internal fun MediaCard(entry: MediaEntry, favorite: Boolean, playing: Boolean, o
         ) {
             var artworkReady by remember(entry.logo) { mutableStateOf(false) }
             if (!artworkReady) Text(entry.name.take(2).uppercase(), modifier = Modifier.testTag("artwork-placeholder-${entry.id}"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, contentDescription = null,
+            val normalizedLogo = play.ott.nativeapp.core.ArtworkUrls.normalizeUrl(entry.logo)
+            if (normalizedLogo.isNotBlank()) AsyncImage(normalizedLogo, contentDescription = null,
                 modifier = Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit,
                 onSuccess = { artworkReady = true }, onError = { artworkReady = false })
             if (playing) Text(stringResource(R.string.library_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.BottomStart).background(MaterialTheme.colorScheme.background.copy(alpha = .85f)).padding(6.dp))
@@ -860,7 +866,8 @@ internal fun FeaturedContent(entry: MediaEntry, onAction: (AppAction) -> Unit) {
     Card(onClick = { onAction(when (entry.kind) { MediaKind.SERIES -> AppAction.OpenSeries(entry); MediaKind.MOVIE -> AppAction.OpenMovie(entry); else -> AppAction.Play(entry) }) },
         modifier = Modifier.fillMaxWidth().testTag("featured-content")) {
         Box(Modifier.fillMaxWidth().height(240.dp).background(Brush.horizontalGradient(listOf(Color(0xFF112E46), Color(0xFF211130))))) {
-            if (entry.logo.isNotBlank()) AsyncImage(entry.logo, null, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(320.dp), contentScale = ContentScale.Crop)
+            val normalizedHeroLogo = play.ott.nativeapp.core.ArtworkUrls.normalizeUrl(entry.logo)
+            if (normalizedHeroLogo.isNotBlank()) AsyncImage(normalizedHeroLogo, null, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(320.dp), contentScale = ContentScale.Crop)
             Column(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE080B16), Color.Transparent))).padding(20.dp), verticalArrangement = Arrangement.Center) {
                 Text("DESTAQUE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)

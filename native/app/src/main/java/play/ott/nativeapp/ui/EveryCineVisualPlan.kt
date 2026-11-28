@@ -1,11 +1,19 @@
 package play.ott.nativeapp.ui
 
+import play.ott.nativeapp.core.ArtworkUrls
 import play.ott.nativeapp.core.MediaEntry
 import play.ott.nativeapp.core.MediaKind
+import play.ott.nativeapp.core.XtreamGroup
 import play.ott.nativeapp.data.RecentPlayback
 
-/** Every Cine has four persistent bottom pages; games are deliberately out of scope. */
-internal enum class EveryCinePage { HOME, LIVE, CATALOG, PROFILE }
+/** Five persistent bottom pages: Home, Live, Movies, Series, Profile. */
+internal enum class EveryCinePage { HOME, LIVE, MOVIES, SERIES, PROFILE }
+
+/** Restores saved tab names safely across upgrades (legacy CATALOG maps to MOVIES). */
+internal fun parseEveryCinePage(name: String?): EveryCinePage = when (name) {
+    "CATALOG" -> EveryCinePage.MOVIES
+    else -> EveryCinePage.entries.firstOrNull { it.name == name } ?: EveryCinePage.HOME
+}
 
 internal data class EveryCineSection(val title: String, val entries: List<MediaEntry>)
 
@@ -47,11 +55,146 @@ internal fun everyCineSections(
     return sections
 }
 
-/** Original home uses a banner pager, with only real catalog titles as pages. */
-internal fun everyCineBannerEntries(entries: List<MediaEntry>, recent: List<RecentPlayback>): List<MediaEntry> =
-    (entries.asSequence().filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES } +
+/**
+ * Builds Home-style horizontal poster rails exclusively for a dedicated VOD tab
+ * (Movies or Series), ordering category rails by the upstream Xtream category order.
+ */
+internal fun everyCineKindSections(
+    entries: List<MediaEntry>,
+    recent: List<RecentPlayback>,
+    favoriteIds: Set<String>,
+    kind: MediaKind,
+    preferredCategoryOrder: List<String> = emptyList(),
+    maxCategoryRails: Int = 12,
+): List<EveryCineSection> {
+    val sections = ArrayList<EveryCineSection>(maxCategoryRails + 2)
+    val resumable = recent.asSequence()
+        .filter { it.positionMs > 0 }
+        .map { it.entry }
+        .filter { entry ->
+            entry.kind == kind || (kind == MediaKind.SERIES && entry.kind == MediaKind.EPISODE)
+        }
+        .distinctBy { it.sourceId to it.id }
+        .take(20)
+        .toList()
+    if (resumable.isNotEmpty()) sections += EveryCineSection("Continuar assistindo", resumable)
+
+    val kindEntries = entries.filter { it.kind == kind }
+    val favorites = kindEntries.asSequence()
+        .filter { it.id in favoriteIds }
+        .distinctBy { it.sourceId to it.id }
+        .take(20)
+        .toList()
+    if (favorites.isNotEmpty()) sections += EveryCineSection("Minha lista", favorites)
+
+    val grouped = LinkedHashMap<String, MutableList<MediaEntry>>()
+    val ungrouped = ArrayList<MediaEntry>()
+    kindEntries.forEach { entry ->
+        val group = entry.group.trim()
+        if (group.isNotEmpty()) {
+            grouped.getOrPut(group) { ArrayList() }.add(entry)
+        } else {
+            ungrouped.add(entry)
+        }
+    }
+
+    val orderedGroups = ArrayList<String>(grouped.size)
+    val addedKeys = HashSet<String>()
+    val byLower = grouped.keys.associateBy { it.lowercase() }
+    preferredCategoryOrder.forEach { preferred ->
+        val matched = byLower[preferred.trim().lowercase()]
+        if (matched != null && addedKeys.add(matched)) {
+            orderedGroups.add(matched)
+        }
+    }
+    grouped.keys.forEach { existing ->
+        if (addedKeys.add(existing)) orderedGroups.add(existing)
+    }
+
+    orderedGroups.asSequence().take(maxCategoryRails).forEach { category ->
+        val selected = grouped[category].orEmpty()
+            .asSequence()
+            .distinctBy { it.sourceId to it.id }
+            .take(20)
+            .toList()
+        if (selected.isNotEmpty()) sections += EveryCineSection(category, selected)
+    }
+
+    if (orderedGroups.isEmpty() && ungrouped.isNotEmpty()) {
+        val label = when (kind) {
+            MediaKind.SERIES -> "Séries"
+            MediaKind.LIVE -> "TV ao vivo"
+            else -> "Filmes"
+        }
+        sections += EveryCineSection(label, ungrouped.distinctBy { it.sourceId to it.id }.take(20))
+    }
+
+    return sections
+}
+
+/** Original home uses a banner pager, prioritizing titles with real cover artwork. */
+internal fun everyCineBannerEntries(entries: List<MediaEntry>, recent: List<RecentPlayback>): List<MediaEntry> {
+    val candidates = (entries.asSequence().filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES } +
         recent.asSequence().map { it.entry }.filter { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES })
-        .distinctBy { it.sourceId to it.id }.take(5).toList()
+        .distinctBy { it.sourceId to it.id }
+        .toList()
+    return prioritizeWithArtwork(candidates).take(5)
+}
+
+/** Dedicated Movies/Series banner pager strictly scoped to a single MediaKind. */
+internal fun everyCineBannerEntriesForKind(
+    entries: List<MediaEntry>,
+    recent: List<RecentPlayback>,
+    kind: MediaKind,
+): List<MediaEntry> {
+    val candidates = (entries.asSequence().filter { it.kind == kind } +
+        recent.asSequence().map { it.entry }.filter { it.kind == kind })
+        .distinctBy { it.sourceId to it.id }
+        .toList()
+    return prioritizeWithArtwork(candidates).take(5)
+}
+
+private fun prioritizeWithArtwork(candidates: List<MediaEntry>): List<MediaEntry> {
+    val withArtwork = ArrayList<MediaEntry>(candidates.size)
+    val withoutArtwork = ArrayList<MediaEntry>()
+    candidates.forEach { entry ->
+        if (ArtworkUrls.normalizeUrl(entry.logo).isNotBlank()) withArtwork.add(entry)
+        else withoutArtwork.add(entry)
+    }
+    return withArtwork + withoutArtwork
+}
+
+/**
+ * Selects only the missing Xtream category IDs required to populate the first
+ * [desiredCategoryCount] showcase rails for [kind], never fetching already-loaded categories.
+ */
+internal fun everyCineShowcaseGroupIdsToLoad(
+    remoteGroups: List<XtreamGroup>,
+    loadedEntries: List<MediaEntry>,
+    kind: MediaKind,
+    desiredCategoryCount: Int,
+): List<String> {
+    if (desiredCategoryCount <= 0) return emptyList()
+    val kindGroups = remoteGroups.filter { it.kind == kind && it.name.isNotBlank() }
+    if (kindGroups.isEmpty()) return emptyList()
+    val loadedGroupNames = loadedEntries.asSequence()
+        .filter { it.kind == kind }
+        .map { it.group.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .toHashSet()
+    val targetNames = kindGroups.asSequence()
+        .map { it.name.trim() }
+        .distinctBy { it.lowercase() }
+        .take(desiredCategoryCount)
+        .filter { it.lowercase() !in loadedGroupNames }
+        .map { it.lowercase() }
+        .toHashSet()
+    if (targetNames.isEmpty()) return emptyList()
+    return kindGroups
+        .filter { it.name.trim().lowercase() in targetNames }
+        .map { it.id }
+        .distinct()
+}
 
 internal fun everyCineFeatured(entries: List<MediaEntry>, recent: List<RecentPlayback>): MediaEntry? =
     entries.firstOrNull { it.kind == MediaKind.MOVIE || it.kind == MediaKind.SERIES }

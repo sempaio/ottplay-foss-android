@@ -29,6 +29,37 @@ class XtreamDetailRecoveryTest {
         assertEquals("https://fixture.invalid/unique.jpg", result[2].logo)
     }
 
+    @Test fun `edition and release variants sharing a poster keep their covers`() {
+        val poster = "https://image.tmdb.org/t/p/w600_and_h900_bestv2/sample.jpg"
+        val entries = listOf(
+            movie.copy(id = "m1", name = "Fora de Controle", logo = poster),
+            movie.copy(id = "m2", name = "Fora de Controle [Lançamento]", logo = poster),
+            movie.copy(id = "m3", name = "Fora de Controle 2026", logo = poster),
+        )
+        val result = XtreamProvider(ProviderHttp(OkHttpClient(), RemoteTransportPolicy(false))).withoutSharedArtwork(entries)
+        assertEquals(listOf(poster, poster, poster), result.map { it.logo })
+    }
+
+    @Test fun `M81 metadata_source tmdb poster is accepted when listing cover was blank`() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val action = chain.request().url.queryParameter("action")
+            val body = if (action == "get_vod_info") {
+                """{"info":{"description":"Sinopse M81","movie_image":"http://image.tmdb.org/t/p/w500/m81vod.jpg","metadata_source":"tmdb","metadata_pending":false},"movie_data":{"container_extension":"mp4"}}"""
+            } else {
+                """{"info":{"plot":"Sinopse Serie M81","cover":"http://image.tmdb.org/t/p/w500/m81series.jpg","metadata_source":"tmdb","metadata_pending":false}}"""
+            }
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("Fixture").body(body.toResponseBody()).build()
+        }.build()
+        try {
+            val repo = ProviderRepository(client)
+            val vodResult = repo.loadMovieInfo(source, movie.copy(logo = ""))
+            assertEquals("https://image.tmdb.org/t/p/w500/m81vod.jpg", vodResult.logo)
+            val seriesResult = repo.loadSeriesInfo(source, series.copy(logo = ""))
+            assertEquals("https://image.tmdb.org/t/p/w500/m81series.jpg", seriesResult.logo)
+        } finally { client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
+    }
+
     private fun exercise(operation: String, failures: Int = 1, status: Int? = null,
         tls: Boolean = false, block: suspend (ProviderRepository, AtomicInteger) -> Unit) = runBlocking {
         val calls = AtomicInteger()

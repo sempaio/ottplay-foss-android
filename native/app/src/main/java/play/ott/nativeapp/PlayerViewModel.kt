@@ -456,6 +456,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 detailJob = operation {
                     val source = availableSources().first { it.id == action.entry.sourceId }
                     val movie = repository.providers.loadMovieInfo(source, action.entry)
+                    propagateResolvedLogo(movie)
                     updateState { if (it.movieEntry?.id == action.entry.id) it.copy(movieEntry = movie, isBusy = false) else it }
                 }
             }
@@ -472,6 +473,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     else emptyList()
                     val series = if (source.kind == SourceKind.XTREAM)
                         repository.providers.loadSeriesInfo(source, action.entry) else action.entry
+                    propagateResolvedLogo(series)
                     updateState { if (it.seriesEntry?.id == action.entry.id) it.copy(seriesEntry = series, episodes = episodes, isBusy = false) else it }
                 }
             }
@@ -496,6 +498,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 load(source.id, true)
             }
             AppAction.ImportPlaylist, AppAction.ImportSettings, AppAction.ExportSettings -> Unit // System document launchers in Activity.
+        }
+    }
+
+    private fun propagateResolvedLogo(updated: MediaEntry) {
+        val logo = ArtworkUrls.normalizeUrl(updated.logo)
+        if (logo.isBlank()) return
+        var changedVisited = false
+        for (key in visitedGroups.keys.toList()) {
+            val list = visitedGroups[key] ?: continue
+            if (list.any { it.id == updated.id && it.sourceId == updated.sourceId && it.logo != logo }) {
+                visitedGroups[key] = list.map { entry ->
+                    if (entry.id == updated.id && entry.sourceId == updated.sourceId) entry.copy(logo = logo) else entry
+                }
+                changedVisited = true
+            }
+        }
+        if (changedVisited) {
+            updateState { it.copy(entries = visitedXtreamEntries()) }
+        } else if (state.value.entries.any { it.id == updated.id && it.sourceId == updated.sourceId && it.logo != logo }) {
+            updateState { current ->
+                current.copy(entries = current.entries.map { entry ->
+                    if (entry.id == updated.id && entry.sourceId == updated.sourceId) entry.copy(logo = logo) else entry
+                })
+            }
         }
     }
 
@@ -577,6 +603,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
                     val key = id + ":" + group.kind + ":" + group.id
                     if (visitedGroups.containsKey(key)) {
+                        val existing = visitedGroups.remove(key)
+                        if (existing != null) visitedGroups[key] = existing
                         shown = true
                         updateState { it.copy(entries = visitedXtreamEntries()) }
                         continue
@@ -585,12 +613,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         catch (e: CancellationException) { throw e }
                         catch (_: Exception) { null }
                     if (cached != null) {
-                        visitedGroups[key] = cached.value.entries
+                        val normalizedEntries = cached.value.entries.map { entry ->
+                            val normalizedLogo = ArtworkUrls.normalizeUrl(entry.logo)
+                            if (normalizedLogo == entry.logo) entry else entry.copy(logo = normalizedLogo)
+                        }
+                        visitedGroups.remove(key)
+                        visitedGroups[key] = normalizedEntries
                         shown = true
                         updateState { it.copy(entries = visitedXtreamEntries()) }
                         val hasLegacyTsLive = group.kind == MediaKind.LIVE &&
                             cached.value.entries.any { it.url.endsWith(".ts", ignoreCase = true) }
-                        val ttlMs = if (hasLegacyTsLive) 60_000L else 30 * 60_000L
+                        val hasLegacyArtwork = group.kind != MediaKind.LIVE &&
+                            cached.value.entries.any { ArtworkUrls.needsArtworkRefresh(it.logo) }
+                        val ttlMs = if (hasLegacyTsLive || hasLegacyArtwork) 60_000L else 30 * 60_000L
                         if (cached.ageMillis < ttlMs) continue
                     }
                     val catalog = try { repository.xtreamCategory(source, group) }
@@ -601,6 +636,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     ensureActive()
                     if (sequence != groupSequence || generation != loadGeneration || state.value.selectedSourceId != id) return@launch
+                    visitedGroups.remove(key)
                     visitedGroups[key] = catalog.entries
                     shown = true
                     updateState { it.copy(entries = visitedXtreamEntries()) }

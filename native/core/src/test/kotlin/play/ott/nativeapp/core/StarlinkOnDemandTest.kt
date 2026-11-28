@@ -80,4 +80,24 @@ class StarlinkOnDemandTest {
             assertEquals(2, server.requestCount)
         }
     }
+
+    @Test fun categoryArtworkNormalizesHttpTmdbAndRescuesDeadTmdbMirrors() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val config = SourceConfig("managed", "STARLINK", SourceKind.XTREAM,
+                server.url("/").toString(), "user", "password")
+            val repo = ProviderRepository()
+            server.enqueue(MockResponse().setBody(
+                """[
+                    {"stream_id":10,"name":"Fora de Controle","category_id":"vod","container_extension":"mp4","stream_icon":"http://image.tmdb.org/t/p/w600_and_h900_bestv2/same.jpg"},
+                    {"stream_id":11,"name":"Fora de Controle [Lançamento]","category_id":"vod","container_extension":"mp4","stream_icon":"https://image.tmdb.org/t/p/w600_and_h900_bestv2/same.jpg"},
+                    {"stream_id":12,"name":"Resgatado","category_id":"vod","container_extension":"mp4","stream_icon":"http://timg.bdta.pro/t/p/w600_and_h900_bestv2/9LNp4wA2DzZhdYUbTan3shbC8j8.jpg"}
+                ]"""))
+            val entries = repo.xtreamCategory(config, XtreamGroup("vod", "FILMES | Lançamentos", MediaKind.MOVIE)).entries
+            assertEquals(3, entries.size)
+            assertEquals("https://image.tmdb.org/t/p/w600_and_h900_bestv2/same.jpg", entries[0].logo)
+            assertEquals("https://image.tmdb.org/t/p/w600_and_h900_bestv2/same.jpg", entries[1].logo)
+            assertEquals("https://image.tmdb.org/t/p/w600_and_h900_bestv2/9LNp4wA2DzZhdYUbTan3shbC8j8.jpg", entries[2].logo)
+        }
+    }
 }

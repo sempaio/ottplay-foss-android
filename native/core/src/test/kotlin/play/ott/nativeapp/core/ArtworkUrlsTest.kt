@@ -1,0 +1,89 @@
+package play.ott.nativeapp.core
+
+import kotlin.test.*
+
+class ArtworkUrlsTest {
+    @Test fun upgradesKnownHttpsHostsAndPreservesPath() {
+        assertEquals(
+            "https://image.tmdb.org/t/p/w300/6oCBiVDfEfMnbNA7s3JaqdDCm9w.jpg",
+            ArtworkUrls.normalizeUrl("http://image.tmdb.org/t/p/w300/6oCBiVDfEfMnbNA7s3JaqdDCm9w.jpg"),
+        )
+        assertEquals(
+            "https://media.themoviedb.org/t/p/w500/abc.jpg",
+            ArtworkUrls.normalizeUrl("  HTTP://media.themoviedb.org/t/p/w500/abc.jpg  "),
+        )
+        assertEquals(
+            "https://panel.taila5c5c2.ts.net/channel-logo/22b118cc173f893f08dc.png",
+            ArtworkUrls.normalizeUrl("http://panel.taila5c5c2.ts.net/channel-logo/22b118cc173f893f08dc.png"),
+        )
+    }
+
+    @Test fun rescuesDeadTmdbMirrorPathsToOfficialTmdb() {
+        assertEquals(
+            "https://image.tmdb.org/t/p/w600_and_h900_bestv2/9LNp4wA2DzZhdYUbTan3shbC8j8.jpg",
+            ArtworkUrls.normalizeUrl("http://timg.bdta.pro/t/p/w600_and_h900_bestv2/9LNp4wA2DzZhdYUbTan3shbC8j8.jpg"),
+        )
+    }
+
+    @Test fun handlesProtocolRelativeSpacesAndRejectsUnsafeSchemes() {
+        assertEquals(
+            "https://image.tmdb.org/t/p/w500/poster.jpg",
+            ArtworkUrls.normalizeUrl("//image.tmdb.org/t/p/w500/poster.jpg"),
+        )
+        assertEquals(
+            "http://example.invalid/covers/My%20Movie.jpg",
+            ArtworkUrls.normalizeUrl("http://example.invalid/covers/My Movie.jpg"),
+        )
+        assertEquals("", ArtworkUrls.normalizeUrl(""))
+        assertEquals("", ArtworkUrls.normalizeUrl("   "))
+        assertEquals("", ArtworkUrls.normalizeUrl("javascript:alert(1)"))
+        assertEquals("", ArtworkUrls.normalizeUrl("file:///etc/passwd"))
+        assertEquals("", ArtworkUrls.normalizeUrl("not a url"))
+    }
+
+    @Test fun httpsUpgradeCandidateOnlyUpgradesDefaultPortHttp() {
+        assertEquals(
+            "https://cdn.example.invalid/poster.jpg",
+            ArtworkUrls.httpsUpgradeCandidate("http://cdn.example.invalid/poster.jpg"),
+        )
+        assertNull(ArtworkUrls.httpsUpgradeCandidate("https://cdn.example.invalid/poster.jpg"))
+        assertNull(ArtworkUrls.httpsUpgradeCandidate("http://cdn.example.invalid:8080/poster.jpg"))
+        assertNull(ArtworkUrls.httpsUpgradeCandidate(""))
+    }
+
+    @Test fun titleDedupeNormalizationCollapsesEditionAndYearVariantsOnly() {
+        val launchBase = ArtworkUrls.normalizeTitleForArtworkDedupe("Fora de Controle")
+        assertEquals(launchBase, ArtworkUrls.normalizeTitleForArtworkDedupe("Fora de Controle [Lançamento]"))
+        assertEquals(launchBase, ArtworkUrls.normalizeTitleForArtworkDedupe("Fora de Controle [L]"))
+        assertEquals(launchBase, ArtworkUrls.normalizeTitleForArtworkDedupe("Fora de Controle (2026)"))
+        assertEquals(launchBase, ArtworkUrls.normalizeTitleForArtworkDedupe("Fora de Controle 2026"))
+        assertEquals(launchBase, ArtworkUrls.normalizeTitleForArtworkDedupe("Fora de Controle [Dublado] 4K"))
+
+        assertEquals(
+            ArtworkUrls.normalizeTitleForArtworkDedupe("O Preço de uma Vida"),
+            ArtworkUrls.normalizeTitleForArtworkDedupe("O Preço de uma Vida [L]"),
+        )
+
+        // Numeric-only movie titles must remain distinct and non-empty.
+        assertEquals("2012", ArtworkUrls.normalizeTitleForArtworkDedupe("2012"))
+        assertEquals("1917", ArtworkUrls.normalizeTitleForArtworkDedupe("1917"))
+        assertNotEquals(
+            ArtworkUrls.normalizeTitleForArtworkDedupe("2012"),
+            ArtworkUrls.normalizeTitleForArtworkDedupe("1917"),
+        )
+
+        // Unrelated titles remain distinct.
+        assertNotEquals(
+            ArtworkUrls.normalizeTitleForArtworkDedupe("Fixture movie"),
+            ArtworkUrls.normalizeTitleForArtworkDedupe("Other"),
+        )
+    }
+
+    @Test fun trustedDetailPosterAcceptsM81MetadataSourceAndTmdbHost() {
+        assertTrue(ArtworkUrls.isTrustedDetailPoster("https://cdn.example/a.jpg", "tmdb", ""))
+        assertTrue(ArtworkUrls.isTrustedDetailPoster("https://cdn.example/a.jpg", "", "tmdb"))
+        assertTrue(ArtworkUrls.isTrustedDetailPoster("https://image.tmdb.org/t/p/w500/x.jpg", "", ""))
+        assertFalse(ArtworkUrls.isTrustedDetailPoster("https://untrusted.example/shared.jpg", "", ""))
+        assertFalse(ArtworkUrls.isTrustedDetailPoster("", "tmdb", "tmdb"))
+    }
+}

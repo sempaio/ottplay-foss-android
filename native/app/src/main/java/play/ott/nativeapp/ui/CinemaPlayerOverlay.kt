@@ -798,7 +798,7 @@ internal fun CinemaPlayerOverlay(
                                     bumpHud()
                                     val isLandscape = activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                                     activity.requestedOrientation = if (isLandscape) {
-                                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                                     } else {
                                         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                                     }

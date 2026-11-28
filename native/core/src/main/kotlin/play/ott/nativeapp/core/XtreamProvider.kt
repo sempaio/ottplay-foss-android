@@ -96,8 +96,9 @@ internal class XtreamProvider(private val http: ProviderHttp) {
                 id = stableId(config.id, "xtream", pathKind, providerId),
                 sourceId = config.id, name = name, url = url,
                 kind = group.kind, group = group.name,
-                logo = row.string(if (group.kind == MediaKind.SERIES) "cover" else "stream_icon")
-                    .takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
+                logo = ArtworkUrls.normalizeUrl(
+                    row.string(if (group.kind == MediaKind.SERIES) "cover" else "stream_icon")
+                ),
                 epgId = row.string("epg_channel_id"),
                 providerId = providerId, headers = config.headers,
                 headerOrigins = headerOrigins(config.headers, config.url),
@@ -153,8 +154,9 @@ internal class XtreamProvider(private val http: ProviderHttp) {
                     url = streamUrl,
                     kind = kind,
                     group = groupName,
-                    logo = row.string(if (kind == MediaKind.SERIES) "cover" else "stream_icon")
-                        .takeIf { it.startsWith("https://") || it.startsWith("http://") }.orEmpty(),
+                    logo = ArtworkUrls.normalizeUrl(
+                        row.string(if (kind == MediaKind.SERIES) "cover" else "stream_icon")
+                    ),
                     epgId = row.string("epg_channel_id"),
                     providerId = providerId,
                     headers = config.headers,
@@ -210,10 +212,25 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             segments[segments.lastIndex] = segments.last().substringBeforeLast('.') + "." + extension
             parsed.newBuilder().encodedPath("/").apply { segments.forEach { addPathSegment(it) } }.build().toString()
         } else entry.url
-        val image = info?.string("movie_image").orEmpty()
-        val trustedImage = if (entry.logo.isBlank() && info?.string("poster_source") != "tmdb") "" else image
-        return entry.copy(url = url, description = info?.string("description").orEmpty().ifBlank { entry.description },
-            logo = trustedImage.ifBlank { entry.logo })
+        val image = ArtworkUrls.normalizeUrl(
+            info?.string("movie_image").orEmpty().ifBlank { info?.string("poster_url").orEmpty() }
+        )
+        val trustedPoster = ArtworkUrls.isTrustedDetailPoster(
+            image,
+            info?.string("poster_source").orEmpty(),
+            info?.string("metadata_source").orEmpty(),
+        )
+        val existingLogo = ArtworkUrls.normalizeUrl(entry.logo)
+        val resolvedLogo = when {
+            image.isNotBlank() && trustedPoster -> image
+            existingLogo.isNotBlank() -> image.ifBlank { existingLogo }
+            else -> ""
+        }
+        return entry.copy(
+            url = url,
+            description = info?.string("description").orEmpty().ifBlank { info?.string("plot").orEmpty() }.ifBlank { entry.description },
+            logo = resolvedLogo,
+        )
     }
 
     suspend fun seriesInfo(config: SourceConfig, entry: MediaEntry): MediaEntry {
@@ -225,16 +242,30 @@ internal class XtreamProvider(private val http: ProviderHttp) {
             delay(1000)
         }
         val info = data?.get("info") as? JsonObject ?: return entry
-        val image = info.string("cover")
-        val trustedImage = if (entry.logo.isBlank() && info.string("poster_source") != "tmdb") "" else image
-        return entry.copy(description = info.string("plot").ifBlank { info.string("description") }.ifBlank { entry.description },
-            logo = trustedImage.ifBlank { entry.logo })
+        val image = ArtworkUrls.normalizeUrl(
+            info.string("cover").ifBlank { info.string("poster_url") }
+        )
+        val trustedPoster = ArtworkUrls.isTrustedDetailPoster(
+            image,
+            info.string("poster_source"),
+            info.string("metadata_source"),
+        )
+        val existingLogo = ArtworkUrls.normalizeUrl(entry.logo)
+        val resolvedLogo = when {
+            image.isNotBlank() && trustedPoster -> image
+            existingLogo.isNotBlank() -> image.ifBlank { existingLogo }
+            else -> ""
+        }
+        return entry.copy(
+            description = info.string("plot").ifBlank { info.string("description") }.ifBlank { entry.description },
+            logo = resolvedLogo,
+        )
     }
 
     /** A source logo reused for distinct titles is not a trustworthy poster. */
     internal fun withoutSharedArtwork(entries: List<MediaEntry>): List<MediaEntry> {
         val titlesByLogo = entries.asSequence().filter { it.logo.isNotBlank() }
-            .groupBy({ it.logo }, { it.name.trim().lowercase() })
+            .groupBy({ it.logo }, { ArtworkUrls.normalizeTitleForArtworkDedupe(it.name) })
         val shared = titlesByLogo.filterValues { names -> names.distinct().size > 1 }.keys
         return entries.map { if (it.logo in shared) it.copy(logo = "") else it }
     }
@@ -289,7 +320,7 @@ internal class XtreamProvider(private val http: ProviderHttp) {
     }
     private fun item(entry: XtreamItem, config: SourceConfig, zone: String): MediaEntry {
         val kind = when (entry.kind) { "vod" -> MediaKind.MOVIE; "series" -> MediaKind.SERIES; "episode" -> MediaKind.EPISODE; else -> MediaKind.LIVE }
-        return MediaEntry(entry.id, config.id, entry.name, entry.url, kind, group = entry.group, logo = entry.logo,
+        return MediaEntry(entry.id, config.id, entry.name, entry.url, kind, group = entry.group, logo = ArtworkUrls.normalizeUrl(entry.logo),
             epgId = entry.epgId, headers = config.headers,
             catchup = entry.archiveDays?.let { Catchup("xtream", entry.archiveSource, it, zone) },
             description = entry.description, season = entry.season.toIntOrNull(), episode = entry.episode?.toInt(),

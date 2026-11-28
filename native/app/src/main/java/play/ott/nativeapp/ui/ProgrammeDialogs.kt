@@ -10,11 +10,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import play.ott.nativeapp.core.ArtworkUrls
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -127,6 +131,15 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
         Surface(Modifier.tvRemoteInput().fillMaxWidth(.94f).widthIn(max = 860.dp).fillMaxHeight(.91f), shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val seriesCover = ArtworkUrls.normalizeUrl(entry.logo)
+                    if (seriesCover.isNotBlank()) {
+                        coil.compose.AsyncImage(
+                            seriesCover,
+                            contentDescription = entry.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(width = 64.dp, height = 92.dp).clip(RoundedCornerShape(10.dp)),
+                        )
+                    }
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.dialog_series), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -166,7 +179,8 @@ internal fun SeriesDialog(entry: MediaEntry, episodes: List<MediaEntry>, loading
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                             ) {
                                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    if (episode.logo.isNotBlank()) coil.compose.AsyncImage(episode.logo, null, Modifier.widthIn(max = 140.dp).weight(.4f))
+                                    val episodeCover = ArtworkUrls.normalizeUrl(episode.logo)
+                                    if (episodeCover.isNotBlank()) coil.compose.AsyncImage(episodeCover, null, Modifier.widthIn(max = 140.dp).weight(.4f))
                                     Column(Modifier.weight(1f)) {
                                         episode.episode?.let { Text(stringResource(R.string.dialog_episode, it), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary) }
                                         Text(episode.name, style = MaterialTheme.typography.titleMedium)
